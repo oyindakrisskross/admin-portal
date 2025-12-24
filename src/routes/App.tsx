@@ -1,0 +1,446 @@
+// src/routes/App.tsx
+
+import { Navigate, Route, Routes } from "react-router-dom";
+
+import { useAuth } from "../auth/AuthContext";
+
+import LoginPage from "../screens/LoginPage";
+import AppShell from "../screens/layout/AppShell";
+import { ItemGroupListPage } from "../screens/catalog/itemGroup/ItemGroupListPage";
+import { ItemListPage } from "../screens/catalog/item/ItemListPage";
+import ItemGroupFormPage from "../screens/catalog/itemGroup/ItemGroupFormPage";
+import ItemFormPage from "../screens/catalog/item/ItemFormPage";
+import { LocationListPage } from "../screens/settings/location/LocationListPage";
+import LocationFormPage from "../screens/settings/location/LocationFormPage";
+import { ItemInvAdjust } from "../screens/catalog/item/ItemInvAdjust";
+import SettingsShell from "../screens/settings/layout/SettingsShell";
+import { TaxListPage } from "../screens/settings/tax/TaxListPage";
+import TaxFormPage from "../screens/settings/tax/TaxFormPage";
+import { UnitListPage } from "../screens/settings/unit/UnitListPage";
+import UnitFormPage from "../screens/settings/unit/UnitFormPage";
+import OrgFormPage from "../screens/settings/OrgFormPage";
+import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
+import RoleFormPage from "../screens/settings/access-control/RoleFormPage";
+import { PermCategoryListPage } from "../screens/settings/access-control/PermCategoryListPage";
+import PermCategoryFormPage from "../screens/settings/access-control/PermCategoryFormPage";
+import { ContactListPage } from "../screens/crm/contact/ContactListPage";
+import ContactFormPage from "../screens/crm/contact/ContactFormPage";
+import { UserListPage } from "../screens/crm/user/UserListPage";
+import UserFormPage from "../screens/crm/user/UserFormPage";
+import type { PermissionBitSet } from "../types/accounts";
+import type { JSX } from "react";
+import ReportsOverviewPage from "../screens/reports/ReportsOverviewPage";
+import ProductsReportPage from "../screens/reports/products/ProductsReportPage";
+import ProductGroupReportPage from "../screens/reports/products/ProductGroupReportPage";
+import VariationsReportPage from "../screens/reports/VariationsReportPage";
+import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
+import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
+import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
+import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
+
+function Protected({ children }: { children: JSX.Element }) {
+  const { me, loading } = useAuth();
+  if (loading) return <div className="p-8 text-sm text-kk-muted">Loading…</div>;
+  if (!me) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function RequirePerm({ perm, action = "view", children }: {
+  perm: string; action?: keyof PermissionBitSet; children: JSX.Element;
+}) {
+  const { can } = useAuth();
+  if (!can(perm, action)) return <Navigate to="/" replace />;
+  return children;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route
+        path="/"
+        element={
+          <Protected>
+            <AppShell />
+          </Protected>
+        }
+      >
+        {/* Home / dashboard */}
+        <Route index element={<ReportsOverviewPage />} />
+        <Route 
+          path="reports/" 
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <ReportsOverviewPage />
+            </RequirePerm>
+          } 
+        />
+        <Route 
+          path="reports/products" 
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <ProductsReportPage />
+            </RequirePerm>
+          } 
+        />
+        <Route 
+          path="reports/products/group/:groupId" 
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <ProductGroupReportPage />
+            </RequirePerm>
+          } 
+        />
+        <Route 
+          path="reports/variations" 
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <VariationsReportPage />
+            </RequirePerm>
+          } 
+        />
+        <Route 
+          path="reports/invoices" 
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <InvoicesReportPage />
+            </RequirePerm>
+          } 
+        />
+
+        {/* Catalog: Item Groups */}
+        <Route
+          path="catalog/item-groups"
+          element={
+            <RequirePerm perm="Item" action="view">
+              <ItemGroupListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/item-groups/:id"
+          element={
+            <RequirePerm perm="Item" action="view">
+              <ItemGroupListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/item-groups/new"
+          element={
+            <RequirePerm perm="Item" action="create">
+              <ItemGroupFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/item-groups/:id/edit"
+          element={
+            <RequirePerm perm="Item" action="edit">
+              <ItemGroupFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Catalog: Items */}
+        <Route
+          path="catalog/items"
+          element={
+            <RequirePerm perm="Item" action="view">
+              <ItemListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/items/:id"
+          element={
+            <RequirePerm perm="Item" action="view">
+              <ItemListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/items/new"
+          element={
+            <RequirePerm perm="Item" action="create">
+              <ItemFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/items/:id/edit"
+          element={
+            <RequirePerm perm="Item" action="edit">
+              <ItemFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/items/:id/adjust-inventory"
+          element={
+            <RequirePerm perm="Inventory Adjustment" action="edit">
+              <ItemInvAdjust />
+            </RequirePerm>
+          }
+        />
+
+        {/* Catalog: Categories */}
+        <Route 
+          path="catalog/categories"
+          element={
+            <RequirePerm perm="Category" action="view">
+              <CategoryListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+            path="catalog/categories/new"
+            element={
+              <RequirePerm perm="Category" action="create">
+                <CategoryFormPage />
+              </RequirePerm>
+            }
+          />
+        <Route 
+          path="catalog/categories/:id/edit"
+          element={
+            <RequirePerm perm="Category" action="edit">
+              <CategoryFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Sales: Invoices */}
+        <Route 
+          path="sales/invoices"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <InvoiceListPage />
+            </RequirePerm>
+          }
+        />
+        <Route 
+          path="sales/invoices/:id"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <InvoiceListPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* CRM: Contacts */}
+        <Route
+          path="crm/contacts"
+          element={
+            <RequirePerm perm="Contacts" action="view">
+              <ContactListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="crm/contacts/:id"
+          element={
+            <RequirePerm perm="Contacts" action="view">
+              <ContactListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="crm/contacts/new"
+          element={
+            <RequirePerm perm="Contacts" action="create">
+              <ContactFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="crm/contacts/:id/edit"
+          element={
+            <RequirePerm perm="Contacts" action="edit">
+              <ContactFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* CRM: Users */}
+        <Route
+          path="/crm/users"
+          element={
+            <RequirePerm perm="Portal Users" action="view">
+              <UserListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="/crm/users/new"
+          element={
+            <RequirePerm perm="Portal Users" action="create">
+              <UserFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="/crm/users/:id/edit"
+          element={
+            <RequirePerm perm="Portal Users" action="edit">
+              <UserFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Settings */}
+        <Route path="settings" element={<SettingsShell />}>
+
+          {/* Organization */}
+          <Route
+            path="organization/:id"
+            element={
+              <RequirePerm perm="Organization" action="edit">
+                <OrgFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Taxes */}
+          <Route
+            path="taxes"
+            element={
+              <RequirePerm perm="Taxes" action="view">
+                <TaxListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="taxes/new"
+            element={
+              <RequirePerm perm="Taxes" action="create">
+                <TaxFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="taxes/:id/edit"
+            element={
+              <RequirePerm perm="Taxes" action="edit">
+                <TaxFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Units */}
+          <Route
+            path="units"
+            element={
+              <RequirePerm perm="Units" action="view">
+                <UnitListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="units/new"
+            element={
+              <RequirePerm perm="Units" action="create">
+                <UnitFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="units/:id/edit"
+            element={
+              <RequirePerm perm="Units" action="edit">
+                <UnitFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Business: Locations */}
+          <Route
+            path="locations"
+            element={
+              <RequirePerm perm="Locations" action="view">
+                <LocationListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="locations/:id"
+            element={
+              <RequirePerm perm="Locations" action="view">
+                <LocationListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="locations/new"
+            element={
+              <RequirePerm perm="Locations" action="create">
+                <LocationFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="locations/:id/edit"
+            element={
+              <RequirePerm perm="Locations" action="edit">
+                <LocationFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Access Control - Roles */}
+          <Route
+            path="roles"
+            element={
+              <RequirePerm perm="Roles" action="view">
+                <RoleListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="roles/new"
+            element={
+              <RequirePerm perm="Roles" action="create">
+                <RoleFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="roles/:id/edit"
+            element={
+              <RequirePerm perm="Roles" action="edit">
+                <RoleFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Access Control - Permission Categories */}
+          <Route
+            path="permission-categories"
+            element={
+              <RequirePerm perm="Permission Categories" action="view">
+                <PermCategoryListPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="permission-categories/new"
+            element={
+              <RequirePerm perm="Permission Categories" action="create">
+                <PermCategoryFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="permission-categories/:id/edit"
+            element={
+              <RequirePerm perm="Permission Categories" action="edit">
+                <PermCategoryFormPage />
+              </RequirePerm>
+            }
+          />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}

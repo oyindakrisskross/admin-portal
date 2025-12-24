@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+@theme {
+  /* Dark Colour Scheme */
+  --color-kk-dark-bg: #191919;
+  --color-kk-dark-bg-elevated: #1F1F1F;
+  --color-kk-dark-text: #D4D4D4;
+  --color-kk-dark-text-muted: #9B9B9B;
+  --color-kk-dark-hover: #282C32;
+  --color-kk-dark-border: rgba(71,71,71,0.5);
+  --color-kk-dark-input-border: rgba(71,71,71);
+
+  --color-kk-bg-elevated: #202226;
+  --color-kk-muted: #D7DADF;
+  --color-kk-accent: #3B82F6;
+  --color-kk-accent-soft: rgba(59,130,246,0.12);
+  --color-kk-danger: #EF4444;
+
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Inter", "Segoe UI";
+
+  --shadow-soft: 0 0 0 1px rgba(255,255,255,0.03), 0 18px 40px rgba(0,0,0,0.6);
+
+  --radius-x1: 0.9rem;
+}
+
+:root {
+  /* font-family: system-ui, Avenir, Helvetica, Arial, sans-serif; */
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  /* color: rgba(255, 255, 255, 0.87);
+  background-color: #242424; */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+} */
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+
+  @apply bg-kk-dark-bg text-gray-100 font-sans;
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  padding: 0.6em;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.25s;
+  position: relative;
+  text-align: center;
+}
+button:hover {
+  @apply bg-kk-dark-hover;
+}
+button:focus,
+button:focus-visible {
+  @apply bg-kk-dark-hover;
+}
+
+.new {
+  @apply bg-purple-500;
+  padding: 0.6em 0.9em;
+}
+.new:hover {
+  @apply bg-purple-400;
+}
+
+.help {
+  position: relative;
+}
+
+.tooltip-t {  
+  visibility: hidden;
+  display: block;
+  width: auto;
+  padding: 0.5em;
+  border-radius: 8px;
+  position: absolute;
+  z-index: 40;
+  bottom: 110%;
+  right: 0;
+
+  @apply 
+  bg-kk-dark-hover 
+  text-gray-100 
+  font-sans
+  text-center
+  text-xs;
+}
+.tooltip-b {  
+  visibility: hidden;
+  display: block;
+  width: auto;
+  padding: 0.5em;
+  border-radius: 8px;
+  position: absolute;
+  z-index: 999;
+  top: 110%;
+  right: 0;
+
+  @apply 
+  bg-kk-dark-hover 
+  text-gray-100 
+  font-sans
+  text-center
+  text-xs;
+}
+.tooltip-r {  
+  visibility: hidden;
+  display: block;
+  padding: 0.5em;
+  border-radius: 8px;
+  position: absolute;
+  z-index: 999;
+  top: -50%;
+  left: 110%;
+
+  @apply 
+  bg-kk-dark-hover 
+  text-gray-100 
+  font-sans
+  text-center
+  text-xs;
+}
+button:hover .tooltip-t, 
+button:hover .tooltip-b,
+.help:hover .tooltip-r {
+  visibility: visible;
+}
+
+/* Table Styling */
+table {
+  @apply 
+  text-kk-dark-text 
+  text-sm
+  ;
+}
+thead {
+  @apply
+  text-kk-dark-text-muted
+  ;
+}
+thead tr th {
+  @apply
+  px-3
+  py-2
+  text-left
+  font-medium
+  ;
+}
+td {
+  @apply
+  px-3
+  py-2 
+  border-r 
+  border-b 
+  border-t 
+  border-kk-dark-border/50;
+}
+td:last-child {
+  @apply border-r-0;
+}
+.table-icon {
+  @apply
+  h-5
+  w-5
+  inline-flex
+  items-center
+  mr-2
+  ;
+}
+
+/* Inputs */
+input[type="checkbox"] {
+  @apply accent-purple-500;
+}
+
+/* input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="daatetime-local"]::-webkit-calendar-picker-indicator {
+  @apply text-kk-dark-text;
+  opacity: 1;
+} */
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255,255,255,0.12);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
