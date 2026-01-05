@@ -175,6 +175,10 @@ export async function patchItemGroup(id: number, payload: Catalog.ItemGroup) {
   return res.data;
 }
 
+export async function deleteItemGroup(id: number) {
+  await api.delete(`/api/catalog/item-groups/${id}/`);
+}
+
 
 // Items
 // export async function fetchItems(params?: Record<string, any>) {
@@ -237,6 +241,10 @@ export async function updateItem(id: number, payload: Catalog.ItemGroup) {
 export async function patchItem(id: number, payload: Partial<Catalog.ItemGroup>) {
   const res = await api.patch<Catalog.Item>(`/api/catalog/items/${id}/`, payload);
   return res.data;
+}
+
+export async function deleteItem(id: number) {
+  await api.delete(`/api/catalog/items/${id}/`);
 }
 
 

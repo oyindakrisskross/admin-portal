@@ -109,44 +109,54 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   const [selectedAllLocs, setSelectedAllLocs] = useState(false);
   const initialAvailabilityRef = useRef<ItemAvailability[]>([]);
 
+  const handleRemoveAvailibility = (id: number) => {
+    setItem((prev) => ({
+      ...prev,
+      availabilities: prev.availabilities?.filter((a)=> a.location !== id),
+    }));
+  };
+
+  const handleAddAvailibility = (id: number) => {
+    if (item.availabilities?.find((a) => a.location === id)) return;
+    setItem((prev) => ({
+      ...prev,
+      availabilities: [
+        ...(prev.availabilities ?? []),
+        {
+          location: id,
+        },
+      ],
+    }));
+  };
+
   const toggleLocation = (id: number) => {
     setAvailableLocationIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-    setItem((prev) => {
-      const current = prev.availabilities ?? [];
-      const exists = current.some((a) => a.location === id);
+    const current = item.availabilities ?? [];
+    const exists = current.some((a) => a.location === id);
 
-      if (exists) {
-        return {
-          ...prev,
-          availabilities: current.filter((a) => a.location !== id),
-        };
-      }
-
-      return {
-        ...prev,
-        availabilities: [
-          ...current,
-          {
-            location: id
-          },
-        ],
-      };
-    });
+    if (exists) {
+      handleRemoveAvailibility(id);
+    } else {
+      handleAddAvailibility(id);
+    }
   };
 
   const handleSelectAllLocations = () => {
     setAvailableLocationIds(locations.map((l) => l.id!));
+    locations.map((l) => handleAddAvailibility(l.id!));
   };
 
   const handleRemoveAllLocations = () => {
+    availableLocationIds.map((l)=> handleRemoveAvailibility(l));
     setAvailableLocationIds([]);
   };
 
   const handleRemoveLocation = (id: number) => {
     setAvailableLocationIds((prev) => prev.filter((x) => x !== id));
+    handleRemoveAvailibility(id);
   };
 
 

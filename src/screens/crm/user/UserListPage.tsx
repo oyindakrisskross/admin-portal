@@ -117,7 +117,7 @@ export const UserListPage: React.FC = () => {
             <tbody>
               {users.map((u) => (
                 <tr
-                  key={u.email}
+                  key={u.id}
                   className="cursor-pointer"
                   onClick={() => openPeek(u)}
                 >

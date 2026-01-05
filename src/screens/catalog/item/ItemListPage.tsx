@@ -9,7 +9,7 @@ import { useAuth } from "../../../auth/AuthContext";
 
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
-import { fetchItems, patchItem } from "../../../api/catalog";
+import { deleteItem, fetchItems, patchItem } from "../../../api/catalog";
 import { ItemPeek } from "./ItemPeek";
 import placeholder from "../../../assets/placeholder.png";
 
@@ -146,7 +146,7 @@ export const ItemListPage: React.FC = () => {
               filters={filters}
               onChange={setFilters}
             />
-            <button>
+            {/* <button>
               <span className="tooltip-t">Sort</span>
               <ArrowsUpDownIcon className="h-4 w-4 text-kk-muted"/>
             </button>
@@ -161,7 +161,7 @@ export const ItemListPage: React.FC = () => {
             <button>
               <span className="tooltip-t">Export</span>
               <ArrowUpTrayIcon className="h-4 w-4 text-kk-muted"/>
-            </button>
+            </button> */}
             {can("Item", "create") && (
               <button
                 onClick={() => navigate("/catalog/items/new")} 
@@ -350,7 +350,7 @@ export const ItemListPage: React.FC = () => {
                 </button>
               )}
               {can("Item", "delete") && (
-                <button>
+                <button onClick={() => {deleteItem(selectedId!); navigate(0);}}>
                   <span className="tooltip-b">Delete</span>
                   <TrashIcon className="h-5 w-5 text-red-500" />
                 </button>

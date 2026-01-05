@@ -4,7 +4,7 @@ import { useAuth } from "../../auth/AuthContext";
 
 import { 
   HomeIcon,
-  InboxIcon,
+  // InboxIcon,
   Cog8ToothIcon,
   ChevronRightIcon, 
 } from "@heroicons/react/24/outline";
@@ -17,11 +17,11 @@ const toolboxItems = [
     label: "Dashboard", 
     icon: <HomeIcon className="h-5 w-5" />
   },
-  { 
-    to: "/inbox", 
-    label: "Inbox", 
-    icon: <InboxIcon className="h-5 w-5" />
-  },
+  // { 
+  //   to: "/inbox", 
+  //   label: "Inbox", 
+  //   icon: <InboxIcon className="h-5 w-5" />
+  // },
   { 
     to: "/settings", 
     label: "Settings", 

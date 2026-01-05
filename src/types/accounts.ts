@@ -60,10 +60,10 @@ export interface RolePermission {
 
 export interface UserLocation {
   id?: number;
-  user: number;
+  user?: number;
   location?: number;
   location_name?: number;
-  is_primary: boolean;
+  is_primary?: boolean;
 }
 
 export interface UserProfile {

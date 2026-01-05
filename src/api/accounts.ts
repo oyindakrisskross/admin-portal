@@ -1,7 +1,13 @@
 // src/api/accounts.ts
 
 import api from "./client";
-import { type Role, type Permission, type PermissionCategory, type UserProfile } from "../types/accounts";
+import { 
+  type Role, 
+  type Permission, 
+  type PermissionCategory, 
+  type UserProfile,
+  type UserLocation, 
+} from "../types/accounts";
 import type { FilterSet } from "../types/filters";
 
 export interface PaginatedResult<T> {
@@ -138,4 +144,14 @@ export async function updatePermission(id: number, patch: Partial<Permission>) {
 
 export async function deletePermission(id: number) {
   await api.delete(`/api/permissions/${id}/`);
+}
+
+// User Locations
+export async function createUserLocation(payload: UserLocation) {
+  const res = await api.post<UserLocation>("/api/user-locations/", payload);
+  return res.data;
+}
+
+export async function deleteUserLocation(id: number) {
+  await api.delete(`/api/user-locations/${id}/`);
 }

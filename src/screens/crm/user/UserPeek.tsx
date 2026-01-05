@@ -8,9 +8,6 @@ interface Props {
 }
 
 export const UserPeek: React.FC<Props> = ({ user }) => {
-  useEffect(() => {
-    console.log(user);
-  },[user]);
 
   return (
     <div className="flex h-full flex-col gap-7  p-5 pb-7">
@@ -30,25 +27,6 @@ export const UserPeek: React.FC<Props> = ({ user }) => {
           </h2>
           <p>{user.email}</p>
           <p className="font-medium mt-2">Role: {user.role_name}</p>
-        </div>
-        <div>
-          <h2 className="text-xl font-semibold">Accessible Locations</h2>
-          <table className="grid grid-cols-12">
-            <thead>
-              <tr>
-                <th>Location</th>
-                <th>Address</th>
-              </tr>
-            </thead>
-            <tbody>
-              {user.allowed_locations?.map((loc, idx) => (
-                <tr key={idx}>
-                  <td>{loc.location_name}</td>
-                  <td></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

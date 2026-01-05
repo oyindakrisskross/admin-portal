@@ -15,18 +15,22 @@ const settingsLinks = [
   {
     to: "organization/1",
     label: "Organization",
+    perm: "Organization",
   },
   {
     to: "taxes",
     label: "Taxes",
+    perm: "Taxes",
   },
   {
     to: "units",
     label: "Units of Measurement",
+    perm: "Units",
   },
   {
     to: "locations",
     label: "Locations",
+    perm: "Locations",
   },
   {
     label: "Access Control",
@@ -52,23 +56,25 @@ export default function SettingsShell() {
 
               // simple link (no children)
               if (item.to) {
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end
-                    className={({  isActive }) =>
-                      [
-                        "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium",
-                        isActive
-                          ? "bg-kk-dark-hover text-kk-dark-text"
-                          : "text-kk-dark-text-muted hover:bg-kk-dark-hover hover:text-kk-dark-text",
-                      ].join(" ")
-                    }
-                  >
-                    {item.label}
-                  </NavLink>
-                );
+                if (!item.perm || can(item.perm, "view")) {
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end
+                      className={({  isActive }) =>
+                        [
+                          "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium",
+                          isActive
+                            ? "bg-kk-dark-hover text-kk-dark-text"
+                            : "text-kk-dark-text-muted hover:bg-kk-dark-hover hover:text-kk-dark-text",
+                        ].join(" ")
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  );
+                }
               }
 
               // dropdown section

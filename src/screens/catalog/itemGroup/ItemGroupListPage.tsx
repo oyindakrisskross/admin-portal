@@ -9,17 +9,17 @@ import { useAuth } from "../../../auth/AuthContext";
 
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
-import { fetchItemGroups, patchItemGroup } from "../../../api/catalog";
+import { fetchItemGroups, patchItemGroup, deleteItemGroup } from "../../../api/catalog";
 import { ItemGroupPeek } from "./ItemGroupPeek";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
 
 import { 
-  ArrowsUpDownIcon,
-  MagnifyingGlassIcon,
-  AdjustmentsHorizontalIcon,
-  ArrowUpTrayIcon,
+  // ArrowsUpDownIcon,
+  // MagnifyingGlassIcon,
+  // AdjustmentsHorizontalIcon,
+  // ArrowUpTrayIcon,
   HashtagIcon,
   BanknotesIcon,
   BoldIcon,
@@ -146,7 +146,7 @@ export const ItemGroupListPage: React.FC = () => {
               filters={filters}
               onChange={setFilters}
             />
-            <button>
+            {/* <button>
               <span className="tooltip-t">Sort</span>
               <ArrowsUpDownIcon className="h-4 w-4 text-kk-muted"/>
             </button>
@@ -161,7 +161,7 @@ export const ItemGroupListPage: React.FC = () => {
             <button>
               <span className="tooltip-t">Export</span>
               <ArrowUpTrayIcon className="h-4 w-4 text-kk-muted"/>
-            </button>
+            </button> */}
             {can("Item","create") && (
               <button
                 onClick={() => navigate("/catalog/item-groups/new")} 
@@ -326,7 +326,7 @@ export const ItemGroupListPage: React.FC = () => {
                 </>
               )}
               {can("Item", "delete") && (
-                <button>
+                <button onClick={() => deleteItemGroup(selectedId!)}>
                   <span className="tooltip-b">Delete</span>
                   <TrashIcon className="h-5 w-5 text-red-500" />
                 </button>
