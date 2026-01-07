@@ -16,7 +16,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await login(email, password, 2);
+      await login(email, password, 1);
       navigate("/");
     } catch (err: any) {
       setError("Invalid credentials or server error.");
