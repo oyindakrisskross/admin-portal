@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import ToastModal from "../components/ui/ToastModal";
 import { requestPasswordReset } from "../api/passwordReset";
 
-const PORTAL_ID = 2;
+const PORTAL_ID = 1;
 
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
