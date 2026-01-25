@@ -1,6 +1,6 @@
 // src/screens/settings/access-control/PermCategoryListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import type { PermissionCategory } from "../../../types/accounts";
@@ -9,12 +9,14 @@ import { Plus } from "lucide-react";
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { useAuth } from "../../../auth/AuthContext";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 export const PermCategoryListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<PermissionCategory[]>([]);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] })
+  const [sort, setSort] = useState<SortState<"name" | "portal"> | null>(null);
 
   const filterColumns: ColumnMeta[] = [
       { id: "portal_name", label: "Portal Name", type: "text" },
@@ -32,6 +34,13 @@ export const PermCategoryListPage: React.FC = () => {
     
     navigate(`/settings/permission-categories/${id}/edit`)
   };
+
+  const sortedCategories = useMemo(() => {
+    return sortBy(categories, sort, {
+      name: (c) => c.name ?? "",
+      portal: (c) => c.portal_name ?? "",
+    });
+  }, [categories, sort]);
 
   return (
     <div className="flex-1 flex gap-4">
@@ -63,13 +72,23 @@ export const PermCategoryListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>Permission Category</th>
-                <th>Portal Name</th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
+                  Permission Category{sortIndicator(sort, "name")}
+                </th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "portal"))}
+                >
+                  Portal Name{sortIndicator(sort, "portal")}
+                </th>
               </tr>
             </thead>
             {categories?.length ? (
               <tbody>
-                {categories?.map((c) => (
+                {sortedCategories.map((c) => (
                   <tr
                     key={c.id}
                     className="cursor-pointer"

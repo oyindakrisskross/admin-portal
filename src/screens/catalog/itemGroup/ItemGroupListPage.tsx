@@ -1,6 +1,6 @@
 // src/screens/catalog/ItemGroupListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus } from "lucide-react";
 
@@ -14,6 +14,7 @@ import { ItemGroupPeek } from "./ItemGroupPeek";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 import { 
   // ArrowsUpDownIcon,
@@ -42,6 +43,7 @@ export const ItemGroupListPage: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<ItemGroup | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
+  const [sort, setSort] = useState<SortState<"name" | "stock" | "price" | "status" | "created"> | null>(null);
 
   const filterColumns: ColumnMeta[] = [
     { id: "name", label: "Name", type: "text" },
@@ -128,6 +130,15 @@ export const ItemGroupListPage: React.FC = () => {
     };
   }, [filters]);
 
+  const sortedGroups = useMemo(() => {
+    return sortBy(groups, sort, {
+      name: (g) => g.name,
+      stock: (g) => g.stock_on_hand ?? "",
+      price: (g) => g.min_price ?? g.max_price ?? "",
+      status: (g) => g.status ?? "",
+      created: (g) => (g.created_on ? new Date(g.created_on) : null),
+    });
+  }, [groups, sort]);
 
 
   return (
@@ -179,40 +190,55 @@ export const ItemGroupListPage: React.FC = () => {
           <table className="min-w-full table-auto">
             <thead>
               <tr>
-                <th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
                   <BoldIcon className="table-icon" />
-                  Name
+                  Name{sortIndicator(sort, "name")}
                 </th>
                 {!hasPeek &&
-                  <th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => setSort((s) => nextSort(s, "stock"))}
+                  >
                     <HashtagIcon className="table-icon" />
-                    Stock On Hand
+                    Stock On Hand{sortIndicator(sort, "stock")}
                   </th>
                 }
-                <th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "price"))}
+                >
                   <BanknotesIcon className={`table-icon ${!hasPeek ? "text-left" : "text-right"}`} />
-                  Price
+                  Price{sortIndicator(sort, "price")}
                 </th>
                 {!hasPeek && 
                   <>
-                    <th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                    >
                       <BoltIcon className="table-icon" />
-                      Status
+                      Status{sortIndicator(sort, "status")}
                     </th>
                     <th>
                       <TagIcon className="table-icon" />
                       Categories
                     </th>
-                    <th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "created"))}
+                    >
                       <CalendarDaysIcon className="table-icon" />
-                      Date Created
+                      Date Created{sortIndicator(sort, "created")}
                     </th>
                   </>
                 }
               </tr>
             </thead>
             <tbody>
-              {groups.map((g) => (
+              {sortedGroups.map((g) => (
                 <tr
                   key={g.id}
                   className="cursor-pointer"

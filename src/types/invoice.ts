@@ -4,17 +4,25 @@ export interface InvoiceItemChild {
   id: number;
   item: number;                // item ID
   item_name: string;
+  item_sku?: string;
+  item_inventory_tracking?: boolean;
+  item_returnable?: boolean;
   description: string;
   customization_label: string; // "Crash Course", "No Sugar", or "" if none
   quantity: string;            // decimal as string, e.g. "5.00"
   unit_price: string;          // decimal as string
+  discount_amount: string;
   line_total: string;          // decimal as string
+  refunded_from_line?: number | null;
 }
 
 export interface InvoiceItem {
   id: number;
   item: number;
   item_name: string;
+  item_sku?: string;
+  item_inventory_tracking?: boolean;
+  item_returnable?: boolean;
   description: string;
   customization_label: string;
   quantity: string;
@@ -23,6 +31,7 @@ export interface InvoiceItem {
   tax_amount: string;
   line_total: string;
   parent_line: number | null;        // null for top-level, or parent line id
+  refunded_from_line?: number | null;
   children: InvoiceItemChild[];      // nested children for receipt/customizations
 }
 
@@ -39,6 +48,10 @@ export interface InvoiceResponse {
   number: string;                    // "INV-9-000001"
   type_id: "SALE" | "REFUND";        // currently "SALE" in your examples
   status: "PAID" | "DRAFT" | "VOID" | string;
+  coupon_code?: string;
+  refunded_from?: number | null;
+  refunded_total?: string;           // sum of refunds created for this sale invoice
+  net_grand_total?: string;          // grand_total - refunded_total (for SALE invoices)
   location: number;
   location_name: string;
   customer: number | null;

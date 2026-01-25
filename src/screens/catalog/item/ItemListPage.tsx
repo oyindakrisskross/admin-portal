@@ -1,6 +1,6 @@
 // src/screens/catalog/ItemListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
 
@@ -15,6 +15,7 @@ import placeholder from "../../../assets/placeholder.png";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 import { 
   ArrowsUpDownIcon,
@@ -44,6 +45,7 @@ export const ItemListPage: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
+  const [sort, setSort] = useState<SortState<"name" | "sku" | "price" | "stock" | "status" | "categories"> | null>(null);
 
   const filterColumns: ColumnMeta[] = [
     { id: "name", label: "Name", type: "text" },
@@ -129,6 +131,16 @@ export const ItemListPage: React.FC = () => {
     };
   }, [filters]);
 
+  const sortedItems = useMemo(() => {
+    return sortBy(items, sort, {
+      name: (i) => i.name,
+      sku: (i) => i.sku ?? "",
+      price: (i) => i.price ?? "",
+      stock: (i) => i.stock_on_hand ?? "",
+      status: (i) => i.status ?? "",
+      categories: (i) => (i.categories ?? []).map((c) => c.category_name ?? "").join(", "),
+    });
+  }, [items, sort]);
 
   return (
     <div className="flex-1 flex gap-4">
@@ -179,40 +191,58 @@ export const ItemListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
                   <BoldIcon className="table-icon" />
-                  Name
+                  Name{sortIndicator(sort, "name")}
                 </th>
                 {!hasPeek &&
-                  <th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => setSort((s) => nextSort(s, "sku"))}
+                  >
                     <BoldIcon className="table-icon" />
-                    SKU
+                    SKU{sortIndicator(sort, "sku")}
                   </th>
                 }
-                <th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "price"))}
+                >
                   <BanknotesIcon className="table-icon" />
-                  Price
+                  Price{sortIndicator(sort, "price")}
                 </th>
                 {!hasPeek &&
                   <>
-                    <th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "stock"))}
+                    >
                       <HashtagIcon className="table-icon" />
-                      Stock On Hand
+                      Stock On Hand{sortIndicator(sort, "stock")}
                     </th>
-                    <th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                    >
                       <BoltIcon className="table-icon" />
-                      Status
+                      Status{sortIndicator(sort, "status")}
                     </th>
-                    <th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "categories"))}
+                    >
                       <TagIcon className="table-icon" />
-                      Categories
+                      Categories{sortIndicator(sort, "categories")}
                     </th>
                   </>
                 }
               </tr>
             </thead>
             <tbody>
-              {items.map((i) => (
+              {sortedItems.map((i) => (
                 <tr
                   key={i.id}
                   className="cursor-pointer"

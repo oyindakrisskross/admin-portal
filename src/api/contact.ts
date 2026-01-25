@@ -99,7 +99,7 @@ export async function updateAddressBook(id: number, payload: Contact.AddressBook
 }
 
 // Contacts
-export async function fetchContacts(params?: {filters?:FilterSet}) {
+export async function fetchContacts(params?: { filters?: FilterSet; search?: string }) {
   const search = new URLSearchParams();
 
   if (params?.filters) {
@@ -115,6 +115,10 @@ export async function fetchContacts(params?: {filters?:FilterSet}) {
       }
       search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
     });
+  }
+
+  if (params?.search) {
+    search.set("search", params.search);
   }
 
   const res = await api.get(

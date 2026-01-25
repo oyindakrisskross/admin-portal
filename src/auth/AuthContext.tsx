@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import api, { setAccessToken, setRefreshToken } from "../api/client"; 
+import { applyTheme, DEFAULT_THEME, getStoredTheme, themeScopeForUser } from "../utils/theme";
 
 type PermissionBitset = {
   view: boolean;
@@ -56,7 +57,9 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const fetchMe = async () => {
     try {
       const { data } = await api.get("/api/auth/me");
-      setMe(normalizeMe(data));
+      const normalized = normalizeMe(data);
+      setMe(normalized);
+      applyTheme(getStoredTheme(themeScopeForUser({ id: normalized.id, portal: normalized.portal })));
     } catch {
       setMe(null);
     } finally {
@@ -72,13 +75,16 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     const { data } = await api.post("/api/auth/login", { email, password, portal_id,});
     setAccessToken((data as any).access);
     setRefreshToken((data as any).refresh);
-    setMe(normalizeMe(data));
+    const normalized = normalizeMe(data);
+    setMe(normalized);
+    applyTheme(getStoredTheme(themeScopeForUser({ id: normalized.id, portal: normalized.portal })));
   };
 
   const logout = () => {
     setAccessToken(null);
     setRefreshToken(null);
     setMe(null);
+    applyTheme(DEFAULT_THEME);
   };
 
   const can = (perm: string, action: keyof PermissionBitset = "view") => {

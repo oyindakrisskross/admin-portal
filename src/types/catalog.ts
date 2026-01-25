@@ -204,7 +204,7 @@ export interface ItemGroup {
 
 export interface Item {
   id?: number;
-  sku: string;
+  sku?: string;
   name: string;
   description?: string;
   type_id: ItemType;
@@ -215,8 +215,8 @@ export interface Item {
   unit_name?: string;
   sale_tax?: number;
   sale_tax_name?: string;
-  price: string;
-  cost: string;
+  price?: string;
+  cost?: string;
   status?: ItemStatus;
   visibility?: ItemVisibility;
   group?: number;

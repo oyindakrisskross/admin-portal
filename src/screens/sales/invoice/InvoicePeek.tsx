@@ -11,6 +11,8 @@ interface Props {
 
 export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
   const topLevelItems = invoice.items.filter((ln) => ln.parent_line === null);
+  const refundedTotal = Number(invoice.refunded_total ?? 0);
+  const netTotal = Math.max(0, Number(invoice.net_grand_total ?? invoice.grand_total ?? 0));
 
   return (
     <div className="flex h-full flex-col gap-7 p-5 pb-7">
@@ -62,7 +64,15 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                   </td>
                   <td>{i.quantity}</td>
                   <td>{formatMoneyNGN(+i.unit_price)}</td>
-                  <td>{formatMoneyNGN(+i.discount_amount)}</td>
+                  <td>
+                    {formatMoneyNGN(
+                      (+i.discount_amount || 0) +
+                        (i.children?.reduce(
+                          (sum, c) => sum + (+c.discount_amount || 0),
+                          0
+                        ) ?? 0)
+                    )}
+                  </td>
                   <td className="text-right">{formatMoneyNGN(+i.line_total)}</td>
                 </tr>
               ))}
@@ -80,13 +90,36 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                 <p>Discount</p>
                 <p>{formatMoneyNGN(+invoice.discount_total)}</p>
               </div>
+              {invoice.coupon_code && +invoice.discount_total > 0 && (
+                <div className="flex justify-between text-xs text-kk-dark-text-muted">
+                  <p>Code</p>
+                  <p>{invoice.coupon_code}</p>
+                </div>
+              )}
               <div className="flex justify-between">
                 <p>VAT (7.5%)</p>
                 <p>{formatMoneyNGN(+invoice.tax_total)}</p>
               </div>
+              {invoice.type_id === "SALE" && refundedTotal > 0.01 && (
+                <div className="flex justify-between text-red-500">
+                  <p>Refunded</p>
+                  <p>-{formatMoneyNGN(refundedTotal)}</p>
+                </div>
+              )}
               <div className="flex justify-between items-end">
                 <p className="text-xl">Total</p>
-                <p>{formatMoneyNGN(+invoice.grand_total)}</p>
+                {invoice.type_id === "SALE" && refundedTotal > 0.01 ? (
+                  <div className="flex flex-col items-end leading-tight">
+                    <span className="text-xs text-kk-dark-text-muted line-through">
+                      {formatMoneyNGN(+invoice.grand_total)}
+                    </span>
+                    <span className="text-lg font-semibold text-red-500">
+                      {formatMoneyNGN(netTotal)}
+                    </span>
+                  </div>
+                ) : (
+                  <p>{formatMoneyNGN(+invoice.grand_total)}</p>
+                )}
               </div>
             </div>
           </div>

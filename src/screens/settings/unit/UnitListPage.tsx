@@ -1,17 +1,19 @@
 // src/screens/settings/UnitListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import type { Unit } from "../../../types/catalog";
 import { fetchUnits } from "../../../api/catalog";
 import { Plus } from "lucide-react";
 import { useAuth } from "../../../auth/AuthContext";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 export const UnitListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [units, setUnits] = useState<Unit[] | null>([]);
+  const [sort, setSort] = useState<SortState<"name" | "symbol"> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -25,6 +27,14 @@ export const UnitListPage: React.FC = () => {
     
     navigate(`/settings/units/${id}/edit`)
   };
+
+  const sortedUnits = useMemo(() => {
+    const rows = units ?? [];
+    return sortBy(rows, sort, {
+      name: (u) => u.name ?? "",
+      symbol: (u) => u.symbol ?? "",
+    });
+  }, [units, sort]);
 
   return (
     <div className="flex-1 flex gap-4">
@@ -51,13 +61,23 @@ export const UnitListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>Unit Name</th>
-                <th>Symbol</th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
+                  Unit Name{sortIndicator(sort, "name")}
+                </th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "symbol"))}
+                >
+                  Symbol{sortIndicator(sort, "symbol")}
+                </th>
               </tr>
             </thead>
             {units?.length ? (
               <tbody>
-                {units?.map((t) => (
+                {sortedUnits.map((t) => (
                   <tr
                     key={t.id}
                     className="cursor-pointer"

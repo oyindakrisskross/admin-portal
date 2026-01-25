@@ -1,6 +1,6 @@
 // src/screens/crm/user/UserListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, TrashIcon } from "lucide-react";
 import { type UserProfile } from "../../../types/accounts";
@@ -11,6 +11,7 @@ import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import { UserPeek } from "./UserPeek";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 export const UserListPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ export const UserListPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
+  const [sort, setSort] = useState<SortState<"details" | "portal" | "role" | "status"> | null>(null);
 
   const filterColumns: ColumnMeta = [];
 
@@ -71,6 +73,15 @@ export const UserListPage: React.FC = () => {
       }
     }, [hasId, id, users])
 
+  const sortedUsers = useMemo(() => {
+    return sortBy(users, sort, {
+      details: (u) => `${u.contact_last_name ?? ""} ${u.contact_first_name ?? ""} ${u.email ?? ""}`,
+      portal: (u) => u.portal_name ?? "",
+      role: (u) => u.role_name ?? "",
+      status: (u) => u.status ?? "",
+    });
+  }, [users, sort]);
+
 
   return (
     <div className="flex-1 flex gap-4">
@@ -104,18 +115,38 @@ export const UserListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>User Details</th>
-                <th>Portal</th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "details"))}
+                >
+                  User Details{sortIndicator(sort, "details")}
+                </th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "portal"))}
+                >
+                  Portal{sortIndicator(sort, "portal")}
+                </th>
                 {!hasPeek &&
                   <>
-                    <th>Role</th>
-                    <th>Status</th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "role"))}
+                    >
+                      Role{sortIndicator(sort, "role")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                    >
+                      Status{sortIndicator(sort, "status")}
+                    </th>
                   </>
                 }
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {sortedUsers.map((u) => (
                 <tr
                   key={u.id}
                   className="cursor-pointer"

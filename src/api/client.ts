@@ -25,7 +25,9 @@ api.interceptors.request.use((config) => {
   // Skip attaching JWT to login & refresh requests
   if (
     url.includes("/api/auth/login") ||
-    url.includes("/api/auth/refresh")
+    url.includes("/api/auth/refresh") ||
+    url.includes("/api/auth/password-reset/request") ||
+    url.includes("/api/auth/password-reset/confirm")
   ) {
     return config;
   }
@@ -54,7 +56,9 @@ api.interceptors.response.use(
       status === 401 &&
       !originalRequest._retry &&
       !url.includes("/api/auth/login") &&
-      !url.includes("/api/auth/refresh")
+      !url.includes("/api/auth/refresh") &&
+      !url.includes("/api/auth/password-reset/request") &&
+      !url.includes("/api/auth/password-reset/confirm")
     ) {
       // no refresh token – just fail and let app log out
       if (!refreshToken) {

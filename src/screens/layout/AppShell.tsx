@@ -1,21 +1,34 @@
 import { Outlet, NavLink } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
+import { getStoredTheme, setStoredTheme, themeScopeForUser, type Theme } from "../../utils/theme";
 
 import { 
   HomeIcon,
   // InboxIcon,
   Cog8ToothIcon,
   ChevronRightIcon, 
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
-import { useState } from "react";
-import { ChartNoAxesCombined, Contact, ShoppingBag, ShoppingCart } from "lucide-react";
+import { useEffect, useState } from "react";
+import {
+  ChartNoAxesCombined,
+  Contact,
+  ShoppingBag,
+  ShoppingCart,
+  TicketPercent,
+} from "lucide-react";
 
 const toolboxItems = [
   { 
     to: "/", 
     label: "Dashboard", 
     icon: <HomeIcon className="h-5 w-5" />
+  },
+  { 
+    to: "/profile", 
+    label: "Profile", 
+    icon: <UserCircleIcon className="h-5 w-5" />
   },
   // { 
   //   to: "/inbox", 
@@ -38,6 +51,11 @@ const portalLinks = [
       { to: "/catalog/items", label: "Items", perm: "Item" },
       { to: "/catalog/categories", label: "Categories", perm: "Category"},
     ],
+  },
+  {
+    label: "Promotions",
+    icon: <TicketPercent className="h-5 w-5" />,
+    children: [{ to: "/promotions/coupons", label: "Coupons", perm: "Coupons" }],
   },
   {
     label: "Sales",
@@ -64,6 +82,7 @@ const portalLinks = [
       { to: "/reports/products", label: "Products", perm: "Reports" },
       { to: "/reports/variations", label: "Variations", perm: "Reports" },
       { to: "/reports/invoices", label: "Invoices", perm: "Reports" },
+      { to: "/reports/coupons", label: "Coupons", perm: "Reports" },
     ],
   },
 ];
@@ -72,6 +91,23 @@ const portalLinks = [
 function ShellInner() {
   const { me, logout, can } = useAuth();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const themeScope = me ? themeScopeForUser({ id: me.id, portal: me.portal }) : undefined;
+  const [theme, setTheme] = useState<Theme>(() => getStoredTheme(themeScope));
+
+  // In case the signed-in user changes (shared device), snap to that user's stored theme.
+  // (This also avoids leaking another user's preference across logins.)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!me) return;
+    const next = getStoredTheme(themeScopeForUser({ id: me.id, portal: me.portal }));
+    setTheme(next);
+  }, [me?.id, me?.portal]);
+
+  const toggleTheme = () => {
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    setTheme(next);
+    setStoredTheme(next, themeScope);
+  };
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-kk-dark-bg text-kk-dark-text">
@@ -192,14 +228,29 @@ function ShellInner() {
         </div>
 
         <div className="border-t border-kk-dark-border px-3 py-3 flex items-center justify-between text-xs text-kk-muted">
-          <div className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-wide">Signed in</span>
-            <span className="text-[12px] truncate max-w-[150px]">
-              {me?.email}
-            </span>
-          </div>
           <button
-            className="px-2 py-1 rounded-md text-[11px] border border-kk-dark-border hover:bg-[rgba(255,255,255,0.03)]"
+            type="button"
+            onClick={toggleTheme}
+            className="flex items-center gap-2 rounded-md border border-kk-dark-border px-2 py-1 hover:bg-kk-dark-hover"
+            aria-label="Toggle theme"
+            title="Toggle theme"
+          >
+            <span className="text-[11px] uppercase tracking-wide">Theme</span>
+            <span className="text-[11px]">{theme === "dark" ? "Dark" : "Light"}</span>
+            <span
+              className="relative inline-flex h-5 w-9 items-center rounded-full border border-kk-dark-border bg-kk-dark-bg"
+            >
+              <span
+                className={[
+                  "inline-block h-4 w-4 transform rounded-full bg-kk-accent transition-transform",
+                  theme === "dark" ? "translate-x-4" : "translate-x-1",
+                ].join(" ")}
+              />
+            </span>
+          </button>
+
+          <button
+            className="px-2 py-1 rounded-md text-[11px] border border-kk-dark-border hover:bg-kk-dark-hover"
             onClick={logout}
           >
             Log out

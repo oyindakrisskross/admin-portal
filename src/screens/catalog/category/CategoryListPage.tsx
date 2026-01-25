@@ -1,17 +1,27 @@
 // src/screens/catalog/category/CategoryListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { fetchCategories } from "../../../api/catalog";
 import type { Category } from "../../../types/catalog";
 import { useAuth } from "../../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import { Plus } from "lucide-react";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 export const CategoryListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<Category[] | null>([]);
+  const [sort, setSort] = useState<SortState<"name" | "parent"> | null>(null);
+
+  const sortedCategories = useMemo(() => {
+    const rows = categories ?? [];
+    return sortBy(rows, sort, {
+      name: (c) => c.name,
+      parent: (c) => c.parent_name ?? "",
+    });
+  }, [categories, sort]);
 
   useEffect(() => {
     (async () => {
@@ -51,13 +61,23 @@ export const CategoryListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>Category Name</th>
-                <th>Parent</th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
+                  Category Name{sortIndicator(sort, "name")}
+                </th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "parent"))}
+                >
+                  Parent{sortIndicator(sort, "parent")}
+                </th>
               </tr>
             </thead>
             {categories?.length ? (
               <tbody>
-                {categories.map((c) => (
+                {sortedCategories.map((c) => (
                   <tr
                     key={c.id}
                     className="cursor-pointer"

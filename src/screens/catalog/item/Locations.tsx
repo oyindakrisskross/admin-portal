@@ -1,9 +1,10 @@
 // src/screens/catalog/item/Locations.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 import type { Inventory } from "../../../types/catalog";
 import { fetchInventory } from "../../../api/catalog";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 interface Props {
   itemId: number;
@@ -11,6 +12,7 @@ interface Props {
 
 export const Locations: React.FC<Props> = ({ itemId }) => {
   const [inventories, setInventories] = useState<Inventory[]>([]);
+  const [sort, setSort] = useState<SortState<"location" | "stock" | "wasted" | "reorder"> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -19,19 +21,48 @@ export const Locations: React.FC<Props> = ({ itemId }) => {
     })();
   }, [itemId]);
 
+  const rows = useMemo(() => {
+    return sortBy(inventories, sort, {
+      location: (r) => r.location_name ?? "",
+      stock: (r) => r.stock_qty ?? "",
+      wasted: (r) => r.wasted ?? "",
+      reorder: (r) => r.reorder_point ?? "",
+    });
+  }, [inventories, sort]);
+
   return (
     <div>
       <table className="min-w-full">
         <thead>
           <tr>
-            <th>Location</th>
-            <th>Stock Qty</th>
-            <th>Wasted Qty</th>
-            <th>Reorder Point</th>
+            <th
+              className="cursor-pointer select-none"
+              onClick={() => setSort((s) => nextSort(s, "location"))}
+            >
+              Location{sortIndicator(sort, "location")}
+            </th>
+            <th
+              className="cursor-pointer select-none"
+              onClick={() => setSort((s) => nextSort(s, "stock"))}
+            >
+              Stock Qty{sortIndicator(sort, "stock")}
+            </th>
+            <th
+              className="cursor-pointer select-none"
+              onClick={() => setSort((s) => nextSort(s, "wasted"))}
+            >
+              Wasted Qty{sortIndicator(sort, "wasted")}
+            </th>
+            <th
+              className="cursor-pointer select-none"
+              onClick={() => setSort((s) => nextSort(s, "reorder"))}
+            >
+              Reorder Point{sortIndicator(sort, "reorder")}
+            </th>
           </tr>
         </thead>
         <tbody>
-          {inventories.map((t) => (
+          {rows.map((t) => (
             <tr key={t.id}>
               <td>{t.location_name}</td>
               <td>{t.stock_qty}</td>

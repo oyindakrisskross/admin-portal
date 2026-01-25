@@ -5,6 +5,8 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 
 import LoginPage from "../screens/LoginPage";
+import ForgotPasswordPage from "../screens/ForgotPasswordPage";
+import ResetPasswordPage from "../screens/ResetPasswordPage";
 import AppShell from "../screens/layout/AppShell";
 import { ItemGroupListPage } from "../screens/catalog/itemGroup/ItemGroupListPage";
 import { ItemListPage } from "../screens/catalog/item/ItemListPage";
@@ -36,7 +38,13 @@ import VariationsReportPage from "../screens/reports/VariationsReportPage";
 import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
 import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
+import InvoiceRefundPage from "../screens/sales/invoice/InvoiceRefundPage";
 import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
+import CouponsReportPage from "../screens/reports/CouponsReportPage";
+import CouponDetailReportPage from "../screens/reports/coupons/CouponDetailReportPage";
+import { CouponListPage } from "../screens/promotions/coupon/CouponListPage";
+import CouponFormPage from "../screens/promotions/coupon/CouponFormPage";
+import ProfilePage from "../screens/ProfilePage";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { me, loading } = useAuth();
@@ -57,6 +65,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route
         path="/"
         element={
@@ -67,6 +77,7 @@ export default function App() {
       >
         {/* Home / dashboard */}
         <Route index element={<ReportsOverviewPage />} />
+        <Route path="profile" element={<ProfilePage />} />
         <Route 
           path="reports/" 
           element={
@@ -106,6 +117,56 @@ export default function App() {
               <InvoicesReportPage />
             </RequirePerm>
           } 
+        />
+        <Route
+          path="reports/coupons"
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <CouponsReportPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="reports/coupons/:code"
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <CouponDetailReportPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Promotions: Coupons */}
+        <Route
+          path="promotions/coupons"
+          element={
+            <RequirePerm perm="Coupons" action="view">
+              <CouponListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="promotions/coupons/:id"
+          element={
+            <RequirePerm perm="Coupons" action="view">
+              <CouponListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="promotions/coupons/new"
+          element={
+            <RequirePerm perm="Coupons" action="create">
+              <CouponFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="promotions/coupons/:id/edit"
+          element={
+            <RequirePerm perm="Coupons" action="edit">
+              <CouponFormPage />
+            </RequirePerm>
+          }
         />
 
         {/* Catalog: Item Groups */}
@@ -224,6 +285,14 @@ export default function App() {
           element={
             <RequirePerm perm="Invoices" action="view">
               <InvoiceListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="sales/invoices/:id/refund"
+          element={
+            <RequirePerm perm="Sales Return" action="create">
+              <InvoiceRefundPage />
             </RequirePerm>
           }
         />
