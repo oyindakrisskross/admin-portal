@@ -190,6 +190,7 @@ export default function ReportsOverviewPage() {
         <KpiCard label="Items Sold" value={data ? formatNumber(+data.performance.products_sold) : "—"} />
         <KpiCard label="Discounted Orders" value={data ? formatNumber(data.performance.discounted_orders) : "—"} />
         <KpiCard label="Net Discount Amount" value={data ? formatMoneyNGN(+data.performance.net_discount_amount) : "—"} />
+        <KpiCard label="Total Refunded" value={data ? formatMoneyNGN(+(data.performance.total_refunded ?? 0)) : "—"} />
         <KpiCard label="Total Tax" value={data ? formatMoneyNGN(+data.performance.tax_total) : "—"} />
       </div>
 

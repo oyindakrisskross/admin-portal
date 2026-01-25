@@ -22,9 +22,14 @@ import {
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import ListPageHeader from "../layout/ListPageHeader";
 import { Loader2 } from "lucide-react";
+import ToastModal from "../ui/ToastModal";
 
 interface Props {
   initial?: Contact | null;
+  mode?: "page" | "modal";
+  embedded?: boolean;
+  onClose?: () => void;
+  onSaved?: (contact: Contact) => void;
 }
 
 const INITIAL_TYPE: ContactType = "BUSINESS";
@@ -35,7 +40,13 @@ const EMPTY_CONTACT: Contact = {
   contact_type: INITIAL_TYPE,
 };
 
-export const ContactForm: React.FC<Props> = ({ initial }) => {
+export const ContactForm: React.FC<Props> = ({
+  initial,
+  mode = "page",
+  embedded = false,
+  onClose,
+  onSaved,
+}) => {
   const navigate = useNavigate();
 
   const [contact, setContact] = useState<Contact>(initial ?? EMPTY_CONTACT);
@@ -62,10 +73,11 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
   const [billStates, setBillStates] = useState<State[]>([]);
 
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: "error" | "success" } | null>(null);
 
 
-  const handleTypeChange = (event) => {
-    setSelectedType(event.target.value);
+  const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedType(event.target.value as ContactType);
   };
 
   const handleChange = (patch: Partial<Contact>) => {
@@ -80,12 +92,12 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
     setBilling((s) => ({ ...(s ?? {} as any), ...patch }));
   };
 
-  const handleShipCountryChange = (event) => {
+  const handleShipCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
 
     const c = event.target.value;
 
     handleShippingChange({ country: c, state: "" });
-    setShipCountry(shipCountry);
+    setShipCountry(c);
 
     (async () => {
       const data = await fetchStates(
@@ -105,12 +117,12 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
     })();
   };
 
-  const handleBillCountryChange = (event) => {
+  const handleBillCountryChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
 
     const c = event.target.value;
     
     handleBillingChange({ country: c, state: "" });
-    setBillCountry(billCountry);
+    setBillCountry(c);
 
     (async () => {
       const data = await fetchStates(
@@ -184,7 +196,16 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
       await syncShipAddress(saved.id!);
       await syncBillAddress(saved.id!);
 
-      navigate(`/crm/contacts/${saved.id}`)
+      if (mode === "modal") {
+        onSaved?.(saved);
+        onClose?.();
+      } else {
+        navigate(`/crm/contacts/${saved.id}`);
+      }
+      setToast({ message: "Contact saved.", variant: "success" });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || "Failed to save contact.";
+      setToast({ message: String(msg), variant: "error" });
     } finally {
       setSaving(false);
     }
@@ -237,20 +258,28 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
 
   return (
     <>
-      <ListPageHeader 
-        section="CRM"
-        title={initial ? `Edit ${initial.first_name} ${initial.last_name}` : "New Contact"}
-        right = {
-          <button
-            onClick={() => navigate("/crm/contacts")}
-            className="p-1 rounded-md hover:bg-[rgba(255,255,255,0.06)] text-kk-muted hover:text-gray-100"
-          >
-            <XMarkIcon className="h-7 w-7" />
-          </button>
-        } 
+      <ToastModal
+        message={toast?.message ?? null}
+        onClose={() => setToast(null)}
+        variant={toast?.variant ?? "error"}
       />
 
-      <div className="flex flex-col gap-6 text-sm px-6 pt-8 pb-8">
+      {!embedded ? (
+        <ListPageHeader
+          section="CRM"
+          title={initial ? `Edit ${initial.first_name} ${initial.last_name}` : "New Contact"}
+          right={
+            <button
+              onClick={() => (mode === "modal" ? onClose?.() : navigate("/crm/contacts"))}
+              className="p-1 rounded-md hover:bg-[rgba(255,255,255,0.06)] text-kk-muted hover:text-gray-100"
+            >
+              <XMarkIcon className="h-7 w-7" />
+            </button>
+          }
+        />
+      ) : null}
+
+      <div className={embedded ? "flex flex-col gap-6 text-sm px-0 pt-0 pb-0" : "flex flex-col gap-6 text-sm px-6 pt-8 pb-8"}>
         <div className="grid grid-cols-12 gap-2">
           <p className="col-span-2">Contact Type</p>
           <div className="col-span-5 flex gap-3">
@@ -485,7 +514,7 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
         <div className="flex justify-end gap-2">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => (mode === "modal" ? onClose?.() : navigate(-1))}
             className="danger rounded-full border border-red-600 px-4 py-1.5 text-xs font-medium text-red-600"
           >
             Cancel
@@ -497,7 +526,7 @@ export const ContactForm: React.FC<Props> = ({ initial }) => {
             className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
           >
             {saving && <Loader2 className="h-3 w-3 animate-spin" />}
-            Save Item
+            Save Contact
           </button>
         </div>
       </div>

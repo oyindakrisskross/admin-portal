@@ -1,6 +1,7 @@
 // src/api/reports.ts
 
 import type { GroupResponse, OverviewResponse, ReportResponse } from "../types/reports";
+import type { CouponDetailReportResponse, CouponReportResponse } from "../types/reports";
 import api from "./client";
 
 export interface PaginatedResult<T> {
@@ -133,5 +134,58 @@ export async function fetchGroupReport(args: {
   if (args.granularity) q.set("granularity", args.granularity);
 
   const res = await api.get<GroupResponse>(`/api/sales/reports/products/group/${args.groupId}/?${q.toString()}`);
+  return res.data;
+}
+
+export async function fetchCouponsReport(args: {
+  start: string;
+  end: string;
+  locationIds?: number[];
+  granularity?: "hour" | "day" | "week" | "month";
+  search?: string;
+  sort?: "net_discount" | "discounted_orders" | "code" | "name";
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  q.set("start", args.start);
+  q.set("end", args.end);
+  if (args.granularity) q.set("granularity", args.granularity);
+  if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
+  if (args.search) q.set("search", args.search);
+  if (args.sort) q.set("sort", args.sort);
+  if (args.order) q.set("order", args.order);
+  q.set("limit", String(args.limit ?? 25));
+  q.set("offset", String(args.offset ?? 0));
+
+  const res = await api.get<CouponReportResponse>(`/api/sales/reports/coupons/?${q.toString()}`);
+  return res.data;
+}
+
+export async function fetchCouponDetailReport(args: {
+  code: string;
+  start: string;
+  end: string;
+  locationIds?: number[];
+  granularity?: "hour" | "day" | "week" | "month";
+  sort?: "date" | "discount" | "net_sales" | "number";
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  q.set("start", args.start);
+  q.set("end", args.end);
+  if (args.granularity) q.set("granularity", args.granularity);
+  if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
+  if (args.sort) q.set("sort", args.sort);
+  if (args.order) q.set("order", args.order);
+  q.set("limit", String(args.limit ?? 25));
+  q.set("offset", String(args.offset ?? 0));
+
+  const res = await api.get<CouponDetailReportResponse>(
+    `/api/sales/reports/coupons/${encodeURIComponent(args.code)}/?${q.toString()}`
+  );
   return res.data;
 }

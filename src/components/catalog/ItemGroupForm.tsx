@@ -15,6 +15,7 @@ import {
 
 import { SkuPatternModal } from "./SkuPatternModal";
 import ListPageHeader from "../layout/ListPageHeader";
+import ToastModal from "../ui/ToastModal";
 import { 
   createItemGroup, 
   updateItemGroup,
@@ -45,17 +46,17 @@ type PreviewItem = {
   price: string;
 };
 
-const EMPTY_GROUP: ItemGroup = {
-  name: "",
-  description: "",
-  type_id: "GOOD",
-  status: "ACTIVE",
-  returnable: false,
-  sellable: true,
-  purchasable: true,
-  inventory_tracking: true,
-  attributes: [],
-  items: [],
+const EMPTY_GROUP: ItemGroup = { 
+  name: "", 
+  description: "", 
+  type_id: "GOOD", 
+  status: "ACTIVE", 
+  returnable: true, 
+  sellable: true, 
+  purchasable: true, 
+  inventory_tracking: true, 
+  attributes: [], 
+  items: [], 
   sku_pattern: { rows: [] },
   gallery: [],
 };
@@ -74,6 +75,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const navigate = useNavigate();
   const [group, setGroup] = useState<ItemGroup>(initial ?? EMPTY_GROUP);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [skuModalOpen, setSkuModalOpen] = useState(false);
   const [selectedType, setSelectedType] = useState<ItemType>(initial?.type_id ?? INITIAL_TYPE);
   const [attributeChoices, setAttributeChoices] = useState<Attribute[]>([]);
@@ -88,8 +90,8 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [previewItems, setPreviewItems] = useState<PreviewItem[]>([]);
   const attrIdCounter = useRef(-1);
 
-  const [sellable, setSellable] = useState(true);
-  const [purchasable, setPurchasable] = useState(true);
+  const [sellable, setSellable] = useState(initial?.sellable ?? true);
+  const [purchasable, setPurchasable] = useState(initial?.purchasable ?? true);
   const [trackInventory, setTrackInventory] = useState(
     initial?.inventory_tracking ?? true
   );
@@ -128,7 +130,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   }, [initial]);
 
   useEffect(() => {
-    let items = generatePreviewItemsFromGroup(group.name, group.attributes);
+    let items = generatePreviewItemsFromGroup(group.attributes);
     if (group.sku_pattern) {
       items = applySkuToPreviewItems(
         items,
@@ -202,18 +204,72 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
     setGroup((g) => ({ ...g, ...patch }));
   };
 
-  const handleTypeChange = (event) => {
-    setSelectedType(event.target.value);
+  const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSelectedType(event.target.value as ItemType);
   };
 
-  const handleSellableChg = (event) => {
-    if (!event.target.checked) {
-      setSellable(event.target.checked);
-      setTrackInventory(event.target.checked);
-    } else { 
-      setSellable(event.target.checked);
+  const handleSellableChg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setSellable(checked);
+
+    if (!checked) {
+      setTrackInventory(false);
+      setPreviewItems((items) =>
+        items.map((it) => ({
+          ...it,
+          price: "0",
+        }))
+      );
     }
-  }
+  };
+
+  const handlePurchasableChg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setPurchasable(checked);
+
+    if (!checked) {
+      setPreviewItems((items) =>
+        items.map((it) => ({
+          ...it,
+          cost: "0",
+        }))
+      );
+    }
+  };
+
+  const handleCopyCostToAll = () => {
+    if (!purchasable) return;
+    if (!previewItems.length) return;
+
+    const first = previewItems[0].cost ?? "";
+    const costNum = Number(first);
+    if (first === "" || !Number.isFinite(costNum) || costNum <= 0) {
+      setError("Enter a valid Cost Price (> 0) in the first row before copying.");
+      return;
+    }
+
+    setError(null);
+    setPreviewItems((items) =>
+      items.map((it, idx) => (idx === 0 ? it : { ...it, cost: first }))
+    );
+  };
+
+  const handleCopyPriceToAll = () => {
+    if (!sellable) return;
+    if (!previewItems.length) return;
+
+    const first = previewItems[0].price ?? "";
+    const priceNum = Number(first);
+    if (first === "" || !Number.isFinite(priceNum) || priceNum < 0) {
+      setError("Enter a valid Selling Price (≥ 0) in the first row before copying.");
+      return;
+    }
+
+    setError(null);
+    setPreviewItems((items) =>
+      items.map((it, idx) => (idx === 0 ? it : { ...it, price: first }))
+    );
+  };
 
   const handleAttrChange = (index: number, patch: Partial<ItemGroupAttribute>) => {
     setGroup((g) => ({
@@ -387,6 +443,32 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
 
 
   const handleSave = async () => {
+    setError(null);
+
+    if (sellable) {
+      const bad = previewItems.findIndex((pi) => {
+        const v = pi.price ?? "";
+        const n = Number(v);
+        return v === "" || !Number.isFinite(n) || n < 0;
+      });
+      if (bad >= 0) {
+        setError("Selling Price is required (and must be ≥ 0) for all items when Sellable is checked.");
+        return;
+      }
+    }
+
+    if (purchasable) {
+      const bad = previewItems.findIndex((pi) => {
+        const v = pi.cost ?? "";
+        const n = Number(v);
+        return v === "" || !Number.isFinite(n) || n <= 0;
+      });
+      if (bad >= 0) {
+        setError("Cost Price is required (and must be > 0) for all items when Purchasable is checked.");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // 1) attributes_input for the backend
@@ -399,13 +481,8 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
       const item_variants_input = previewItems.map((pi) => ({
         attributes: pi.attributesByName,
         sellable: sellable,
-        // Only send cost/price if those toggles are enabled
-        ...(purchasable && pi.cost
-          ? { cost: pi.cost }
-          : {}),
-        ...(sellable && pi.price
-          ? { price: pi.price }
-          : {}),
+        cost: purchasable ? pi.cost : "0",
+        price: sellable ? pi.price : "0",
         inventory_tracking: trackInventory,
       }));
 
@@ -417,6 +494,8 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
         tax_rule: group.tax_rule,
         returnable: group.returnable,
         inventory_tracking: trackInventory,
+        sellable,
+        purchasable,
         sku_pattern: group.sku_pattern,
         attributes_input,
         item_variants_input,
@@ -434,6 +513,8 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
       await syncGallery(saved.id!);
 
       navigate(`/catalog/item-groups/${saved.id}`);
+    } catch (e) {
+      setError("Failed to save item group. Please check the form and try again.");
     } finally {
       setSaving(false);
     }
@@ -779,7 +860,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
               <input
                 type="checkbox"
                 checked={purchasable}
-                onChange={(e) => setPurchasable(e.target.checked)}
+                onChange={handlePurchasableChg}
               />
               Purchasable
             </label>
@@ -804,10 +885,30 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
                     <th className="px-2 py-2 text-left font-medium">ITEM NAME</th>
                     <th className="px-2 py-2 text-left font-medium">SKU</th>
                     <th className="px-2 py-2 text-left font-medium">
-                      COST PRICE (per unit)
+                      <div className="flex flex-col gap-1">
+                        <span>COST PRICE (per unit)</span>
+                        <button
+                          type="button"
+                          disabled={!purchasable}
+                          onClick={handleCopyCostToAll}
+                          className="w-fit rounded-full border border-kk-dark-input-border px-2 py-0.5 text-[10px] font-medium hover:bg-kk-dark-hover disabled:opacity-60"
+                        >
+                          Copy to All
+                        </button>
+                      </div>
                     </th>
                     <th className="px-2 py-2 text-left font-medium">
-                      SELLING PRICE (per unit)
+                      <div className="flex flex-col gap-1">
+                        <span>SELLING PRICE (per unit)</span>
+                        <button
+                          type="button"
+                          disabled={!sellable}
+                          onClick={handleCopyPriceToAll}
+                          className="w-fit rounded-full border border-kk-dark-input-border px-2 py-0.5 text-[10px] font-medium hover:bg-kk-dark-hover disabled:opacity-60"
+                        >
+                          Copy to All
+                        </button>
+                      </div>
                     </th>
                   </tr>
                 </thead>
@@ -897,6 +998,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
             Save Item Group
           </button>
         </div>
+        <ToastModal message={error} onClose={() => setError(null)} variant="error" />
       </div>
 
       <SkuPatternModal
@@ -930,7 +1032,6 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
 };
 
 function generatePreviewItemsFromGroup(
-  name: string,
   attributes: ItemGroupAttribute[]
 ): PreviewItem[] {
   const cleanAttrs = attributes

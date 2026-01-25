@@ -51,6 +51,7 @@ import {
   QuestionMarkCircleIcon,
 } from "@heroicons/react/24/outline";
 import ListPageHeader from "../layout/ListPageHeader";
+import ToastModal from "../ui/ToastModal";
 
 interface Props {
   initial?: Item | null;
@@ -58,24 +59,17 @@ interface Props {
 
 const INITIAL_TYPE: ItemType = "GOOD";
 
-const EMPTY_ITEM: Item = {
-  name: "",
-  sku: "",
-  description: "",
-  type_id: INITIAL_TYPE,
-  status: "ACTIVE",
-  returnable: false,
-  sellable: true,
-  price: "",
-  cost: "",
-  purchasable: true,
-  inventory_tracking: false,
-  gallery: [],
-  weight: "",
-  width: "",
-  height: "",
-  length: "",
-  scheduled: false,
+const EMPTY_ITEM: Item = { 
+  name: "", 
+  description: "", 
+  type_id: INITIAL_TYPE, 
+  status: "ACTIVE", 
+  returnable: true, 
+  sellable: true, 
+  purchasable: true, 
+  inventory_tracking: false, 
+  gallery: [], 
+  scheduled: false, 
   schedules: [],
   customized: false,
   customizations: [],
@@ -95,9 +89,10 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   const [items, setItems] = useState<Item[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [saving, setSaving] = useState(false);
-  const [selectedType, setSelectedType] = useState<ItemType>(initial?.type_id ?? INITIAL_TYPE);
-  const [unitChoices, setUnitChoices] = useState<Unit[]>([]);
-  const [taxRuleChoices, setTaxRuleChoices] = useState<TaxRule[]>([]);
+  const [error, setError] = useState<string | null>(null); 
+  const [selectedType, setSelectedType] = useState<ItemType>(initial?.type_id ?? INITIAL_TYPE); 
+  const [unitChoices, setUnitChoices] = useState<Unit[]>([]); 
+  const [taxRuleChoices, setTaxRuleChoices] = useState<TaxRule[]>([]); 
 
   const [selectedImageIdx, setSelectedImageIdx] = useState<number | null>(null);
   const [gallery, setGallery] = useState<GalleryItemLocal[]>([]);
@@ -161,8 +156,8 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
 
   const [returnable, setReturnable] = useState(
-    initial?.returnable ?? false
-  );
+    initial?.returnable ?? true
+  ); 
 
   const [sellable, setSellable] = useState(
     initial?.sellable ?? true
@@ -325,25 +320,36 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     setItem((i) => ({ ...i, ...patch }));
   };
 
-  const handleTypeChange = (event) => {
-    setSelectedType(event.target.value);
+  const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => { 
+    const nextType = event.target.value as ItemType; 
+    setSelectedType(nextType); 
+ 
+    if (nextType === "SERVICE") { 
+      setTrackInventory(false); 
+      setReturnable(true); 
+    } 
+  }; 
 
-    if (selectedType === "SERVICE") {
+  const handleSellableChg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setSellable(checked);
+
+    if (!checked) {
+      setCustomized(false);
       setTrackInventory(false);
-      setReturnable(false);
+      setScheduled(false);
+      handleChange({ price: "0" });
     }
   };
 
-  const handleSellableChg = (event) => {
-    if (!event.target.checked) {
-      setSellable(event.target.checked);
-      setCustomized(event.target.checked);
-      setTrackInventory(event.target.checked);
-      setScheduled(event.target.checked);
-    } else {
-      setSellable(event.target.checked);
+  const handlePurchasableChg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setPurchasable(checked);
+
+    if (!checked) {
+      handleChange({ cost: "0" });
     }
-  }
+  };
 
   const handleCategoryChg = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -764,6 +770,27 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   };
 
   const handleSave = async () => {
+    setError(null);
+
+    const normalizedPrice = sellable ? item.price : "0";
+    const normalizedCost = purchasable ? item.cost : "0";
+
+    if (sellable) {
+      const priceNum = Number(normalizedPrice);
+      if (normalizedPrice == null || normalizedPrice === "" || !Number.isFinite(priceNum) || priceNum < 0) {
+        setError("Price is required (and must be ≥ 0) when Sellable is checked.");
+        return;
+      }
+    }
+
+    if (purchasable) {
+      const costNum = Number(normalizedCost);
+      if (normalizedCost == null || normalizedCost === "" || !Number.isFinite(costNum) || costNum <= 0) {
+        setError("Cost is required (and must be > 0) when Purchasable is checked.");
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const payload: any = {
@@ -776,8 +803,8 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
         returnable: returnable,
         inventory_tracking: trackInventory,
         inventory_input: item.inventory_input,
-        price: item.price,
-        cost: item.cost,
+        price: normalizedPrice,
+        cost: normalizedCost,
         sellable: sellable,
         purchasable: purchasable,
         weight: item.weight,
@@ -803,6 +830,8 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
       await syncAvailability(saved.id!);
 
       navigate(`/catalog/items/${saved.id}`);
+    } catch (e) {
+      setError("Failed to save item. Please check the form and try again.");
     } finally {
       setSaving(false);
     }
@@ -1106,7 +1135,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
                 <input 
                   type="checkbox"
                   checked={purchasable}
-                  onChange={(e) => setPurchasable(e.target.checked)}
+                  onChange={handlePurchasableChg}
                 />
                 Purchasable
               </label>
@@ -1557,6 +1586,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
             Save Item
           </button>
         </div>
+        <ToastModal message={error} onClose={() => setError(null)} variant="error" />
       </div>
     </>
   )

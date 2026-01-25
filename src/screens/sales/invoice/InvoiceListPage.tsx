@@ -1,8 +1,8 @@
 // src/screens/sales/invoice/InvoiceListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../auth/AuthContext";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type { InvoiceResponse } from "../../../types/invoice";
 import { fetchOrders } from "../../../api/invoice";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
@@ -10,17 +10,23 @@ import { Plus, ReceiptText } from "lucide-react";
 import { formatMoneyNGN } from "../../../helpers";
 import SidePeek from "../../../components/layout/SidePeek";
 import { InvoicePeek } from "./InvoicePeek";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { FilterBar } from "../../../components/filter/FilterBar";
+import type { ColumnMeta, FilterSet } from "../../../types/filters";
 
 export const InvoiceListPage: React.FC = () => {
   const { can } = useAuth();
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const hasId = Boolean(id);
 
   const [invoices, setInvoices] = useState<InvoiceResponse[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceResponse | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [sort, setSort] = useState<SortState<"number" | "date" | "status" | "location" | "total" | "sales"> | null>(null);
+  const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
 
   const hasPeek = !!selectedInvoice;
 
@@ -55,11 +61,26 @@ export const InvoiceListPage: React.FC = () => {
 
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      const data = await fetchOrders();
-      setInvoices(data.results);
+      const q = new URLSearchParams(location.search);
+      const coupon_code = q.get("coupon_code") || undefined;
+      const start = q.get("start") || undefined;
+      const end = q.get("end") || undefined;
+
+      const data = await fetchOrders({
+        ...(coupon_code ? { coupon_code } : {}),
+        ...(start && end ? { start, end } : {}),
+        filters,
+      });
+      if (!cancelled) setInvoices(data.results);
     })();
-  },[]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.search, filters]);
 
   useEffect(() => {
     if (!hasId || !invoices.length) return;
@@ -75,6 +96,42 @@ export const InvoiceListPage: React.FC = () => {
     }
   }, [hasId, id, invoices])
 
+  const sortedInvoices = useMemo(() => {
+    return sortBy(invoices, sort, {
+      number: (i) => i.number ?? "",
+      date: (i) => new Date(i.invoice_date),
+      status: (i) => i.status ?? "",
+      location: (i) => i.location_name ?? "",
+      total: (i) => Number(i.net_grand_total ?? i.grand_total ?? 0),
+      sales: (i) => i.created_by_name ?? "",
+    });
+  }, [invoices, sort]);
+
+  const refundedTotal = (inv: InvoiceResponse) => Number(inv.refunded_total ?? 0);
+  const netTotal = (inv: InvoiceResponse) =>
+    Math.max(0, Number(inv.net_grand_total ?? (Number(inv.grand_total ?? 0) - refundedTotal(inv))));
+  const displayStatus = (inv: InvoiceResponse) => {
+    if (inv.type_id === "SALE" && refundedTotal(inv) > 0.01) return "REFUNDED";
+    return inv.status;
+  };
+
+  const renderTotal = (inv: InvoiceResponse) => {
+    const refunded = refundedTotal(inv);
+    const net = netTotal(inv);
+    const isRefunded = inv.type_id === "SALE" && refunded > 0.01;
+
+    if (!isRefunded) return <span>{formatMoneyNGN(+inv.grand_total)}</span>;
+
+    return (
+      <div className="flex flex-col items-end leading-tight">
+        <span className="text-xs text-kk-dark-text-muted line-through">
+          {formatMoneyNGN(+inv.grand_total)}
+        </span>
+        <span className="text-sm font-medium text-red-500">{formatMoneyNGN(net)}</span>
+      </div>
+    );
+  };
+
   return (
     <div className="flex-1 flex gap-4">
       <div className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${
@@ -84,12 +141,21 @@ export const InvoiceListPage: React.FC = () => {
           icon= {<ReceiptText className="h-5 w-5" />}
           section= "Sales"
           title= "Invoices"
+          subtitle={(() => {
+            const q = new URLSearchParams(location.search);
+            const code = q.get("coupon_code");
+            const start = q.get("start");
+            const end = q.get("end");
+            if (!code) return undefined;
+            if (start && end) return `Filtered by coupon: ${code} (${start} to ${end})`;
+            return `Filtered by coupon: ${code}`;
+          })()}
           right= {!hasPeek ? (<div className="flex items-center gap-1 text-xs">
-            {/* <FilterBar 
+            <FilterBar 
               columns={filterColumns}
               filters={filters}
               onChange={setFilters}
-            /> */}
+            />
             {/* <button>
               <span className="tooltip-t">Sort</span>
               <ArrowsUpDownIcon className="h-4 w-4 text-kk-muted"/>
@@ -124,22 +190,50 @@ export const InvoiceListPage: React.FC = () => {
           <table className="min-w-full table-auto">
             <thead>
               <tr>
-                <th>
-                  { !hasPeek ? "Invoice Number" : "Invoice"}
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "number"))}
+                >
+                  { !hasPeek ? "Invoice Number" : "Invoice"}{sortIndicator(sort, "number")}
                 </th>
                 {!hasPeek && (
                   <>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Location</th>
-                    <th>Total</th>
-                    <th>Sales Person</th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "date"))}
+                    >
+                      Date{sortIndicator(sort, "date")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                    >
+                      Status{sortIndicator(sort, "status")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "location"))}
+                    >
+                      Location{sortIndicator(sort, "location")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "total"))}
+                    >
+                      Total{sortIndicator(sort, "total")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "sales"))}
+                    >
+                      Sales Person{sortIndicator(sort, "sales")}
+                    </th>
                   </>
                 )}
               </tr>
             </thead>
             <tbody>
-              {invoices.map((i) => (
+              {sortedInvoices.map((i) => (
                 <tr
                   key={i.id}
                   className="cursor-pointer"
@@ -157,14 +251,15 @@ export const InvoiceListPage: React.FC = () => {
                                 className={`inline-flex rounded-md px-2 py-1 text-[11px] font-medium ${
                                   i.status === "PAID"
                                       ? "bg-emerald-50 text-emerald-700"
+                                      : displayStatus(i) === "REFUNDED" ? "bg-orange-50 text-orange-700"
                                       : i.status === "VOID" ? "bg-red-400 text-red-50" 
                                       : "bg-slate-100 text-slate-500"
                                   }`}
                               >
-                                {i.status}
+                                {displayStatus(i)}
                               </span>
                             </div>
-                              <span className="text-base font-medium">{formatMoneyNGN(+i.grand_total)}</span>
+                            <div className="text-base font-medium">{renderTotal(i)}</div>
                           </div>
                         )
                     }
@@ -178,15 +273,16 @@ export const InvoiceListPage: React.FC = () => {
                           className={`inline-flex rounded-md px-2 py-1 text-[11px] font-medium ${
                             i.status === "PAID"
                                 ? "bg-emerald-50 text-emerald-700"
+                                : displayStatus(i) === "REFUNDED" ? "bg-orange-50 text-orange-700"
                                 : i.status === "VOID" ? "bg-red-400 text-red-50" 
                                 : "bg-slate-100 text-slate-500"
                             }`}
                         >
-                          {i.status}
+                          {displayStatus(i)}
                         </span>
                       </td>
                       <td>{i.location_name}</td>
-                      <td>{formatMoneyNGN(+i.grand_total)}</td>
+                      <td>{renderTotal(i)}</td>
                       <td>{i.created_by_name}</td>
                     </>
                   )}
@@ -212,6 +308,25 @@ export const InvoiceListPage: React.FC = () => {
           isOpen={hasPeek}
           onClose={closePeek}
           widthClass="w-3/4"
+          actions={
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-medium text-kk-dark-text">{selectedInvoice.number}</div>
+              {can("Sales Return", "create") &&
+                selectedInvoice.type_id === "SALE" &&
+                (selectedInvoice.status === "PAID" || selectedInvoice.status === "REFUNDED") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closePeek();
+                      navigate(`/sales/invoices/${selectedInvoice.id}/refund`);
+                    }}
+                    className="rounded-md bg-kk-accent px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500"
+                  >
+                    Refund
+                  </button>
+                )}
+            </div>
+          }
         >
           <InvoicePeek invoice={selectedInvoice} />
         </SidePeek>
@@ -219,3 +334,9 @@ export const InvoiceListPage: React.FC = () => {
     </div>
   );
 };
+  const filterColumns: ColumnMeta[] = [
+    { id: "invoice_date", label: "Invoice date", type: "date" },
+    { id: "net_grand_total", label: "Total (after refunds)", type: "number" },
+    { id: "item_name", label: "Item on invoice", type: "text" },
+    { id: "has_discount", label: "Discount applied", type: "boolean" },
+  ];

@@ -1,6 +1,6 @@
 // src/screens/crm/contact/ContactListPage.tsx
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, TrashIcon } from "lucide-react";
 
@@ -13,6 +13,7 @@ import { fetchContacts } from "../../../api/contact";
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
+import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 export const ContactListPage: React.FC = () => {
   const { can } = useAuth();
@@ -24,6 +25,7 @@ export const ContactListPage: React.FC = () => {
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
+  const [sort, setSort] = useState<SortState<"name" | "company" | "email" | "phone"> | null>(null);
 
   const filterColumns: ColumnMeta[] = [
     { id: "first_name", label: "First Name", type: "text" },
@@ -79,6 +81,15 @@ export const ContactListPage: React.FC = () => {
     }
   }, [hasId, id, contacts])
 
+  const sortedContacts = useMemo(() => {
+    return sortBy(contacts, sort, {
+      name: (c) => `${c.last_name ?? ""} ${c.first_name ?? ""}`,
+      company: (c) => c.company_name ?? "",
+      email: (c) => c.email ?? "",
+      phone: (c) => `${c.phone_1_code_code ?? ""}${c.phone_1 ?? ""}`,
+    });
+  }, [contacts, sort]);
+
   return (
     <div className="flex-1 flex gap-4">
       <div className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${
@@ -114,18 +125,38 @@ export const ContactListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th>Name</th>
+                <th
+                  className="cursor-pointer select-none"
+                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                >
+                  Name{sortIndicator(sort, "name")}
+                </th>
                 {!hasPeek &&
                   <>
-                    <th>Company Name</th>
-                    <th>Email</th>
-                    <th>Phone</th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "company"))}
+                    >
+                      Company Name{sortIndicator(sort, "company")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "email"))}
+                    >
+                      Email{sortIndicator(sort, "email")}
+                    </th>
+                    <th
+                      className="cursor-pointer select-none"
+                      onClick={() => setSort((s) => nextSort(s, "phone"))}
+                    >
+                      Phone{sortIndicator(sort, "phone")}
+                    </th>
                   </>
                 }
               </tr>
             </thead>
             <tbody>
-              {contacts.map((c) => (
+              {sortedContacts.map((c) => (
                 <tr
                   key={c.id}
                   className="cursor-pointer"

@@ -311,10 +311,11 @@ export default function InvoicesReportPage() {
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <KpiCard label="Orders" value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"} />
         <KpiCard label="Net Sales" value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"} />
         <KpiCard label="Avg Sale Value" value={data ? formatMoneyNGN(Number(data.kpi.avg_value ?? 0)) : "—"} />
+        <KpiCard label="Total Refunded" value={data ? formatMoneyNGN(Number(data.kpi.total_refunded ?? 0)) : "—"} />
       </div>
 
       {/* Charts */}

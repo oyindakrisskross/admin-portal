@@ -15,6 +15,7 @@ export interface OverviewResponse {
   performance: {
     total_sales: string;
     net_sales: string;
+    total_refunded?: string;
     orders: number;
     products_sold: string;
     discounted_orders: number;
@@ -66,6 +67,7 @@ export interface ReportResponse {
     net_discount: string; 
     orders: number;
     avg_value: string;
+    total_refunded?: string;
   };
   series: {
     items_sold: SeriesPoint[];
@@ -102,3 +104,60 @@ export interface GroupResponse {
     orders: number;
   }>;
 };
+
+export interface CouponReportRow {
+  code: string;
+  name: string | null;
+  discounted_orders: number;
+  net_discount: string;
+}
+
+export interface CouponReportResponse {
+  range: {
+    start: string;
+    end: string;
+    granularity: Granularity;
+    available_granularities: Array<Granularity>;
+  };
+  scope: { location_ids: number[] | "ALL" };
+  kpi: {
+    discounted_orders: number;
+    net_discount: string;
+  };
+  series: {
+    discounted_orders: SeriesPoint[];
+    net_discount: SeriesPoint[];
+  };
+  pagination: { total: number; limit: number; offset: number };
+  results: CouponReportRow[];
+}
+
+export interface CouponInvoiceRow {
+  invoice_id: number;
+  invoice_number: string;
+  invoice_date: string;
+  location: string;
+  net_sales: string;
+  coupon_discount: string;
+}
+
+export interface CouponDetailReportResponse {
+  range: {
+    start: string;
+    end: string;
+    granularity: Granularity;
+    available_granularities: Array<Granularity>;
+  };
+  scope: { location_ids: number[] | "ALL" };
+  coupon: { code: string; name: string | null };
+  kpi: {
+    discounted_orders: number;
+    net_discount: string;
+  };
+  series: {
+    discounted_orders: SeriesPoint[];
+    net_discount: SeriesPoint[];
+  };
+  pagination: { total: number; limit: number; offset: number };
+  results: CouponInvoiceRow[];
+}

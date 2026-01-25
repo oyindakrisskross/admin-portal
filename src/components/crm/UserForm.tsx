@@ -9,6 +9,12 @@ import { CheckCircle2, Loader2, X } from "lucide-react";
 import { type Location } from "../../types/location";
 import { fetchLocations } from "../../api/location";
 import { createUser, createUserLocation, deleteUserLocation, fetchRoles, updateUser } from "../../api/accounts";
+import { fetchContact } from "../../api/contact";
+import ToastModal from "../ui/ToastModal";
+import type { Contact } from "../../types/contact";
+import { SAFE_SPECIAL_CHARS, validatePortalPassword, validateStaffPin } from "../../utils/passwordPolicy";
+import { ContactSearchSelect } from "./ContactSearchSelect";
+import { ContactFormModal } from "./ContactFormModal";
 
 interface Props {
   initial?: UserProfile | null;
@@ -19,15 +25,21 @@ const EMPTY_USER: UserProfile = {
   is_active: true,
   is_staff: false,
   password: null,
+  first_name: "",
+  last_name: "",
+  phone: "",
 };
 
 export const UserForm: React.FC<Props> = ({ initial }) => {
   const navigate = useNavigate();
 
   const [user, setUser] = useState<UserProfile>(initial ?? EMPTY_USER);
+  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
   const [portals, setPortals] = useState<Location[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [toast, setToast] = useState<{ message: string; variant: "error" | "success" } | null>(null);
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [availableLocationIds, setAvailableLocationIds] = useState<number[]>([]);
@@ -99,11 +111,6 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
   const handlePortalChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const portalId = Number(event.target.value);
     handleChange({ portal: portalId });
-
-    (async () => {
-      const data = await fetchRoles({ portal: portalId });
-      setRoles(data.results);
-    })();
   };
 
   const syncAllowedLocations = async (userId: number) => {
@@ -155,9 +162,46 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
     setSaving(true);
 
     try {
+      const contactId = selectedContact?.id ?? user.contact;
+      if (!contactId) {
+        setToast({ message: "Contact is required.", variant: "error" });
+        return;
+      }
+
+      if (!user.portal) {
+        setToast({ message: "Portal is required.", variant: "error" });
+        return;
+      }
+
+      if (!user.role) {
+        setToast({ message: "Role is required.", variant: "error" });
+        return;
+      }
+
+      const selectedPortal = portals.find((p) => p.id === user.portal);
+      const isPortalUser = Boolean(selectedPortal && selectedPortal.type_id === "PORTAL");
+      const pwd = (user.password ?? "") as string;
+      if (pwd && pwd.trim()) {
+        const msg = isPortalUser ? validatePortalPassword(pwd) : validateStaffPin(pwd);
+        if (msg) {
+          setToast({ message: msg, variant: "error" });
+          return;
+        }
+      }
+
       const payload: any = {
-        ...user,
+        email: user.email,
+        portal: user.portal,
+        role: user.role,
+        contact_id: contactId,
+        first_name: user.first_name ?? "",
+        last_name: user.last_name ?? "",
+        phone: user.phone ?? "",
+        is_active: user.is_active,
+        is_staff: user.is_staff,
+        status: user.status ?? (user.is_active ? "ACTIVE" : "INACTIVE"),
       };
+      if (pwd && pwd.trim()) payload.password = pwd;
       let saved: UserProfile;
 
       if (user.id) {
@@ -169,6 +213,13 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
       await syncAllowedLocations(saved.id!);
 
       navigate(`/crm/users/`);
+      setToast({ message: "User saved.", variant: "success" });
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.password?.[0] ||
+        err?.response?.data?.detail ||
+        "Failed to save user.";
+      setToast({ message: msg, variant: "error" });
     } finally {
       setSaving(false);
     }
@@ -176,6 +227,14 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
 
   useEffect(() => {
     if (initial) {
+      setUser((prev) => ({
+        ...prev,
+        ...initial,
+        first_name: initial.contact_first_name ?? initial.first_name ?? "",
+        last_name: initial.contact_last_name ?? initial.last_name ?? "",
+        phone: initial.contact_phone ?? initial.phone ?? "",
+      }));
+
       if (initial?.allowed_locations && initial.allowed_locations.length) {
         const mapped = initial.allowed_locations;
         setAvailableLocationIds(mapped.map((l) => l.location!));
@@ -187,10 +246,40 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
   },[initial]);
 
   useEffect(() => {
+    if (!initial?.contact) return;
+
     (async () => {
-      const data = await fetchLocations();
-      setPortals(data.results);
-      setLocations(data.results.filter((l) => l.type_id !== "PORTAL"));
+      try {
+        const c = await fetchContact(initial.contact!);
+        setSelectedContact(c);
+      } catch {
+        setSelectedContact(null);
+      }
+    })();
+  }, [initial?.contact]);
+
+  useEffect(() => {
+    if (!user.portal) {
+      setRoles([]);
+      return;
+    }
+
+    (async () => {
+      try {
+        const data = await fetchRoles({ portal: user.portal });
+        setRoles(data.results);
+      } catch {
+        setRoles([]);
+      }
+    })();
+  }, [user.portal]);
+
+  useEffect(() => {
+    (async () => {
+      const data = (await fetchLocations()) as { results: Location[] };
+      const results = data.results ?? [];
+      setPortals(results);
+      setLocations(results.filter((loc) => loc.type_id !== "PORTAL"));
     })();
   },[]);
 
@@ -207,7 +296,12 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
   }, [user.portal, portals]);
 
   return (
-    <>
+    <div className="min-h-full">
+      <ToastModal
+        message={toast?.message ?? null}
+        onClose={() => setToast(null)}
+        variant={toast?.variant ?? "error"}
+      />
       <ListPageHeader 
         section="CRM"
         title={initial ? `Edit ${initial.contact_first_name} ${initial.contact_last_name}` : "New User"}
@@ -221,55 +315,86 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
         } 
       />
 
-      <div className="flex flex-col gap-6 text-sm px-6 pt-8 pb-8">
+      <div className="space-y-6 p-6">
+        <div className="grid grid-cols-1 gap-6">
+          <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm">
+            <div className="text-sm font-medium text-kk-dark-text">Contact Information</div>
+            <div className="mt-4 flex flex-col gap-6 text-sm">
         <div className="grid grid-cols-12 gap-2">
-          <p className="col-span-2">Email</p>
-          <input 
-            type="email"
-            className="col-span-5 rounded-md border border-kk-dark-input-border px-3 py-2"
-            value={user.email}
-            placeholder="Email"
-            onChange={(e) => handleChange({ email: e.target.value })}
-          />
+          <p className="col-span-2">Contact</p>
+          <div className="col-span-5 flex gap-2">
+            <div className="flex-1">
+              <ContactSearchSelect
+                value={selectedContact}
+                onChange={(c) => {
+                  setSelectedContact(c);
+                  handleChange({
+                    contact: c?.id,
+                    email: c?.email ?? user.email,
+                    first_name: c?.first_name ?? "",
+                    last_name: c?.last_name ?? "",
+                    phone: c?.phone_1 ?? "",
+                  });
+                }}
+                onError={(msg) => setToast({ message: msg, variant: "error" })}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setContactModalOpen(true)}
+              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm hover:bg-kk-dark-hover"
+            >
+              New Contact
+            </button>
+          </div>
         </div>
-        {/* <div className="grid grid-cols-12 gap-2">
-          <p className="col-span-2">Username</p>
-          <input 
-            type="text"
-            className="col-span-5 rounded-md border border-kk-dark-input-border px-3 py-2"
-            value={user.username}
-            onChange={(e) => handleChange({ username: e.target.value })}
-          />
-        </div> */}
+
         <div className="grid grid-cols-12 gap-2">
-          <p className="col-span-2">Password</p>
-          <input 
-              type="password"
-              className="col-span-5 rounded-md border border-kk-dark-input-border px-3 py-2"
-              value={user.password}
-              autoComplete="new-password"
-              onChange={(e) => handleChange({ password: e.target.value })}
-            />
-        </div>
-        <div className="grid grid-cols-12 gap-2">
-          <p className="col-span-2">Full Name</p>
+          <p className="col-span-2">Contact Name</p>
           <div className="col-span-5 flex gap-3">
             <input 
               type="text"
               className="w-1/2 rounded-md border border-kk-dark-input-border px-3 py-2"
-              value={user.first_name}
+              value={user.first_name ?? ""}
               placeholder="First Name"
               onChange={(e) => handleChange({ first_name: e.target.value })}
             />
             <input 
               type="text"
               className="w-1/2 rounded-md border border-kk-dark-input-border px-3 py-2"
-              value={user.last_name}
+              value={user.last_name ?? ""}
               placeholder="Last Name"
               onChange={(e) => handleChange({ last_name: e.target.value })}
             />
           </div>
         </div>
+        <div className="grid grid-cols-12 gap-2">
+          <p className="col-span-2">Phone</p>
+          <input
+            type="text"
+            className="col-span-5 rounded-md border border-kk-dark-input-border px-3 py-2"
+            value={user.phone ?? ""}
+            placeholder="Phone"
+            onChange={(e) => handleChange({ phone: e.target.value })}
+          />
+        </div>
+        <div className="grid grid-cols-12 gap-2">
+          <p className="col-span-2">Email</p>
+          <input 
+            type="email"
+            className="col-span-5 rounded-md border border-kk-dark-input-border px-3 py-2"
+            value={user.email ?? ""}
+            placeholder="Email"
+            onChange={(e) => handleChange({ email: e.target.value })}
+            disabled={Boolean(selectedContact?.id)}
+          />
+        </div>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm">
+            <div className="text-sm font-medium text-kk-dark-text">Account</div>
+            <div className="mt-4 flex flex-col gap-6 text-sm">
         <div className="grid grid-cols-12 gap-2">
           <p className="col-span-2">Portal</p>
           <select
@@ -299,6 +424,29 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
           </select>
         </div>
         <div className="grid grid-cols-12 gap-2">
+          <p className="col-span-2">Password</p>
+          <div className="col-span-5 flex flex-col gap-1">
+            <input 
+                type="password"
+                className="rounded-md border border-kk-dark-input-border px-3 py-2"
+                value={user.password ?? ""}
+                autoComplete="new-password"
+                onChange={(e) => handleChange({ password: e.target.value })}
+              />
+            {(() => {
+              const selectedPortal = portals.find((p) => p.id === user.portal);
+              const isPortalUser = Boolean(selectedPortal && selectedPortal.type_id === "PORTAL");
+              return isPortalUser ? (
+                <p className="text-[11px] text-kk-dark-text-muted">
+                  Min 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special ({SAFE_SPECIAL_CHARS}).
+                </p>
+              ) : (
+                <p className="text-[11px] text-kk-dark-text-muted">6-digit numeric PIN for staff users.</p>
+              );
+            })()}
+          </div>
+        </div>
+        <div className="grid grid-cols-12 gap-2">
           <p className="col-span-2">Is Staff</p>
           <input 
               type="checkbox"
@@ -316,27 +464,25 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
               onChange={(e) => handleChange({ is_active: e.target.checked })}
             />
         </div>
+            </div>
+          </div>
+        </div>
 
         {/* Accessible Locations (only when portal type is not "PORTAL") */}
         {showLocationSelector && (
-          <section className="mt-6">
-            <div className="mb-3 pl-3">
-              <p className="text-xl">Available Locations</p>
-              <p className="text-xs text-kk-dark-text-muted">
-                Select the locations where this item can be sold.
-              </p>
-            </div>
+          <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm">
+            <div className="text-sm font-medium text-kk-dark-text">Accessible Locations</div>
+            <p className="mt-1 text-xs text-kk-dark-text-muted">Select the locations this user can access.</p>
 
-            <div className="h-64 grid grid-cols-2 gap-0 rounded-2xl border border-kk-dark-input-border overflow-hidden">
+            <div className="mt-4 h-64 grid grid-cols-2 gap-0 rounded-2xl border border-kk-dark-input-border overflow-hidden">
               {/* LEFT: all locations + search */}
               <div className="border-r border-kk-dark-input-border">
                 {/* Search */}
                 <div className="flex items-center gap-2 border-b border-kk-dark-input-border px-4 py-3 text-xs text-kk-dark-text-muted">
-                  <span className="text-base">🔍</span>
                   <input
                     type="text"
                     className="w-full bg-transparent outline-none"
-                    placeholder="Type to search Locations"
+                    placeholder="Search locations..."
                     value={locationSearch}
                     onChange={(e) => setLocationSearch(e.target.value)}
                   />
@@ -348,10 +494,11 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
                   onClick={handleSelectAllLocations}
                   className="flex w-full items-center gap-2 border-b border-kk-dark-input-border px-4 py-2 text-xs hover:bg-kk-dark-hover"
                 >
-                  <span className={`flex h-4 w-4 items-center border border-kk-dark-input-border justify-center rounded-full text-[10px] text-white ${
-                    selectedAllLocs ? "bg-emerald-500" : "bg-transparent"}`}>
-                    ✓
-                  </span>
+                  {selectedAllLocs ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  ) : (
+                    <span className="h-4 w-4 rounded-full border border-kk-dark-input-border" />
+                  )}
                   <span className="font-medium">Select All</span>
                 </button>
 
@@ -396,14 +543,13 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
               <div>
                 <div className="bg-kk-dark-bg flex items-center justify-between border-b border-kk-dark-input-border px-4 py-3 text-xs">
                   <span className="tracking-wide text-kk-dark-text">
-                    ACCESSIBLE LOCATIONS
+                    SELECTED LOCATIONS
                   </span>
                   <button
                     type="button"
                     onClick={handleRemoveAllLocations}
                     className="inline-flex items-center gap-1 text-[11px] text-kk-dark-text-muted hover:text-red-500"
                   >
-                    <span className="text-xs">−</span>
                     <span>Remove All</span>
                   </button>
                 </div>
@@ -438,7 +584,7 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
                 </div>
               </div>
             </div>
-          </section>
+          </div>
         )}
 
         {/* Footer buttons */}
@@ -457,10 +603,26 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
             className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
           >
             {saving && <Loader2 className="h-3 w-3 animate-spin" />}
-            Save Item
+            Save User
           </button>
         </div>
       </div>
-    </>
-  )
+
+      <ContactFormModal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        onSaved={(c) => {
+          setContactModalOpen(false);
+          setSelectedContact(c);
+          handleChange({
+            contact: c.id,
+            email: c.email,
+            first_name: c.first_name ?? "",
+            last_name: c.last_name ?? "",
+            phone: c.phone_1 ?? "",
+          });
+        }}
+      />
+    </div>
+  );
 };

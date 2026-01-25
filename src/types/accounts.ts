@@ -70,6 +70,7 @@ export interface UserProfile {
   id?: number;
   email: string;
   username?: string;
+  image_url?: string | null;
   portal?: number;
   portal_name?: string;
   role?: number;

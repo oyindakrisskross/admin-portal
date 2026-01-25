@@ -10,6 +10,7 @@
   --color-kk-dark-border: rgba(71,71,71,0.5);
   --color-kk-dark-input-border: rgba(71,71,71);
 
+  --color-kk-bg: #191919;
   --color-kk-bg-elevated: #202226;
   --color-kk-muted: #D7DADF;
   --color-kk-accent: #3B82F6;
@@ -28,7 +29,7 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
+  color-scheme: dark;
   /* color: rgba(255, 255, 255, 0.87);
   background-color: #242424; */
 
@@ -36,6 +37,33 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-kk-dark-bg: #f6f7fb;
+  --color-kk-dark-bg-elevated: #ffffff;
+  --color-kk-dark-text: #111827;
+  --color-kk-dark-text-muted: #6b7280;
+  --color-kk-dark-hover: #eef2ff;
+  --color-kk-dark-border: rgba(17, 24, 39, 0.12);
+  --color-kk-dark-input-border: rgba(17, 24, 39, 0.18);
+
+  --color-kk-bg: #f6f7fb;
+  --color-kk-bg-elevated: #ffffff;
+  --color-kk-muted: #6b7280;
+
+  --shadow-soft: 0 0 0 1px rgba(17,24,39,0.05), 0 18px 40px rgba(17,24,39,0.14);
+}
+
+/* Light-theme overrides for a few dark-theme-biased utility choices */
+:root[data-theme="light"] .hover\\:text-gray-100:hover {
+  color: var(--color-kk-dark-text);
 }
 
 /* a {
@@ -54,7 +82,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
 
-  @apply bg-kk-dark-bg text-gray-100 font-sans;
+  @apply bg-kk-bg text-kk-dark-text font-sans;
 }
 
 h1 {
@@ -65,17 +93,21 @@ h1 {
 button {
   border-radius: 8px;
   padding: 0.6em;
-  background-color: transparent;
   cursor: pointer;
   transition: background-color 0.25s;
   position: relative;
   text-align: center;
 }
-button:hover {
+button:not([class*="bg-"]) {
+  background-color: transparent;
+}
+/* Only apply a generic hover background for unstyled buttons.
+   Styled buttons (e.g. with Tailwind bg-* classes) should control their own hover states. */
+button:not([class*="bg-"]):hover {
   @apply bg-kk-dark-hover;
 }
-button:focus,
-button:focus-visible {
+button:not([class*="bg-"]):focus,
+button:not([class*="bg-"]):focus-visible {
   @apply bg-kk-dark-hover;
 }
 
@@ -103,8 +135,11 @@ button:focus-visible {
   right: 0;
 
   @apply 
-  bg-kk-dark-hover 
-  text-gray-100 
+  bg-kk-dark-bg-elevated
+  text-kk-dark-text
+  border
+  border-kk-dark-border
+  shadow-soft
   font-sans
   text-center
   text-xs;
@@ -121,8 +156,11 @@ button:focus-visible {
   right: 0;
 
   @apply 
-  bg-kk-dark-hover 
-  text-gray-100 
+  bg-kk-dark-bg-elevated
+  text-kk-dark-text
+  border
+  border-kk-dark-border
+  shadow-soft
   font-sans
   text-center
   text-xs;
@@ -138,8 +176,11 @@ button:focus-visible {
   left: 110%;
 
   @apply 
-  bg-kk-dark-hover 
-  text-gray-100 
+  bg-kk-dark-bg-elevated
+  text-kk-dark-text
+  border
+  border-kk-dark-border
+  shadow-soft
   font-sans
   text-center
   text-xs;
@@ -204,19 +245,6 @@ input[type="daatetime-local"]::-webkit-calendar-picker-indicator {
   opacity: 1;
 } */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
-}
-
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -227,4 +255,8 @@ input[type="daatetime-local"]::-webkit-calendar-picker-indicator {
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+:root[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(17, 24, 39, 0.18);
 }
