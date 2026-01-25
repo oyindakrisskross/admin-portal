@@ -67,9 +67,9 @@ export default function LoginPage() {
           </div>
           <div className="space-y-1">
             <label className="text-xs text-kk-muted">Password</label>
-            <div className="relative">
+            <div className="flex items-center overflow-hidden rounded-md border border-kk-dark-border bg-[rgba(15,16,19,0.95)] focus-within:border-kk-accent">
               <input
-                className="w-full rounded-md bg-[rgba(15,16,19,0.95)] border border-kk-dark-border px-3 py-2 pr-10 text-sm outline-none focus:border-kk-accent"
+                className="w-full flex-1 bg-transparent px-3 py-2 text-sm outline-none"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type={showPassword ? "text" : "password"}
@@ -78,7 +78,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setShowPassword((s) => !s)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 hover:bg-black/5"
+                className="mr-2 inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-black/5"
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
               >
