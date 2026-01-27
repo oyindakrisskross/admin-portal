@@ -166,6 +166,12 @@ function actionDraftFromCoupon(c: Coupon): ActionDraft {
   const action_type = c.action_type || "CART_PERCENT";
 
   const itemIds = Array.isArray(cfg.items) ? cfg.items : [];
+  const customizedCfg: any = cfg.customized || {};
+  const discountScopeRaw = String(customizedCfg.discount_scope ?? "AUTO").toUpperCase();
+  const discount_scope =
+    discountScopeRaw === "PARENT_ONLY" || discountScopeRaw === "BUNDLE" || discountScopeRaw === "AUTO"
+      ? (discountScopeRaw as any)
+      : ("AUTO" as any);
 
   const bxgy = (() => {
     const buy = cfg.buy || {};
@@ -204,6 +210,11 @@ function actionDraftFromCoupon(c: Coupon): ActionDraft {
       item_ids: itemIds,
       amount: cfg.amount != null ? String(cfg.amount) : "",
     },
+    customized: {
+      include_in_conditions: Boolean(customizedCfg.include_in_conditions ?? true),
+      apply_discount: Boolean(customizedCfg.apply_discount ?? true),
+      discount_scope,
+    },
     bxgy,
   };
 }
@@ -231,10 +242,15 @@ function buildActionConfig(draft: ActionDraft): { config: any; error?: string } 
       return { config: null, error: "Percent Off must be between 0 and 100." };
     }
     const cap = draft.itemPercent.cap.trim();
+    const customized = {
+      include_in_conditions: Boolean(draft.customized?.include_in_conditions ?? true),
+      apply_discount: Boolean(draft.customized?.apply_discount ?? true),
+      discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
+    };
     return {
       config: cap
-        ? { items: draft.itemPercent.item_ids, percent, cap }
-        : { items: draft.itemPercent.item_ids, percent },
+        ? { items: draft.itemPercent.item_ids, percent, cap, customized }
+        : { items: draft.itemPercent.item_ids, percent, customized },
     };
   }
 
@@ -246,7 +262,12 @@ function buildActionConfig(draft: ActionDraft): { config: any; error?: string } 
     if (!amount || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
       return { config: null, error: "Amount Off must be a valid number greater than 0." };
     }
-    return { config: { items: draft.itemAmount.item_ids, amount } };
+    const customized = {
+      include_in_conditions: Boolean(draft.customized?.include_in_conditions ?? true),
+      apply_discount: Boolean(draft.customized?.apply_discount ?? true),
+      discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
+    };
+    return { config: { items: draft.itemAmount.item_ids, amount, customized } };
   }
 
   if (draft.action_type === "BXGY") {
