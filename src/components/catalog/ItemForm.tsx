@@ -73,6 +73,8 @@ const EMPTY_ITEM: Item = {
   schedules: [],
   customized: false,
   customizations: [],
+  categories: [],
+  availabilities: [],
 };
 
 type GalleryItemLocal = {
@@ -417,7 +419,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
   const syncSchedules = async (itemId: number) => {
     const original = initialScheduleRef.current;
-    const current = item.schedules;
+    const current = item.schedules ?? [];
 
     const originalById = new Map<number, ItemSchedule>();
     for (const s of original) {
@@ -425,7 +427,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     const currentById = new Map<number, ItemSchedule>();
-    for (const s of current!) {
+    for (const s of current) {
       if (s.id != null) currentById.set(s.id, s);
     }
 
@@ -462,26 +464,41 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     // 3) Creates: schedules without id + with flags
-    const creations = current?.filter((s) => !s.id && s.weekday);
+    const creations = current.filter((s) => !s.id && s.weekday);
 
-    await Promise.all([
-      ...deletions.map((id) => deleteItemSchedule(id)),
-      ...updates.map((u) => updateItemSchedule(u.id, u.patch)),
-      ...creations!.map((s) => {
-        const payload: ItemSchedule = {
-          item: itemId,
-          weekday: s.weekday,
-          all_day: s.all_day,
-          time_from: s.time_from,
-          time_to: s.time_to,
-        };
-        createItemSchedule(payload)
-      }),
+    const [created] = await Promise.all([
+      Promise.all(
+        creations.map((s) =>
+          createItemSchedule({
+            item: itemId,
+            weekday: s.weekday,
+            all_day: s.all_day,
+            time_from: s.time_from,
+            time_to: s.time_to,
+          })
+        )
+      ),
+      Promise.all(deletions.map((id) => deleteItemSchedule(id))),
+      Promise.all(updates.map((u) => updateItemSchedule(u.id, u.patch))),
     ]);
 
-    // After successful sync, reset "original" snapshot so subsequent saves differ correctly
-    const refreshed = current?.map((s) => ({ ...s }));
-    initialScheduleRef.current = refreshed as any;
+    const createdByKey = new Map<string, ItemSchedule[]>();
+    for (const s of created) {
+      const key = `${s.weekday}|${Boolean(s.all_day)}|${s.time_from ?? ""}|${s.time_to ?? ""}`;
+      const list = createdByKey.get(key) ?? [];
+      list.push(s);
+      createdByKey.set(key, list);
+    }
+
+    const merged = current.map((s) => {
+      if (s.id) return { ...s };
+      const key = `${s.weekday}|${Boolean(s.all_day)}|${s.time_from ?? ""}|${s.time_to ?? ""}`;
+      const list = createdByKey.get(key);
+      const matched = list?.shift();
+      return matched ? { ...matched } : { ...s };
+    });
+
+    initialScheduleRef.current = merged as any;
   }
 
   const handleAddImageClick = () => {
@@ -617,7 +634,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
   const syncCustomizations = async (itemId: number) => {
     const original = initialCustomRef.current;
-    const current = item.customizations;
+    const current = item.customizations ?? [];
 
     const originalById = new Map<number, ItemCustomization>();
     for (const c of original) {
@@ -625,7 +642,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     const currentById = new Map<number, ItemCustomization>();
-    for (const c of current!) {
+    for (const c of current) {
       if (c.id != null) currentById.set(c.id, c);
     }
 
@@ -674,28 +691,43 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     // 3) Creates: customizations without id + with flags
-    const creations = current?.filter((c) => !c.id && (c.child !== 0));
+    const creations = current.filter((c) => !c.id && (c.child !== 0));
 
-    await Promise.all([
-      ...deletions.map((id) => deleteItemCustomization(id)),
-      ...updates.map((u) => updateItemCustomization(u.id, u.patch)),
-      ...creations!.map((c) => {
-        const payload: ItemCustomization = {
-          parent: itemId,
-          ...c,
-        };
-        createItemCustomization(payload);
-      }),
+    const [created] = await Promise.all([
+      Promise.all(
+        creations.map((c) =>
+          createItemCustomization({
+            parent: itemId,
+            ...c,
+          })
+        )
+      ),
+      Promise.all(deletions.map((id) => deleteItemCustomization(id))),
+      Promise.all(updates.map((u) => updateItemCustomization(u.id, u.patch))),
     ]);
 
-    // After successful sync, reset "original" snapshot so subsequent saves differ correctly
-    const refreshed = current?.map((c) => ({ ...c }));
-    initialCustomRef.current = refreshed as any;
+    const createdByKey = new Map<string, ItemCustomization[]>();
+    for (const c of created) {
+      const key = `${c.child ?? ""}|${c.label ?? ""}|${c.pricing_type ?? ""}|${c.price_delta ?? ""}|${c.sort_order ?? ""}`;
+      const list = createdByKey.get(key) ?? [];
+      list.push(c);
+      createdByKey.set(key, list);
+    }
+
+    const merged = current.map((c) => {
+      if (c.id) return { ...c };
+      const key = `${c.child ?? ""}|${c.label ?? ""}|${c.pricing_type ?? ""}|${c.price_delta ?? ""}|${c.sort_order ?? ""}`;
+      const list = createdByKey.get(key);
+      const matched = list?.shift();
+      return matched ? { ...matched } : { ...c };
+    });
+
+    initialCustomRef.current = merged as any;
   };
 
   const syncCategories = async (itemId: number) => {
     const original = initialItemCategoriesRef.current;
-    const current = item.categories;
+    const current = item.categories ?? [];
 
     const originalById = new Map<number, ItemCategory>();
     for (const c of original) {
@@ -703,7 +735,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     const currentById = new Map<number, ItemCategory>();
-    for (const c of current!) {
+    for (const c of current) {
       if (c.id != null) currentById.set(c.id, c);
     }
 
@@ -714,26 +746,40 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     // 2) Creates
-    const creations = current?.filter((c) => !c.id && c.category);
+    const creations = current.filter((c) => !c.id && c.category);
 
-    await Promise.all([
-      ...deletions.map((id) => deleteItemCategory(id)),
-      ...creations!.map((c) => {
-        const payload: ItemCategory = {
-          item: itemId,
-          category: c.category,
-        };
-        createItemCategory(payload);
-      }),
+    const [created] = await Promise.all([
+      Promise.all(
+        creations.map((c) =>
+          createItemCategory({
+            item: itemId,
+            category: c.category,
+          })
+        )
+      ),
+      Promise.all(deletions.map((id) => deleteItemCategory(id))),
     ]);
 
-    const refreshed = current?.map((c) => ({ ...c }));
-    initialItemCategoriesRef.current = refreshed as any;
+    const createdByCategory = new Map<number, ItemCategory[]>();
+    for (const c of created) {
+      const list = createdByCategory.get(c.category) ?? [];
+      list.push(c);
+      createdByCategory.set(c.category, list);
+    }
+
+    const merged = current.map((c) => {
+      if (c.id) return { ...c };
+      const list = createdByCategory.get(c.category);
+      const matched = list?.shift();
+      return matched ? { ...matched } : { ...c, item: itemId };
+    });
+
+    initialItemCategoriesRef.current = merged as any;
   };
 
   const syncAvailability = async (itemId: number) => {
     const original = initialAvailabilityRef.current;
-    const current = item.availabilities;
+    const current = item.availabilities ?? [];
 
     const originalById = new Map<number, ItemAvailability>();
     for (const a of original) {
@@ -741,7 +787,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     const currentById = new Map<number, ItemAvailability>();
-    for (const a of current!) {
+    for (const a of current) {
       if (a.id != null) currentById.set(a.id, a);
     }
 
@@ -752,21 +798,35 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
 
     // 2) Creates
-    const creations = current?.filter((a) => !a.id && a.location);
-    
-    await Promise.all([
-      ...deletions.map((id) => deleteItemAvailability(id)),
-      ...creations!.map((c) => {
-        const payload: ItemAvailability = {
-          item: itemId,
-          location: c.location,
-        };
-        createItemAvailability(payload);
-      }),
+    const creations = current.filter((a) => !a.id && a.location);
+
+    const [created] = await Promise.all([
+      Promise.all(
+        creations.map((c) =>
+          createItemAvailability({
+            item: itemId,
+            location: c.location,
+          })
+        )
+      ),
+      Promise.all(deletions.map((id) => deleteItemAvailability(id))),
     ]);
 
-    const refreshed = current?.map((a) => ({ ...a }));
-    initialAvailabilityRef.current = refreshed as any;
+    const createdByLocation = new Map<number, ItemAvailability[]>();
+    for (const a of created) {
+      const list = createdByLocation.get(a.location) ?? [];
+      list.push(a);
+      createdByLocation.set(a.location, list);
+    }
+
+    const merged = current.map((a) => {
+      if (a.id) return { ...a };
+      const list = createdByLocation.get(a.location);
+      const matched = list?.shift();
+      return matched ? { ...matched } : { ...a, item: itemId };
+    });
+
+    initialAvailabilityRef.current = merged as any;
   };
 
   const handleSave = async () => {
@@ -830,8 +890,13 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
       await syncAvailability(saved.id!);
 
       navigate(`/catalog/items/${saved.id}`);
-    } catch (e) {
-      setError("Failed to save item. Please check the form and try again.");
+    } catch (err: any) {
+      const msg =
+        err?.response?.data?.detail ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Failed to save item. Please check the form and try again.";
+      setError(msg);
     } finally {
       setSaving(false);
     }

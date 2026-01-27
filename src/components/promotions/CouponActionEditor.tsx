@@ -10,6 +10,11 @@ export type ActionDraft = {
   cartAmount: { amount: string };
   itemPercent: { item_ids: number[]; percent: string; cap: string };
   itemAmount: { item_ids: number[]; amount: string };
+  customized: {
+    include_in_conditions: boolean;
+    apply_discount: boolean;
+    discount_scope: "AUTO" | "PARENT_ONLY" | "BUNDLE";
+  };
   bxgy: {
     buy_item_ids: number[];
     get_item_ids: number[];
@@ -202,6 +207,63 @@ export function CouponActionEditor({ value, onChange, itemOptions }: Props) {
               </span>
             </div>
 
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Customized Items</p>
+              <div className="col-span-5 flex flex-col gap-2 text-xs text-kk-dark-text-muted">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.include_in_conditions}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, include_in_conditions: e.target.checked },
+                      })
+                    }
+                  />
+                  Include customized items when evaluating conditions (e.g., minimum qty)
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, apply_discount: e.target.checked },
+                      })
+                    }
+                  />
+                  Apply discount to customized items
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <span className="min-w-[7rem]">Discount scope</span>
+                  <select
+                    className="rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-2 py-1 text-xs"
+                    value={value.customized.discount_scope}
+                    disabled={!value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: {
+                          ...value.customized,
+                          discount_scope: e.target.value as any,
+                        },
+                      })
+                    }
+                  >
+                    <option value="AUTO">Auto (recommended)</option>
+                    <option value="PARENT_ONLY">Parent only (ignore add-ons)</option>
+                    <option value="BUNDLE">Bundle (include add-ons)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             {itemSummary && (
               <div className="mt-1 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs">
                 <span className="text-kk-dark-text-muted mr-2">Action Summary</span>
@@ -250,6 +312,63 @@ export function CouponActionEditor({ value, onChange, itemOptions }: Props) {
               <span className="text-xs text-kk-dark-text-muted col-span-3">
                 Amount in your currency per unit.
               </span>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Customized Items</p>
+              <div className="col-span-5 flex flex-col gap-2 text-xs text-kk-dark-text-muted">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.include_in_conditions}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, include_in_conditions: e.target.checked },
+                      })
+                    }
+                  />
+                  Include customized items when evaluating conditions (e.g., minimum qty)
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, apply_discount: e.target.checked },
+                      })
+                    }
+                  />
+                  Apply discount to customized items
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <span className="min-w-[7rem]">Discount scope</span>
+                  <select
+                    className="rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-2 py-1 text-xs"
+                    value={value.customized.discount_scope}
+                    disabled={!value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: {
+                          ...value.customized,
+                          discount_scope: e.target.value as any,
+                        },
+                      })
+                    }
+                  >
+                    <option value="AUTO">Auto (recommended)</option>
+                    <option value="PARENT_ONLY">Parent only (ignore add-ons)</option>
+                    <option value="BUNDLE">Bundle (include add-ons)</option>
+                  </select>
+                </div>
+              </div>
             </div>
 
             {itemSummary && (

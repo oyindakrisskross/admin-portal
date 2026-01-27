@@ -310,7 +310,7 @@ export async function createItemGroupGallery(
   form.append("sort_order", String(sortOrder));
 
   const res = await api.post("/api/catalog/item-group-images/", form, {
-    headers: { "Content-Type": "multiart/form-data" },
+    headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
 }
@@ -328,7 +328,7 @@ export async function createItemGallery(
   form.append("sort_order", String(sortOrder));
 
   const res = await api.post("/api/catalog/item-images/", form, {
-    headers: { "Content-Type": "multiart/form-data" },
+    headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
 }
@@ -354,5 +354,5 @@ export async function deleteItemGroupGallery(id: number) {
 }
 
 export async function deleteItemGallery(id: number) {
-  await api.delete(`/api/catalog/item-group-images/${id}/`);
+  await api.delete(`/api/catalog/item-images/${id}/`);
 }
