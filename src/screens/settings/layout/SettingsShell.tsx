@@ -28,6 +28,11 @@ const settingsLinks = [
     perm: "Units",
   },
   {
+    to: "reports/daily",
+    label: "Daily Reports",
+    perm: "Reports",
+  },
+  {
     to: "locations",
     label: "Locations",
     perm: "Locations",

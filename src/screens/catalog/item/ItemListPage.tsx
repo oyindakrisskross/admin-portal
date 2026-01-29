@@ -12,6 +12,7 @@ import ListPageHeader from "../../../components/layout/ListPageHeader";
 import { deleteItem, fetchItems, patchItem } from "../../../api/catalog";
 import { ItemPeek } from "./ItemPeek";
 import placeholder from "../../../assets/placeholder.png";
+import ToastModal from "../../../components/ui/ToastModal";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
@@ -46,6 +47,8 @@ export const ItemListPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [sort, setSort] = useState<SortState<"name" | "sku" | "price" | "stock" | "status" | "categories"> | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
 
   const filterColumns: ColumnMeta[] = [
     { id: "name", label: "Name", type: "text" },
@@ -73,6 +76,18 @@ export const ItemListPage: React.FC = () => {
     setSelectedId(null);
   }
 
+  const extractApiDetail = (err: any, fallback: string) => {
+    const data = err?.response?.data;
+    if (typeof data === "string") return data;
+    if (data?.detail) return String(data.detail);
+    return fallback;
+  };
+
+  const showToast = (message: string, variant: "error" | "success" | "info" = "error") => {
+    setToastVariant(variant);
+    setToastMessage(message);
+  };
+
   const handleStatusChg = async () => {
       if (!selectedItem || !selectedId) return;
   
@@ -93,6 +108,24 @@ export const ItemListPage: React.FC = () => {
   
       } finally { /* empty */ }
     }
+
+  const handleDelete = async () => {
+    if (!selectedId) return;
+
+    try {
+      await deleteItem(selectedId);
+      setItems((prev) => prev.filter((i) => i.id !== selectedId));
+      closePeek();
+      showToast("Item deleted.", "success");
+    } catch (err: any) {
+      showToast(
+        extractApiDetail(
+          err,
+          "Unable to delete item. If it has been used in a transaction, deactivate it instead."
+        )
+      );
+    }
+  };
   
 
   useEffect(() => {
@@ -380,7 +413,7 @@ export const ItemListPage: React.FC = () => {
                 </button>
               )}
               {can("Item", "delete") && (
-                <button onClick={() => {deleteItem(selectedId!); navigate(0);}}>
+                <button onClick={handleDelete}>
                   <span className="tooltip-b">Delete</span>
                   <TrashIcon className="h-5 w-5 text-red-500" />
                 </button>
@@ -391,6 +424,12 @@ export const ItemListPage: React.FC = () => {
           <ItemPeek item={selectedItem} />
         </SidePeek>
       )}
+
+      <ToastModal
+        message={toastMessage}
+        onClose={() => setToastMessage(null)}
+        variant={toastVariant}
+      />
     </div>
   );
 };

@@ -21,6 +21,7 @@ import TaxFormPage from "../screens/settings/tax/TaxFormPage";
 import { UnitListPage } from "../screens/settings/unit/UnitListPage";
 import UnitFormPage from "../screens/settings/unit/UnitFormPage";
 import OrgFormPage from "../screens/settings/OrgFormPage";
+import DailyReportsSettingsPage from "../screens/settings/DailyReportsSettingsPage";
 import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
 import RoleFormPage from "../screens/settings/access-control/RoleFormPage";
 import { PermCategoryListPage } from "../screens/settings/access-control/PermCategoryListPage";
@@ -418,6 +419,16 @@ export default function App() {
             element={
               <RequirePerm perm="Units" action="edit">
                 <UnitFormPage />
+              </RequirePerm>
+            }
+          />
+
+          {/* Reports */}
+          <Route
+            path="reports/daily"
+            element={
+              <RequirePerm perm="Reports" action="edit">
+                <DailyReportsSettingsPage />
               </RequirePerm>
             }
           />

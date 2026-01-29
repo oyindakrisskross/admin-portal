@@ -2,6 +2,7 @@
 
 import type { GroupResponse, OverviewResponse, ReportResponse } from "../types/reports";
 import type { CouponDetailReportResponse, CouponReportResponse } from "../types/reports";
+import type { DailyReportRunResponse, DailyReportSettings } from "../types/dailyReports";
 import api from "./client";
 
 export interface PaginatedResult<T> {
@@ -187,5 +188,25 @@ export async function fetchCouponDetailReport(args: {
   const res = await api.get<CouponDetailReportResponse>(
     `/api/sales/reports/coupons/${encodeURIComponent(args.code)}/?${q.toString()}`
   );
+  return res.data;
+}
+
+export async function fetchDailyReportSettings(): Promise<DailyReportSettings> {
+  const res = await api.get<DailyReportSettings>("/api/sales/reports/daily/settings/");
+  return res.data;
+}
+
+export async function updateDailyReportSettings(
+  patch: Partial<DailyReportSettings>
+): Promise<DailyReportSettings> {
+  const res = await api.put<DailyReportSettings>("/api/sales/reports/daily/settings/", patch);
+  return res.data;
+}
+
+export async function runDailyReports(args: {
+  date: string; // YYYY-MM-DD
+  location_ids?: number[];
+}): Promise<DailyReportRunResponse> {
+  const res = await api.post<DailyReportRunResponse>("/api/sales/reports/daily/run/", args);
   return res.data;
 }
