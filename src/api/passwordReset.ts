@@ -1,7 +1,7 @@
 import api from "./client";
 
-export async function requestPasswordReset(email: string, portal_id: number) {
-  const res = await api.post("/api/auth/password-reset/request", { email, portal_id });
+export async function requestPasswordReset(email: string) {
+  const res = await api.post("/api/auth/password-reset/request", { email });
   return res.data as { detail?: string };
 }
 

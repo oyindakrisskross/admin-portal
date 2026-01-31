@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router-dom";
 import ToastModal from "../components/ui/ToastModal";
 import { requestPasswordReset } from "../api/passwordReset";
 
-const PORTAL_ID = 1;
-
 export default function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -17,7 +15,7 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await requestPasswordReset(email, PORTAL_ID);
+      await requestPasswordReset(email);
       setToast({ message: "Password reset email sent. Check your inbox.", variant: "success" });
     } catch (err: any) {
       const msg =

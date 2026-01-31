@@ -169,7 +169,7 @@ export const ItemListPage: React.FC = () => {
       name: (i) => i.name,
       sku: (i) => i.sku ?? "",
       price: (i) => i.price ?? "",
-      stock: (i) => i.stock_on_hand ?? "",
+      stock: (i) => (i.inventory_tracking ? (i.stock_on_hand ?? "") : ""),
       status: (i) => i.status ?? "",
       categories: (i) => (i.categories ?? []).map((c) => c.category_name ?? "").join(", "),
     });
@@ -331,7 +331,7 @@ export const ItemListPage: React.FC = () => {
                     <>
                       <td>
                         {/* Stock on Hand */}
-                        {i.stock_on_hand ?? "—"}
+                        {i.inventory_tracking ? (i.stock_on_hand ?? "0") : "-"}
                       </td>
                       <td>
                         {/* Status */}

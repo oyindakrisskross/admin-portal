@@ -184,6 +184,7 @@ export interface ItemGroup {
   inventory_tracking: boolean;
   sellable: boolean;
   purchasable: boolean; 
+  availability_location_ids?: number[];
   image?: string | null;
   gallery?: { id: number; image: string; is_primary: boolean }[];
 

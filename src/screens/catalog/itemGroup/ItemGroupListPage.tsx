@@ -166,7 +166,7 @@ export const ItemGroupListPage: React.FC = () => {
   const sortedGroups = useMemo(() => {
     return sortBy(groups, sort, {
       name: (g) => g.name,
-      stock: (g) => g.stock_on_hand ?? "",
+      stock: (g) => (g.inventory_tracking ? (g.stock_on_hand ?? "") : ""),
       price: (g) => g.min_price ?? g.max_price ?? "",
       status: (g) => g.status ?? "",
       created: (g) => (g.created_on ? new Date(g.created_on) : null),
@@ -300,7 +300,7 @@ export const ItemGroupListPage: React.FC = () => {
                   </td>
                   {!hasPeek && 
                     <td>
-                      {g.stock_on_hand ?? "—"}
+                      {g.inventory_tracking ? (g.stock_on_hand ?? "0") : "-"}
                     </td>
                   }
                   

@@ -23,7 +23,7 @@ type Me = {
 type AuthContextValue = {
   me: Me | null;
   loading: boolean;
-  login: (email: string, password: string, portal_id: number) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   can: (perm: string, action?: keyof PermissionBitset) => boolean;
 };
@@ -71,8 +71,8 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     fetchMe();
   }, []);
 
-  const login = async (email: string, password: string, portal_id: number) => {
-    const { data } = await api.post("/api/auth/login", { email, password, portal_id,});
+  const login = async (email: string, password: string) => {
+    const { data } = await api.post("/api/auth/login", { email, password });
     setAccessToken((data as any).access);
     setRefreshToken((data as any).refresh);
     const normalized = normalizeMe(data);

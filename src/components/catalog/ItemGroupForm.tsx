@@ -12,6 +12,7 @@ import {
   type TaxRule,
   type Attribute, 
 } from "../../types/catalog";
+import type { Location } from "../../types/location";
 
 import { SkuPatternModal } from "./SkuPatternModal";
 import ListPageHeader from "../layout/ListPageHeader";
@@ -26,7 +27,8 @@ import {
   updateItemGroupGallery,
   deleteItemGroupGallery,
 } from "../../api/catalog";
-import { Loader2, Plus, Trash2, Sparkles } from "lucide-react";
+import { fetchLocations } from "../../api/location";
+import { CheckCircle2, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
 
 import { 
   XMarkIcon,
@@ -81,6 +83,10 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [attributeChoices, setAttributeChoices] = useState<Attribute[]>([]);
   const [unitChoices, setUnitChoices] = useState<Unit[]>([]);
   const [taxRuleChoices, setTaxRuleChoices] = useState<TaxRule[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [availableLocationIds, setAvailableLocationIds] = useState<number[]>([]);
+  const [locationSearch, setLocationSearch] = useState("");
+  const [selectedAllLocs, setSelectedAllLocs] = useState(false);
 
   const [selectedImageIdx, setSelectedImageIdx] = useState<number | null>(null);
   const [gallery, setGallery] = useState<GalleryItemLocal[]>([]);
@@ -95,6 +101,24 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [trackInventory, setTrackInventory] = useState(
     initial?.inventory_tracking ?? true
   );
+
+  const toggleLocation = (id: number) => {
+    setAvailableLocationIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllLocations = () => {
+    setAvailableLocationIds(locations.map((l) => l.id!));
+  };
+
+  const handleRemoveAllLocations = () => {
+    setAvailableLocationIds([]);
+  };
+
+  const handleRemoveLocation = (id: number) => {
+    setAvailableLocationIds((prev) => prev.filter((x) => x !== id));
+  };
 
   useEffect(() => {
     if (!gallery.length) {
@@ -113,6 +137,8 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
     if (initial) {
       // setGroup(initial);
 
+      setAvailableLocationIds(initial.availability_location_ids ?? []);
+
       if (initial?.gallery && initial.gallery.length) {
         const mapped = initial.gallery.map((img: any, idx: number) => ({
           id: img.id,
@@ -128,6 +154,21 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
       }
     }
   }, [initial]);
+
+  useEffect(() => {
+    (async () => {
+      const data = await fetchLocations();
+      setLocations(data.results);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (locations.length && availableLocationIds.length === locations.length) {
+      setSelectedAllLocs(true);
+    } else {
+      setSelectedAllLocs(false);
+    }
+  }, [availableLocationIds, locations]);
 
   useEffect(() => {
     let items = generatePreviewItemsFromGroup(group.attributes);
@@ -499,6 +540,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
         sku_pattern: group.sku_pattern,
         attributes_input,
         item_variants_input,
+        availability_location_ids_input: availableLocationIds,
       };
 
       console.log(payload)
@@ -977,6 +1019,118 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
               Add at least one attribute option to generate items.
             </div>
           )}
+        </section>
+
+        {/* Available Locations for Sale */}
+        <section className="mt-6">
+          <div className="mb-3 pl-3">
+            <p className="text-xl">Available Locations</p>
+            <p className="text-xs text-kk-dark-text-muted">
+              Select the locations where this item group (and all generated items) can be sold.
+            </p>
+          </div>
+
+          <div className="h-64 grid grid-cols-2 gap-0 rounded-2xl border border-kk-dark-input-border overflow-hidden">
+            {/* LEFT: all locations + search */}
+            <div className="border-r border-kk-dark-input-border">
+              {/* Search */}
+              <div className="flex items-center gap-2 border-b border-kk-dark-input-border px-4 py-3 text-xs text-kk-dark-text-muted">
+                <span className="text-base">🔍</span>
+                <input
+                  type="text"
+                  className="w-full bg-transparent outline-none"
+                  placeholder="Type to search Locations"
+                  value={locationSearch}
+                  onChange={(e) => setLocationSearch(e.target.value)}
+                />
+              </div>
+
+              {/* Select all */}
+              <button
+                type="button"
+                onClick={handleSelectAllLocations}
+                className="flex w-full items-center gap-2 border-b border-kk-dark-input-border px-4 py-2 text-xs hover:bg-kk-dark-hover"
+              >
+                <span
+                  className={`flex h-4 w-4 items-center border border-kk-dark-input-border justify-center rounded-full text-[10px] text-white ${
+                    selectedAllLocs ? "bg-emerald-500" : "bg-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                <span className="font-medium">Select All</span>
+              </button>
+
+              {/* Locations list */}
+              <div className="h-full overflow-auto">
+                {locations
+                  .filter((loc) =>
+                    loc.name.toLowerCase().includes(locationSearch.toLowerCase())
+                  )
+                  .map((loc) => {
+                    const selected = availableLocationIds.includes(loc.id!);
+                    return (
+                      <button
+                        key={loc.id}
+                        type="button"
+                        onClick={() => toggleLocation(loc.id!)}
+                        className={`flex w-full items-center gap-2 px-4 py-2 text-sm ${
+                          selected ? "bg-emerald-50" : "hover:bg-kk-dark-hover"
+                        }`}
+                      >
+                        {selected ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <span className="h-4 w-4 rounded-full border border-kk-dark-input-border" />
+                        )}
+                        <span className={`${selected ? "font-semibold" : "font-medium"}`}>
+                          {loc.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* RIGHT: selected locations */}
+            <div>
+              <div className="bg-kk-dark-bg flex items-center justify-between border-b border-kk-dark-input-border px-4 py-3 text-xs">
+                <span className="tracking-wide text-kk-dark-text">ACCESSIBLE LOCATIONS</span>
+                <button
+                  type="button"
+                  onClick={handleRemoveAllLocations}
+                  className="inline-flex items-center gap-1 text-[11px] text-kk-dark-text-muted hover:text-red-500"
+                >
+                  <span className="text-xs">−</span>
+                  <span>Remove All</span>
+                </button>
+              </div>
+
+              <div className="h-full overflow-auto px-4 py-3 text-sm">
+                {availableLocationIds.length === 0 ? (
+                  <p className="text-xs text-kk-dark-text-muted">No locations selected yet.</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {locations
+                      .filter((loc) => availableLocationIds.includes(loc.id!))
+                      .map((loc) => (
+                        <li key={loc.id} className="flex items-center justify-between gap-2">
+                          <span>{loc.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveLocation(loc.id!)}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-kk-dark-input-border text-[11px] text-kk-dark-text-muted hover:border-red-500 hover:text-red-500"
+                            aria-label={`Remove ${loc.name}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* Footer buttons */}

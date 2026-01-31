@@ -28,7 +28,7 @@ export default function LoginPage() {
     setSubmitting(true);
     setToast(null);
     try {
-      await login(email, password, 1);
+      await login(email, password);
       navigate("/");
     } catch (err: any) {
       setToast({ message: "Invalid credentials or server error.", variant: "error" });
