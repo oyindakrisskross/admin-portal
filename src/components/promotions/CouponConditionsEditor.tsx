@@ -17,6 +17,7 @@ export type ConditionDraft = {
   mode?: ConditionMode;
   item_ids?: number[];
   group_ids?: number[];
+  category_ids?: number[];
 };
 
 type Props = {
@@ -24,6 +25,8 @@ type Props = {
   conditions: ConditionDraft[];
   itemOptions: SelectOption[];
   groupOptions: SelectOption[];
+  categoryOptions: SelectOption[];
+  categoryCascade?: { descendantsById: Record<number, number[]> };
   onChange: (next: { op: ConditionOp; conditions: ConditionDraft[] }) => void;
 };
 
@@ -38,6 +41,8 @@ export function CouponConditionsEditor({
   conditions,
   itemOptions,
   groupOptions,
+  categoryOptions,
+  categoryCascade,
   onChange,
 }: Props) {
   const patch = (key: string, patch: Partial<ConditionDraft>) => {
@@ -95,19 +100,26 @@ export function CouponConditionsEditor({
                           type: nextType,
                           value:
                             nextType === "IN_CART_ITEMS_MIN_QTY" ||
-                            nextType === "IN_CART_GROUPS_MIN_QTY"
+                            nextType === "IN_CART_GROUPS_MIN_QTY" ||
+                            nextType === "IN_CART_CATEGORIES_MIN_QTY"
                               ? undefined
                               : c.value,
                           item_ids: nextType === "IN_CART_ITEMS_MIN_QTY" ? c.item_ids ?? [] : [],
                           group_ids: nextType === "IN_CART_GROUPS_MIN_QTY" ? c.group_ids ?? [] : [],
+                          category_ids:
+                            nextType === "IN_CART_CATEGORIES_MIN_QTY"
+                              ? c.category_ids ?? []
+                              : [],
                           min_qty:
                             nextType === "IN_CART_ITEMS_MIN_QTY" ||
-                            nextType === "IN_CART_GROUPS_MIN_QTY"
+                            nextType === "IN_CART_GROUPS_MIN_QTY" ||
+                            nextType === "IN_CART_CATEGORIES_MIN_QTY"
                               ? c.min_qty ?? 1
                               : undefined,
                           mode:
                             nextType === "IN_CART_ITEMS_MIN_QTY" ||
-                            nextType === "IN_CART_GROUPS_MIN_QTY"
+                            nextType === "IN_CART_GROUPS_MIN_QTY" ||
+                            nextType === "IN_CART_CATEGORIES_MIN_QTY"
                               ? c.mode ?? "SUM"
                               : undefined,
                         });
@@ -150,32 +162,52 @@ export function CouponConditionsEditor({
                     )}
 
                     {(c.type === "IN_CART_ITEMS_MIN_QTY" ||
-                      c.type === "IN_CART_GROUPS_MIN_QTY") && (
+                      c.type === "IN_CART_GROUPS_MIN_QTY" ||
+                      c.type === "IN_CART_CATEGORIES_MIN_QTY") && (
                       <div className="grid grid-cols-12 gap-2 items-center">
                         <span className="col-span-3 text-xs text-kk-dark-text-muted">
-                          {c.type === "IN_CART_ITEMS_MIN_QTY" ? "Items" : "Groups"}
+                          {c.type === "IN_CART_ITEMS_MIN_QTY"
+                            ? "Items"
+                            : c.type === "IN_CART_GROUPS_MIN_QTY"
+                              ? "Groups"
+                              : "Categories"}
                         </span>
                         <div className="col-span-9">
                           <SearchMultiSelectDropdown
                             options={
                               c.type === "IN_CART_ITEMS_MIN_QTY"
                                 ? itemOptions
-                                : groupOptions
+                                : c.type === "IN_CART_GROUPS_MIN_QTY"
+                                  ? groupOptions
+                                  : categoryOptions
+                            }
+                            cascade={
+                              c.type === "IN_CART_CATEGORIES_MIN_QTY" ? categoryCascade : undefined
                             }
                             selectedIds={
                               c.type === "IN_CART_ITEMS_MIN_QTY"
                                 ? c.item_ids ?? []
-                                : c.group_ids ?? []
+                                : c.type === "IN_CART_GROUPS_MIN_QTY"
+                                  ? c.group_ids ?? []
+                                  : c.category_ids ?? []
                             }
                             onChange={(ids) =>
                               patch(
                                 c.key,
                                 c.type === "IN_CART_ITEMS_MIN_QTY"
                                   ? { item_ids: ids }
-                                  : { group_ids: ids }
+                                  : c.type === "IN_CART_GROUPS_MIN_QTY"
+                                    ? { group_ids: ids }
+                                    : { category_ids: ids }
                               )
                             }
-                            placeholder={`Select ${c.type === "IN_CART_ITEMS_MIN_QTY" ? "items" : "groups"}...`}
+                            placeholder={`Select ${
+                              c.type === "IN_CART_ITEMS_MIN_QTY"
+                                ? "items"
+                                : c.type === "IN_CART_GROUPS_MIN_QTY"
+                                  ? "groups"
+                                  : "categories"
+                            }...`}
                           />
                         </div>
 

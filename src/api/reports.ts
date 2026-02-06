@@ -2,6 +2,7 @@
 
 import type { GroupResponse, OverviewResponse, ReportResponse } from "../types/reports";
 import type { CouponDetailReportResponse, CouponReportResponse } from "../types/reports";
+import type { CategoriesReportResponse } from "../types/reports";
 import type { DailyReportRunResponse, DailyReportSettings } from "../types/dailyReports";
 import api from "./client";
 
@@ -188,6 +189,30 @@ export async function fetchCouponDetailReport(args: {
   const res = await api.get<CouponDetailReportResponse>(
     `/api/sales/reports/coupons/${encodeURIComponent(args.code)}/?${q.toString()}`
   );
+  return res.data;
+}
+
+export async function fetchCategoriesReport(args: {
+  start: string;
+  end: string;
+  locationIds?: number[];
+  itemsMode?: "parents" | "all";
+  granularity?: "hour" | "day" | "week" | "month";
+  groupBy?: "all" | "top_level";
+  parentCategoryId?: number;
+}): Promise<CategoriesReportResponse> {
+  const q = new URLSearchParams();
+  q.set("start", args.start);
+  q.set("end", args.end);
+  q.set("items_mode", args.itemsMode ?? "parents");
+  q.set("group_by", args.groupBy ?? "all");
+  if (args.parentCategoryId != null && Number.isFinite(args.parentCategoryId)) {
+    q.set("parent_category_id", String(args.parentCategoryId));
+  }
+  if (args.granularity) q.set("granularity", args.granularity);
+  if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
+
+  const res = await api.get<CategoriesReportResponse>(`/api/sales/reports/categories/?${q.toString()}`);
   return res.data;
 }
 

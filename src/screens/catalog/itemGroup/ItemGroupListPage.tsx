@@ -9,9 +9,14 @@ import { useAuth } from "../../../auth/AuthContext";
 
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
-import { fetchItemGroups, patchItemGroup, deleteItemGroup } from "../../../api/catalog";
+import { bulkItemGroups, fetchItemGroups, patchItemGroup, deleteItemGroup } from "../../../api/catalog";
 import { ItemGroupPeek } from "./ItemGroupPeek";
 import ToastModal from "../../../components/ui/ToastModal";
+import { BulkActionBar } from "../../../components/catalog/bulk/BulkActionBar";
+import { RowSelectCheckbox } from "../../../components/catalog/bulk/RowSelectCheckbox";
+import { BulkEditAvailabilityModal } from "../../../components/catalog/bulk/BulkEditAvailabilityModal";
+import { BulkEditCategoriesModal } from "../../../components/catalog/bulk/BulkEditCategoriesModal";
+import type { Category } from "../../../types/catalog";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
@@ -47,6 +52,11 @@ export const ItemGroupListPage: React.FC = () => {
   const [sort, setSort] = useState<SortState<"name" | "stock" | "price" | "status" | "created"> | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
 
   const filterColumns: ColumnMeta[] = [
     { id: "name", label: "Name", type: "text" },
@@ -87,6 +97,18 @@ export const ItemGroupListPage: React.FC = () => {
     setToastVariant(variant);
     setToastMessage(message);
   };
+
+  const toggleSelected = (id: number, checked?: boolean) => {
+    setSelectedIds((prev) => {
+      const set = new Set(prev);
+      const nextChecked = checked ?? !set.has(id);
+      if (nextChecked) set.add(id);
+      else set.delete(id);
+      return Array.from(set);
+    });
+  };
+
+  const clearSelection = () => setSelectedIds([]);
 
   const handleStatusChg = async () => {
     if (!selectedGroup || !selectedId) return;
@@ -155,6 +177,8 @@ export const ItemGroupListPage: React.FC = () => {
       const data = await fetchItemGroups({ filters });
       if (!cancelled) {
         setGroups(data.results);
+        const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
+        setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
       }
     })();
 
@@ -218,11 +242,110 @@ export const ItemGroupListPage: React.FC = () => {
           </div> ) : ""
           } />
 
+        {!hasPeek && selectedIds.length > 0 && (
+          <BulkActionBar
+            count={selectedIds.length}
+            onClear={clearSelection}
+            actions={[
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <TrashIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "delete"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItemGroups({ ids: selectedIds, action: "delete" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    const failedIds = (res.failed ?? []).map((f) => Number(f.id)).filter(Number.isFinite);
+
+                    if (okSet.size) {
+                      setGroups((prev) => prev.filter((g) => !okSet.has(Number(g.id))));
+                      showToast(`Deleted ${okSet.size} item group(s).`, "success");
+                    }
+
+                    if (failedIds.length) {
+                      showToast(
+                        "Some item groups were not deleted since they have recorded transactions. Deactivate them instead.",
+                        "error"
+                      );
+                      setSelectedIds(failedIds);
+                    } else {
+                      clearSelection();
+                    }
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk delete failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "inactive",
+                label: "Make inactive",
+                icon: <PauseIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItemGroups({ ids: selectedIds, action: "make_inactive" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    setGroups((prev) =>
+                      prev.map((g) => (okSet.has(Number(g.id)) ? { ...g, status: "INACTIVE" } : g))
+                    );
+                    showToast("Updated item group statuses.", "success");
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk update failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "active",
+                label: "Make active",
+                icon: <PlayIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItemGroups({ ids: selectedIds, action: "make_active" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    setGroups((prev) =>
+                      prev.map((g) => (okSet.has(Number(g.id)) ? { ...g, status: "ACTIVE" } : g))
+                    );
+                    showToast("Updated item group statuses.", "success");
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk update failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "availability",
+                label: "Edit availability",
+                icon: <BoltIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: () => setAvailabilityModalOpen(true),
+              },
+              {
+                key: "categories",
+                label: "Edit categories",
+                icon: <TagIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Category", "edit"),
+                onClick: () => setCategoriesModalOpen(true),
+              },
+            ]}
+          />
+        )}
+
         {/* Table */}
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden"}>
           <table className="min-w-full table-auto">
             <thead>
               <tr>
+                {!hasPeek && <th className="w-10" />}
                 <th
                   className="cursor-pointer select-none"
                   onClick={() => setSort((s) => nextSort(s, "name"))}
@@ -274,9 +397,28 @@ export const ItemGroupListPage: React.FC = () => {
               {sortedGroups.map((g) => (
                 <tr
                   key={g.id}
-                  className="cursor-pointer"
-                  onClick={() => openGroup(g!)}
+                  className={[
+                    "cursor-pointer group",
+                    !hasPeek && selectedIdSet.has(Number(g.id)) ? "bg-blue-600/10" : "",
+                  ].join(" ")}
+                  onClick={() => {
+                    if (!hasPeek && selectedIds.length) {
+                      toggleSelected(g.id!, !selectedIdSet.has(g.id!));
+                      return;
+                    }
+                    openGroup(g!);
+                  }}
                 >
+                  {!hasPeek && (
+                    <td className="w-10 px-2">
+                      <div className={selectedIdSet.has(g.id!) ? "" : "opacity-0 group-hover:opacity-100"}>
+                        <RowSelectCheckbox
+                          checked={selectedIdSet.has(g.id!)}
+                          onChange={(checked) => toggleSelected(g.id!, checked)}
+                        />
+                      </div>
+                    </td>
+                  )}
                   <td>
                     <div className="flex items-center gap-2">
                       {g.image && (
@@ -327,7 +469,13 @@ export const ItemGroupListPage: React.FC = () => {
                       </td>
                       <td>
                         {/* categories later */}
-                        —
+                        {g.categories?.length ? (
+                          <span className="line-clamp-2 text-[11px] text-kk-dark-text-muted">
+                            {g.categories.map((c) => c.name).join(", ")}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td>
                         {g.created_on
@@ -342,7 +490,7 @@ export const ItemGroupListPage: React.FC = () => {
               {!groups.length && (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 2 : 6}
+                    colSpan={hasPeek ? 2 : 7}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
                     No item groups yet. Click “New” to create your
@@ -401,6 +549,51 @@ export const ItemGroupListPage: React.FC = () => {
         message={toastMessage}
         onClose={() => setToastMessage(null)}
         variant={toastVariant}
+      />
+
+      <BulkEditAvailabilityModal
+        open={availabilityModalOpen}
+        title="Edit availability"
+        onClose={() => setAvailabilityModalOpen(false)}
+        onApply={async (locationIds) => {
+          setBulkBusy(true);
+          try {
+            await bulkItemGroups({ ids: selectedIds, action: "set_availability", location_ids: locationIds });
+            showToast("Availability updated.", "success");
+          } catch (e: any) {
+            showToast(e?.message ?? "Failed to update availability.");
+          } finally {
+            setBulkBusy(false);
+          }
+        }}
+      />
+
+      <BulkEditCategoriesModal
+        open={categoriesModalOpen}
+        title="Edit categories"
+        onClose={() => setCategoriesModalOpen(false)}
+        onApply={async (categoryIds, categories) => {
+          setBulkBusy(true);
+          try {
+            await bulkItemGroups({ ids: selectedIds, action: "set_categories", category_ids: categoryIds });
+            const idSet = new Set(selectedIds);
+            setGroups((prev) =>
+              prev.map((g) =>
+                idSet.has(Number(g.id))
+                  ? {
+                      ...g,
+                      categories: categories as Category[],
+                    }
+                  : g
+              )
+            );
+            showToast("Categories updated.", "success");
+          } catch (e: any) {
+            showToast(e?.message ?? "Failed to update categories.");
+          } finally {
+            setBulkBusy(false);
+          }
+        }}
       />
     </div>
   );

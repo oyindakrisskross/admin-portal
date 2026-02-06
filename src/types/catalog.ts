@@ -118,13 +118,14 @@ export interface ItemCategory {
   category_name?: string;
 }
 
-export type TrxReason = "SALE" | "ADJUSTMENT" | "REFUND" | "RESTOCK" | "OPENING_STOCK";
+export type TrxReason = "SALE" | "ADJUSTMENT" | "REFUND" | "RESTOCK" | "OPENING_STOCK" | "TRANSFER";
 export const TRX_OPTS: {value: TrxReason; label: string}[] = [
   { value: "SALE", label: "Sale"},
   { value: "ADJUSTMENT", label: "Inventory Adjustment"},
   { value: "REFUND", label: "Refund"},
   { value: "RESTOCK", label: "Re-stock"},
   { value: "OPENING_STOCK", label: "Opening Stock"},
+  { value: "TRANSFER", label: "Transfer"},
 ];
 export interface InventoryTransaction {
   id: number;
@@ -161,6 +162,44 @@ export interface InventoryInput {
   reference?: string;
 }
 
+export type InventoryTransferStatus = "DRAFT" | "PENDING" | "TRANSFERRED";
+
+export interface InventoryTransferLine {
+  id?: number;
+  item: number;
+  item_name?: string;
+  item_sku?: string;
+  quantity: string;
+}
+
+export interface InventoryTransfer {
+  id?: number;
+  number?: string;
+  request_date: string;
+  created_on?: string;
+  created_by?: number;
+  created_by_email?: string;
+  description?: string;
+  status?: InventoryTransferStatus;
+
+  source_location: number;
+  source_location_name?: string;
+  destination_location: number;
+  destination_location_name?: string;
+
+  initiated_on?: string | null;
+  initiated_by?: number | null;
+  initiated_by_email?: string | null;
+
+  transferred_on?: string | null;
+  transferred_by?: number | null;
+  transferred_by_email?: string | null;
+
+  total_quantity?: string;
+  lines?: InventoryTransferLine[];
+  lines_input?: InventoryTransferLine[];
+}
+
 export interface ItemAvailability {
   id?: number;
   item?: number;
@@ -187,6 +226,8 @@ export interface ItemGroup {
   availability_location_ids?: number[];
   image?: string | null;
   gallery?: { id: number; image: string; is_primary: boolean }[];
+  categories?: Category[];
+  category_ids_input?: number[];
 
   attributes: ItemGroupAttribute[];
   items?: Item[] | null;

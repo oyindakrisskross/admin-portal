@@ -10,6 +10,8 @@ export type ActionDraft = {
   cartAmount: { amount: string };
   itemPercent: { item_ids: number[]; percent: string; cap: string };
   itemAmount: { item_ids: number[]; amount: string };
+  categoryPercent: { category_ids: number[]; percent: string; cap: string };
+  categoryAmount: { category_ids: number[]; amount: string };
   customized: {
     include_in_conditions: boolean;
     apply_discount: boolean;
@@ -31,9 +33,11 @@ type Props = {
   value: ActionDraft;
   onChange: (next: ActionDraft) => void;
   itemOptions: SelectOption[];
+  categoryOptions: SelectOption[];
+  categoryCascade?: { descendantsById: Record<number, number[]> };
 };
 
-export function CouponActionEditor({ value, onChange, itemOptions }: Props) {
+export function CouponActionEditor({ value, onChange, itemOptions, categoryOptions, categoryCascade }: Props) {
   const selected = value.action_type;
 
   const itemSummary = useMemo(() => {
@@ -49,8 +53,18 @@ export function CouponActionEditor({ value, onChange, itemOptions }: Props) {
         ? `${value.itemAmount.item_ids.length} item(s) at ${amt} off per unit`
         : "";
     }
+    if (selected === "CATEGORY_PERCENT") {
+      const pct = value.categoryPercent.percent || "0";
+      const n = value.categoryPercent.category_ids.length;
+      return n ? `${n} categor${n === 1 ? "y" : "ies"} at ${pct}% off` : "";
+    }
+    if (selected === "CATEGORY_AMOUNT") {
+      const amt = value.categoryAmount.amount || "0";
+      const n = value.categoryAmount.category_ids.length;
+      return n ? `${n} categor${n === 1 ? "y" : "ies"} at ${amt} off per unit` : "";
+    }
     return "";
-  }, [selected, value.itemAmount, value.itemPercent]);
+  }, [selected, value.categoryAmount, value.categoryPercent, value.itemAmount, value.itemPercent]);
 
   const bxgySummary = useMemo(() => {
     if (selected !== "BXGY") return "";
@@ -306,6 +320,241 @@ export function CouponActionEditor({ value, onChange, itemOptions }: Props) {
                   onChange({
                     ...value,
                     itemAmount: { ...value.itemAmount, amount: e.target.value },
+                  })
+                }
+              />
+              <span className="text-xs text-kk-dark-text-muted col-span-3">
+                Amount in your currency per unit.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Customized Items</p>
+              <div className="col-span-5 flex flex-col gap-2 text-xs text-kk-dark-text-muted">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.include_in_conditions}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, include_in_conditions: e.target.checked },
+                      })
+                    }
+                  />
+                  Include customized items when evaluating conditions (e.g., minimum qty)
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, apply_discount: e.target.checked },
+                      })
+                    }
+                  />
+                  Apply discount to customized items
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <span className="min-w-[7rem]">Discount scope</span>
+                  <select
+                    className="rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-2 py-1 text-xs"
+                    value={value.customized.discount_scope}
+                    disabled={!value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: {
+                          ...value.customized,
+                          discount_scope: e.target.value as any,
+                        },
+                      })
+                    }
+                  >
+                    <option value="AUTO">Auto (recommended)</option>
+                    <option value="PARENT_ONLY">Parent only (ignore add-ons)</option>
+                    <option value="BUNDLE">Bundle (include add-ons)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {itemSummary && (
+              <div className="mt-1 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs">
+                <span className="text-kk-dark-text-muted mr-2">Action Summary</span>
+                <span className="text-kk-dark-text font-medium">{itemSummary}</span>
+              </div>
+            )}
+          </>
+        )}
+
+        {selected === "CATEGORY_PERCENT" && (
+          <>
+            <div className="text-xs text-kk-dark-text-muted">
+              Applies only to products in the selected categories if they appear in the cart.
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Select Categories</p>
+              <div className="col-span-5">
+                <SearchMultiSelectDropdown
+                  options={categoryOptions}
+                  cascade={categoryCascade}
+                  selectedIds={value.categoryPercent.category_ids}
+                  onChange={(ids) =>
+                    onChange({
+                      ...value,
+                      categoryPercent: { ...value.categoryPercent, category_ids: ids },
+                    })
+                  }
+                  placeholder="Select categories..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Percent Off</p>
+              <input
+                type="number"
+                min={0}
+                max={100}
+                step={0.01}
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
+                value={value.categoryPercent.percent}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    categoryPercent: { ...value.categoryPercent, percent: e.target.value },
+                  })
+                }
+              />
+              <span className="text-xs text-kk-dark-text-muted col-span-3">0 - 100</span>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Max Discount (cap)</p>
+              <input
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
+                placeholder="optional"
+                value={value.categoryPercent.cap}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    categoryPercent: { ...value.categoryPercent, cap: e.target.value },
+                  })
+                }
+              />
+              <span className="text-xs text-kk-dark-text-muted col-span-3">
+                Cap applies to total discount for this coupon.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Customized Items</p>
+              <div className="col-span-5 flex flex-col gap-2 text-xs text-kk-dark-text-muted">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.include_in_conditions}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, include_in_conditions: e.target.checked },
+                      })
+                    }
+                  />
+                  Include customized items when evaluating conditions (e.g., minimum qty)
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: { ...value.customized, apply_discount: e.target.checked },
+                      })
+                    }
+                  />
+                  Apply discount to customized items
+                </label>
+
+                <div className="flex items-center gap-2">
+                  <span className="min-w-[7rem]">Discount scope</span>
+                  <select
+                    className="rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-2 py-1 text-xs"
+                    value={value.customized.discount_scope}
+                    disabled={!value.customized.apply_discount}
+                    onChange={(e) =>
+                      onChange({
+                        ...value,
+                        customized: {
+                          ...value.customized,
+                          discount_scope: e.target.value as any,
+                        },
+                      })
+                    }
+                  >
+                    <option value="AUTO">Auto (recommended)</option>
+                    <option value="PARENT_ONLY">Parent only (ignore add-ons)</option>
+                    <option value="BUNDLE">Bundle (include add-ons)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {itemSummary && (
+              <div className="mt-1 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs">
+                <span className="text-kk-dark-text-muted mr-2">Action Summary</span>
+                <span className="text-kk-dark-text font-medium">{itemSummary}</span>
+              </div>
+            )}
+          </>
+        )}
+
+        {selected === "CATEGORY_AMOUNT" && (
+          <>
+            <div className="text-xs text-kk-dark-text-muted">
+              Applies only to products in the selected categories if they appear in the cart.
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Select Categories</p>
+              <div className="col-span-5">
+                <SearchMultiSelectDropdown
+                  options={categoryOptions}
+                  cascade={categoryCascade}
+                  selectedIds={value.categoryAmount.category_ids}
+                  onChange={(ids) =>
+                    onChange({
+                      ...value,
+                      categoryAmount: { ...value.categoryAmount, category_ids: ids },
+                    })
+                  }
+                  placeholder="Select categories..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Amount Off (per unit)</p>
+              <input
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
+                placeholder="0.00"
+                value={value.categoryAmount.amount}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    categoryAmount: { ...value.categoryAmount, amount: e.target.value },
                   })
                 }
               />

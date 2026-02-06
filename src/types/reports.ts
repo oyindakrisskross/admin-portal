@@ -161,3 +161,38 @@ export interface CouponDetailReportResponse {
   pagination: { total: number; limit: number; offset: number };
   results: CouponInvoiceRow[];
 }
+
+export interface CategoriesSeriesPoint {
+  t: string;
+  values: Record<string, string>;
+}
+
+export interface CategoryReportRow {
+  category_id: number;
+  name: string;
+  net_sales: string;
+  orders: number;
+  items_sold: string;
+}
+
+export interface CategoriesReportResponse {
+  range: {
+    start: string;
+    end: string;
+    granularity: Granularity;
+    available_granularities: Array<Granularity>;
+  };
+  scope: {
+    location_ids: number[] | "ALL";
+    items_mode: "parents" | "all";
+    group_by?: "all" | "top_level";
+    parent_category_id?: number | null;
+  };
+  parent_category?: { category_id: number; name: string } | null;
+  categories: Array<{ category_id: number; name: string }>;
+  series: {
+    net_sales: CategoriesSeriesPoint[];
+  };
+  pie: Array<{ category_id: number; name: string; net_sales: string }>;
+  results: CategoryReportRow[];
+}

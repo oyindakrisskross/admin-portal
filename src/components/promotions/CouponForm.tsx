@@ -14,7 +14,7 @@ import {
 } from "../../api/promotions";
 import { fetchLocations } from "../../api/location";
 import type { Location } from "../../types/location";
-import { fetchItemGroups, fetchItems } from "../../api/catalog";
+import { fetchCategories, fetchItemGroups, fetchItems } from "../../api/catalog";
 
 import {
   CouponConditionsEditor,
@@ -28,6 +28,7 @@ import {
   type ScheduleRow,
 } from "./CouponScheduleEditor";
 import { SearchMultiSelectDropdown, type SelectOption } from "./SearchMultiSelectDropdown";
+import { buildCategoryTree } from "../../utils/categoryTree";
 
 interface Props {
   initial?: Coupon | null;
@@ -44,6 +45,8 @@ const EMPTY: Coupon = {
   apply_all_locations: true,
   locations: [],
   excluded_items: [],
+  excluded_categories: [],
+  excluded_groups: [],
   min_subtotal: "0.00",
   min_qty: 0,
   condition_tree: {},
@@ -99,6 +102,15 @@ function conditionDraftsFromTree(tree: any): { op: ConditionOp; conditions: Cond
           group_ids: Array.isArray(leaf.group_ids) ? leaf.group_ids : [],
         };
       }
+      if (type === "IN_CART_CATEGORIES_MIN_QTY") {
+        return {
+          key,
+          type,
+          min_qty: Number(leaf.min_qty ?? 1),
+          mode: (leaf.mode || "SUM") as any,
+          category_ids: Array.isArray(leaf.category_ids) ? leaf.category_ids : [],
+        };
+      }
       return { key, type, value: leaf.value != null ? String(leaf.value) : "" };
     });
 
@@ -121,6 +133,14 @@ function buildConditionTree(op: ConditionOp, conditions: ConditionDraft[]) {
       return {
         type: c.type,
         group_ids: c.group_ids ?? [],
+        min_qty: Number(c.min_qty ?? 1),
+        mode: (c.mode || "SUM").toUpperCase(),
+      };
+    }
+    if (c.type === "IN_CART_CATEGORIES_MIN_QTY") {
+      return {
+        type: c.type,
+        category_ids: c.category_ids ?? [],
         min_qty: Number(c.min_qty ?? 1),
         mode: (c.mode || "SUM").toUpperCase(),
       };
@@ -156,6 +176,13 @@ function validateConditions(op: ConditionOp, conditions: ConditionDraft[]) {
       const minQty = Number(c.min_qty ?? 1);
       if (!Number.isFinite(minQty) || minQty <= 0)
         return "Group condition requires Min Qty greater than 0.";
+    }
+    if (c.type === "IN_CART_CATEGORIES_MIN_QTY") {
+      if (!(c.category_ids ?? []).length)
+        return "Category condition requires at least one category.";
+      const minQty = Number(c.min_qty ?? 1);
+      if (!Number.isFinite(minQty) || minQty <= 0)
+        return "Category condition requires Min Qty greater than 0.";
     }
   }
   return null;
@@ -208,6 +235,15 @@ function actionDraftFromCoupon(c: Coupon): ActionDraft {
     },
     itemAmount: {
       item_ids: itemIds,
+      amount: cfg.amount != null ? String(cfg.amount) : "",
+    },
+    categoryPercent: {
+      category_ids: Array.isArray(cfg.categories) ? cfg.categories : [],
+      percent: cfg.percent != null ? String(cfg.percent) : "",
+      cap: cfg.cap != null ? String(cfg.cap) : "",
+    },
+    categoryAmount: {
+      category_ids: Array.isArray(cfg.categories) ? cfg.categories : [],
       amount: cfg.amount != null ? String(cfg.amount) : "",
     },
     customized: {
@@ -268,6 +304,43 @@ function buildActionConfig(draft: ActionDraft): { config: any; error?: string } 
       discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
     };
     return { config: { items: draft.itemAmount.item_ids, amount, customized } };
+  }
+
+  if (draft.action_type === "CATEGORY_PERCENT") {
+    if (!draft.categoryPercent.category_ids.length) {
+      return { config: null, error: "Select at least one category for Category Percent Off." };
+    }
+    const percent = Number(draft.categoryPercent.percent || 0);
+    if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
+      return { config: null, error: "Percent Off must be between 0 and 100." };
+    }
+    const cap = draft.categoryPercent.cap.trim();
+    const customized = {
+      include_in_conditions: Boolean(draft.customized?.include_in_conditions ?? true),
+      apply_discount: Boolean(draft.customized?.apply_discount ?? true),
+      discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
+    };
+    return {
+      config: cap
+        ? { categories: draft.categoryPercent.category_ids, percent, cap, customized }
+        : { categories: draft.categoryPercent.category_ids, percent, customized },
+    };
+  }
+
+  if (draft.action_type === "CATEGORY_AMOUNT") {
+    if (!draft.categoryAmount.category_ids.length) {
+      return { config: null, error: "Select at least one category for Category Amount Off." };
+    }
+    const amount = draft.categoryAmount.amount.trim();
+    if (!amount || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      return { config: null, error: "Amount Off must be a valid number greater than 0." };
+    }
+    const customized = {
+      include_in_conditions: Boolean(draft.customized?.include_in_conditions ?? true),
+      apply_discount: Boolean(draft.customized?.apply_discount ?? true),
+      discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
+    };
+    return { config: { categories: draft.categoryAmount.category_ids, amount, customized } };
   }
 
   if (draft.action_type === "BXGY") {
@@ -332,6 +405,10 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
   const [locations, setLocations] = useState<Location[]>([]);
   const [itemOptions, setItemOptions] = useState<SelectOption[]>([]);
   const [groupOptions, setGroupOptions] = useState<SelectOption[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
+  const [categoryCascade, setCategoryCascade] = useState<{ descendantsById: Record<number, number[]> }>({
+    descendantsById: {},
+  });
 
   const initialSchedulesRef = useRef<CouponSchedule[]>(initial?.schedules ?? []);
 
@@ -361,28 +438,45 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
     })();
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [itemsRes, groupsRes] = await Promise.all([fetchItems(), fetchItemGroups()]);
-        const items = (itemsRes?.results ?? []) as any[];
-        const groups = (groupsRes?.results ?? []) as any[];
+	  useEffect(() => {
+	    (async () => {
+	      try {
+	        const [itemsRes, groupsRes, categoriesRes] = await Promise.all([
+	          fetchItems(),
+	          fetchItemGroups(),
+	          fetchCategories(),
+	        ]);
+	        const items = (itemsRes?.results ?? []) as any[];
+	        const groups = (groupsRes?.results ?? []) as any[];
+	        const categories = (categoriesRes?.results ?? []) as any[];
+	        const catTree = buildCategoryTree(categories as any);
 
         setItemOptions(
           items
             .filter((i) => i?.id != null)
             .map((i) => ({ id: Number(i.id), label: String(i.name ?? `Item #${i.id}`) }))
         );
-        setGroupOptions(
-          groups
-            .filter((g) => g?.id != null)
-            .map((g) => ({ id: Number(g.id), label: String(g.name ?? `Group #${g.id}`) }))
-        );
-      } catch {
-        // ignore; dropdown will show empty options
-      }
-    })();
-  }, []);
+	        setGroupOptions(
+	          groups
+	            .filter((g) => g?.id != null)
+	            .map((g) => ({ id: Number(g.id), label: String(g.name ?? `Group #${g.id}`) }))
+	        );
+	        setCategoryOptions(
+	          catTree.options.map((c) => ({
+	            id: c.id,
+	            label: c.label,
+	            depth: c.depth,
+	            parentId: c.parentId,
+	          }))
+	        );
+	        setCategoryCascade({
+	          descendantsById: catTree.descendantsById,
+	        });
+	      } catch {
+	        // ignore; dropdown will show empty options
+	      }
+	    })();
+	  }, []);
 
   const selectedLocations = useMemo(() => coupon.locations ?? [], [coupon.locations]);
 
@@ -488,14 +582,16 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
       description: coupon.description || "",
       start_at: fromInputDateTime(toInputDateTime(coupon.start_at)),
       end_at: fromInputDateTime(toInputDateTime(coupon.end_at)),
-      apply_all_locations: Boolean(coupon.apply_all_locations),
-      locations: coupon.apply_all_locations ? [] : coupon.locations ?? [],
-      excluded_items: coupon.excluded_items ?? [],
-      min_subtotal: coupon.min_subtotal != null ? String(coupon.min_subtotal) : "0.00",
-      min_qty: Number(coupon.min_qty || 0),
-      condition_tree,
-      action_type: actionDraft.action_type,
-      action_config,
+	      apply_all_locations: Boolean(coupon.apply_all_locations),
+	      locations: coupon.apply_all_locations ? [] : coupon.locations ?? [],
+	      excluded_items: coupon.excluded_items ?? [],
+	      excluded_categories: coupon.excluded_categories ?? [],
+	      excluded_groups: coupon.excluded_groups ?? [],
+	      min_subtotal: coupon.min_subtotal != null ? String(coupon.min_subtotal) : "0.00",
+	      min_qty: Number(coupon.min_qty || 0),
+	      condition_tree,
+	      action_type: actionDraft.action_type,
+	      action_config,
       priority: Number(coupon.priority || 0),
     };
 
@@ -675,25 +771,50 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
               </div>
             )}
 
-            <div className="grid grid-cols-6 gap-2 items-center">
-              <p>Excluded Items</p>
-              <div className="col-span-5">
-                <SearchMultiSelectDropdown
-                  options={itemOptions}
-                  selectedIds={coupon.excluded_items ?? []}
-                  onChange={(ids) => setCoupon((c) => ({ ...c, excluded_items: ids }))}
-                  placeholder="Select items to exclude..."
-                />
-                <div className="mt-1 text-[11px] text-kk-dark-text-muted">
-                  Excluded items are ignored when calculating cart-level discounts and eligibility.
-                </div>
-              </div>
-            </div>
+	            <div className="grid grid-cols-6 gap-2 items-center">
+	              <p>Excluded Items</p>
+	              <div className="col-span-5">
+	                <SearchMultiSelectDropdown
+	                  options={itemOptions}
+	                  selectedIds={coupon.excluded_items ?? []}
+	                  onChange={(ids) => setCoupon((c) => ({ ...c, excluded_items: ids }))}
+	                  placeholder="Select items to exclude..."
+	                />
+	                <div className="mt-1 text-[11px] text-kk-dark-text-muted">
+	                  Excluded items are ignored when calculating discounts and eligibility.
+	                </div>
+	              </div>
+	            </div>
 
-            <div className="grid grid-cols-6 gap-2 items-center">
-              <p>Priority</p>
-              <input
-                type="number"
+	            <div className="grid grid-cols-6 gap-2 items-center">
+	              <p>Excluded Categories</p>
+	              <div className="col-span-5">
+	                <SearchMultiSelectDropdown
+	                  options={categoryOptions}
+	                  cascade={categoryCascade}
+	                  selectedIds={coupon.excluded_categories ?? []}
+	                  onChange={(ids) => setCoupon((c) => ({ ...c, excluded_categories: ids }))}
+	                  placeholder="Select categories to exclude..."
+	                />
+	              </div>
+	            </div>
+
+	            <div className="grid grid-cols-6 gap-2 items-center">
+	              <p>Excluded Groups</p>
+	              <div className="col-span-5">
+	                <SearchMultiSelectDropdown
+	                  options={groupOptions}
+	                  selectedIds={coupon.excluded_groups ?? []}
+	                  onChange={(ids) => setCoupon((c) => ({ ...c, excluded_groups: ids }))}
+	                  placeholder="Select groups to exclude..."
+	                />
+	              </div>
+	            </div>
+
+	            <div className="grid grid-cols-6 gap-2 items-center">
+	              <p>Priority</p>
+	              <input
+	                type="number"
                 className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
                 value={coupon.priority ?? 0}
                 onChange={(e) => setCoupon((c) => ({ ...c, priority: Number(e.target.value || 0) }))}
@@ -707,22 +828,26 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
           <div className="w-1/3" />
         </section>
 
-        <CouponConditionsEditor
-          op={conditionOp}
-          conditions={conditions}
-          itemOptions={itemOptions}
-          groupOptions={groupOptions}
-          onChange={(next) => {
-            setConditionOp(next.op);
-            setConditions(next.conditions);
-          }}
-        />
+	        <CouponConditionsEditor
+	          op={conditionOp}
+	          conditions={conditions}
+	          itemOptions={itemOptions}
+	          groupOptions={groupOptions}
+	          categoryOptions={categoryOptions}
+	          categoryCascade={categoryCascade}
+	          onChange={(next) => {
+	            setConditionOp(next.op);
+	            setConditions(next.conditions);
+	          }}
+	        />
 
-        <CouponActionEditor
-          value={actionDraft}
-          onChange={setActionDraft}
-          itemOptions={itemOptions}
-        />
+	        <CouponActionEditor
+	          value={actionDraft}
+	          onChange={setActionDraft}
+	          itemOptions={itemOptions}
+	          categoryOptions={categoryOptions}
+	          categoryCascade={categoryCascade}
+	        />
 
         <CouponScheduleEditor
           useSchedule={useSchedule}

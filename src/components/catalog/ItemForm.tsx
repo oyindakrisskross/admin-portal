@@ -1,6 +1,6 @@
 // src/components/catalog/ItemForm.tsx
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { 
@@ -52,6 +52,7 @@ import {
 } from "@heroicons/react/24/outline";
 import ListPageHeader from "../layout/ListPageHeader";
 import ToastModal from "../ui/ToastModal";
+import { buildCategoryTree } from "../../utils/categoryTree";
 
 interface Props {
   initial?: Item | null;
@@ -183,6 +184,8 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const initialItemCategoriesRef = useRef<ItemCategory[]>([]);
+
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
   useEffect(() => {
     (async () => {
@@ -353,39 +356,38 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     }
   };
 
+  const toggleCategoryTree = (categoryId: number, checked: boolean) => {
+    const descendants = categoryTree.descendantsById[categoryId] ?? [];
+    const ids = [categoryId, ...descendants];
+    const idSet = new Set(ids);
+
+    setItem((prev) => {
+      const current = prev.categories ?? [];
+      const currentIds = new Set(current.map((ic) => ic.category));
+
+      if (!checked) {
+        return {
+          ...prev,
+          categories: current.filter((ic) => !idSet.has(ic.category)),
+        };
+      }
+
+      const additions: ItemCategory[] = [];
+      for (const id of ids) {
+        if (currentIds.has(id)) continue;
+        additions.push({ category: id } as ItemCategory);
+      }
+
+      return { ...prev, categories: [...current, ...additions] };
+    });
+  };
+
   const handleCategoryChg = (
     e: React.ChangeEvent<HTMLInputElement>,
     categoryId: number
   ) => {
-    const checked = e.target.checked;
-    setItem((prev) => {
-      const current = prev.categories ?? [];
-
-      // remove if unchecked
-      if (!checked) {
-        return {
-          ...prev,
-          categories: current.filter((ic) => ic.category !== categoryId),
-        };
-      }
-
-      // avoid duplicates
-      if (current.some((ic) => ic.category === categoryId)) {
-        return prev;
-      }
-
-      // add if checked
-      return {
-        ...prev,
-        categories: [
-          ...current,
-          {
-            category: categoryId,
-          } as ItemCategory,
-        ]
-      }
-    })
-  }
+    toggleCategoryTree(categoryId, e.target.checked);
+  };
 
   const handleAddSchedule = () => {
     setItem((i) => ({
@@ -1221,24 +1223,38 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
           </div>
         </section>
 
-        {/* Categories */}
-        <section className="mt-6">
-          <p className="text-xl mb-5">Categories</p>
-          <div className="grid grid-cols-8 gap-3">
-            { categories.map((c) => (
-              <label>
-                <input 
-                  key={c.id}
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300 mx-2"
-                  checked={item.categories?.some((ic) => ic.category === c.id) ?? false}
-                  onChange={(e) => handleCategoryChg(e, c.id!)}
-                />
-                {c.name}
-              </label>
-            ))}
-          </div>
-        </section>
+	        {/* Categories */}
+	        <section className="mt-6">
+	          <p className="text-xl mb-5">Categories</p>
+	          <div className="grid grid-cols-1 gap-2 rounded-xl border border-kk-dark-input-border p-3">
+	            {categoryTree.options.map((c) => {
+	              const checked =
+	                item.categories?.some((ic) => ic.category === c.id) ?? false;
+
+	              return (
+	                <label
+	                  key={c.id}
+	                  className="flex items-center gap-2 text-sm"
+	                >
+	                  <input
+	                    type="checkbox"
+	                    className="h-4 w-4 rounded border-slate-300"
+	                    checked={checked}
+	                    onChange={(e) => handleCategoryChg(e, c.id)}
+	                  />
+	                  <span style={c.depth ? { paddingLeft: `${c.depth * 18}px` } : undefined}>
+	                    {c.label}
+	                  </span>
+	                </label>
+	              );
+	            })}
+	            {!categoryTree.options.length && (
+	              <div className="py-6 text-center text-xs text-kk-dark-text-muted">
+	                No categories available.
+	              </div>
+	            )}
+	          </div>
+	        </section>
 
         {/* Available Locations for Sale */}
         <section className="mt-6">

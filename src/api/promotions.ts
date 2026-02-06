@@ -34,7 +34,8 @@ export async function updateCoupon(id: number, payload: Partial<Coupon>) {
 }
 
 export async function deleteCoupon(id: number) {
-  await api.delete(`/api/promotions/coupons/${id}/`);
+  const res = await api.delete(`/api/promotions/coupons/${id}/`);
+  return res.data;
 }
 
 // Coupon Schedules

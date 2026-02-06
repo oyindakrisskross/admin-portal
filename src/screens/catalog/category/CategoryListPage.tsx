@@ -7,21 +7,25 @@ import { useAuth } from "../../../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import { Plus } from "lucide-react";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { buildCategoryTree } from "../../../utils/categoryTree";
 
 export const CategoryListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
   const [categories, setCategories] = useState<Category[] | null>([]);
-  const [sort, setSort] = useState<SortState<"name" | "parent"> | null>(null);
 
-  const sortedCategories = useMemo(() => {
+  const nameById = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const c of categories ?? []) {
+      if (c?.id != null) m.set(Number(c.id), String(c.name ?? `Category #${c.id}`));
+    }
+    return m;
+  }, [categories]);
+
+  const treeRows = useMemo(() => {
     const rows = categories ?? [];
-    return sortBy(rows, sort, {
-      name: (c) => c.name,
-      parent: (c) => c.parent_name ?? "",
-    });
-  }, [categories, sort]);
+    return buildCategoryTree(rows).options;
+  }, [categories]);
 
   useEffect(() => {
     (async () => {
@@ -61,30 +65,24 @@ export const CategoryListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th
-                  className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "name"))}
-                >
-                  Category Name{sortIndicator(sort, "name")}
-                </th>
-                <th
-                  className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "parent"))}
-                >
-                  Parent{sortIndicator(sort, "parent")}
-                </th>
+                <th>Category Name</th>
+                <th>Parent</th>
               </tr>
             </thead>
             {categories?.length ? (
               <tbody>
-                {sortedCategories.map((c) => (
+                {treeRows.map((c) => (
                   <tr
                     key={c.id}
                     className="cursor-pointer"
-                    onClick={() => handleOnClick(c.id!)}
+                    onClick={() => handleOnClick(c.id)}
                   >
-                    <td>{c.name}</td>
-                    <td>{c.parent_name ?? "-"}</td>
+                    <td style={c.depth ? { paddingLeft: `${c.depth * 18}px` } : undefined}>
+                      {c.label}
+                    </td>
+                    <td>
+                      {c.parentId ? nameById.get(c.parentId) ?? "-" : "-"}
+                    </td>
                   </tr>
                 ))}
               </tbody>

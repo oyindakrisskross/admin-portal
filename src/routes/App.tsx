@@ -36,8 +36,12 @@ import ReportsOverviewPage from "../screens/reports/ReportsOverviewPage";
 import ProductsReportPage from "../screens/reports/products/ProductsReportPage";
 import ProductGroupReportPage from "../screens/reports/products/ProductGroupReportPage";
 import VariationsReportPage from "../screens/reports/VariationsReportPage";
+import CategoriesReportPage from "../screens/reports/CategoriesReportPage";
+import CategoryChildrenReportPage from "../screens/reports/categories/CategoryChildrenReportPage";
 import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
 import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
+import { InventoryTransferListPage } from "../screens/catalog/inventoryTransfer/InventoryTransferListPage";
+import { InventoryTransferFormPage } from "../screens/catalog/inventoryTransfer/InventoryTransferFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
 import InvoiceRefundPage from "../screens/sales/invoice/InvoiceRefundPage";
 import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
@@ -94,6 +98,22 @@ export default function App() {
               <ProductsReportPage />
             </RequirePerm>
           } 
+        />
+        <Route
+          path="reports/categories"
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <CategoriesReportPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="reports/categories/:categoryId"
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <CategoryChildrenReportPage />
+            </RequirePerm>
+          }
         />
         <Route 
           path="reports/products/group/:groupId" 
@@ -268,6 +288,40 @@ export default function App() {
           element={
             <RequirePerm perm="Category" action="edit">
               <CategoryFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Catalog: Transfer Orders */}
+        <Route
+          path="catalog/transfer-inventory"
+          element={
+            <RequirePerm perm="Transfer Orders" action="view">
+              <InventoryTransferListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/transfer-inventory/:id"
+          element={
+            <RequirePerm perm="Transfer Orders" action="view">
+              <InventoryTransferListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/transfer-inventory/new"
+          element={
+            <RequirePerm perm="Transfer Orders" action="create">
+              <InventoryTransferFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/transfer-inventory/:id/edit"
+          element={
+            <RequirePerm perm="Transfer Orders" action="edit">
+              <InventoryTransferFormPage />
             </RequirePerm>
           }
         />

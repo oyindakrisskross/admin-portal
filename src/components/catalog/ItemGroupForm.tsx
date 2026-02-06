@@ -1,6 +1,6 @@
 // src/components/catalog/ItemGroupForm.tsx
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { 
@@ -11,6 +11,7 @@ import {
   type Unit,
   type TaxRule,
   type Attribute, 
+  type Category,
 } from "../../types/catalog";
 import type { Location } from "../../types/location";
 
@@ -21,6 +22,7 @@ import {
   createItemGroup, 
   updateItemGroup,
   fetchAttributes,
+  fetchCategories,
   fetchUnits,
   fetchTaxRules,
   createItemGroupGallery,
@@ -29,6 +31,7 @@ import {
 } from "../../api/catalog";
 import { fetchLocations } from "../../api/location";
 import { CheckCircle2, Loader2, Plus, Sparkles, Trash2, X } from "lucide-react";
+import { buildCategoryTree } from "../../utils/categoryTree";
 
 import { 
   XMarkIcon,
@@ -88,6 +91,10 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [locationSearch, setLocationSearch] = useState("");
   const [selectedAllLocs, setSelectedAllLocs] = useState(false);
 
+  const [categories, setCategories] = useState<Category[]>([]);
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+
   const [selectedImageIdx, setSelectedImageIdx] = useState<number | null>(null);
   const [gallery, setGallery] = useState<GalleryItemLocal[]>([]);
   const initialGalleryRef = useRef<GalleryItemLocal[]>([]);
@@ -120,6 +127,16 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
     setAvailableLocationIds((prev) => prev.filter((x) => x !== id));
   };
 
+  const toggleCategoryTree = (categoryId: number, checked: boolean) => {
+    const ids = [categoryId, ...(categoryTree.descendantsById[categoryId] ?? [])];
+    setSelectedCategoryIds((prev) => {
+      const idSet = new Set(prev);
+      if (checked) ids.forEach((id) => idSet.add(id));
+      else ids.forEach((id) => idSet.delete(id));
+      return Array.from(idSet);
+    });
+  };
+
   useEffect(() => {
     if (!gallery.length) {
       setSelectedImageIdx(null);
@@ -138,6 +155,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
       // setGroup(initial);
 
       setAvailableLocationIds(initial.availability_location_ids ?? []);
+      setSelectedCategoryIds((initial.categories ?? []).map((c) => Number(c.id)).filter((n) => Number.isFinite(n)));
 
       if (initial?.gallery && initial.gallery.length) {
         const mapped = initial.gallery.map((img: any, idx: number) => ({
@@ -159,6 +177,17 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
     (async () => {
       const data = await fetchLocations();
       setLocations(data.results);
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await fetchCategories();
+        setCategories(data.results ?? []);
+      } catch {
+        setCategories([]);
+      }
     })();
   }, []);
 
@@ -541,6 +570,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
         attributes_input,
         item_variants_input,
         availability_location_ids_input: availableLocationIds,
+        category_ids_input: selectedCategoryIds,
       };
 
       console.log(payload)
@@ -775,6 +805,38 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
                 +
               </button>
             </div>
+          </div>
+        </section>
+
+        {/* Categories */}
+        <section className="mt-6">
+          <div className="mb-3">
+            <h3 className="font-semibold">Categories</h3>
+            <p className="text-xs text-kk-dark-text-muted">
+              Assigned categories will be copied to all items within this group.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 rounded-xl border border-kk-dark-input-border p-3">
+            {categoryTree.options.map((c) => {
+              const checked = selectedCategoryIds.includes(c.id);
+              return (
+                <label key={c.id} className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-slate-300"
+                    checked={checked}
+                    onChange={(e) => toggleCategoryTree(c.id, e.target.checked)}
+                  />
+                  <span style={c.depth ? { paddingLeft: `${c.depth * 18}px` } : undefined}>
+                    {c.label}
+                  </span>
+                </label>
+              );
+            })}
+            {!categoryTree.options.length && (
+              <div className="py-6 text-center text-xs text-kk-dark-text-muted">No categories available.</div>
+            )}
           </div>
         </section>
 

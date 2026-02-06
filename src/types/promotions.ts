@@ -5,6 +5,8 @@ export type CouponAction =
     | "CART_AMOUNT"
     | "ITEM_PERCENT"
     | "ITEM_AMOUNT"
+    | "CATEGORY_PERCENT"
+    | "CATEGORY_AMOUNT"
     | "BXGY";
 
 export const ACTION_CHOICES: {value: CouponAction; label: string}[] = [
@@ -12,6 +14,8 @@ export const ACTION_CHOICES: {value: CouponAction; label: string}[] = [
     {value: "CART_AMOUNT", label: "Cart Amount Off"},
     {value: "ITEM_PERCENT", label: "Item Percent Off"},
     {value: "ITEM_AMOUNT", label: "Item Amount Off"},
+    {value: "CATEGORY_PERCENT", label: "Category Percent Off"},
+    {value: "CATEGORY_AMOUNT", label: "Category Amount Off"},
     {value: "BXGY", label: "Buy X Get Y"}
 ];
 
@@ -28,7 +32,8 @@ export type ConditionType =
     | "CART_MAX_SUBTOTAL"
     | "CART_MIN_QTY"
     | "IN_CART_ITEMS_MIN_QTY"
-    | "IN_CART_GROUPS_MIN_QTY";
+    | "IN_CART_GROUPS_MIN_QTY"
+    | "IN_CART_CATEGORIES_MIN_QTY";
 
 export const CDTN_TYPE_CHOICES: {value: ConditionType; label: string}[] = [
     {value: "CART_MIN_SUBTOTAL", label: "Cart Minimum Subtotal"},
@@ -36,6 +41,7 @@ export const CDTN_TYPE_CHOICES: {value: ConditionType; label: string}[] = [
     {value: "CART_MIN_QTY", label: "Cart Minimum Quantity"},
     {value: "IN_CART_ITEMS_MIN_QTY", label: "Minimum Quantity of Items in Cart"},
     {value: "IN_CART_GROUPS_MIN_QTY", label: "Minimum Quantity of Groups in Cart"},
+    {value: "IN_CART_CATEGORIES_MIN_QTY", label: "Minimum Quantity of Categories in Cart"},
 ];
 
 export type ConditionMode = "SUM" | "EACH";
@@ -57,6 +63,8 @@ export interface Coupon {
     apply_all_locations: boolean;
     locations?: number[];
     excluded_items?: number[];
+    excluded_categories?: number[];
+    excluded_groups?: number[];
     min_subtotal?: string;
     min_qty?: number;
     condition_tree?: any;

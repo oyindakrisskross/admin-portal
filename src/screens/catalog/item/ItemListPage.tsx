@@ -4,15 +4,19 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Sparkles } from "lucide-react";
 
-import type { Item, ItemStatus } from "../../../types/catalog";
+import type { Category, Item, ItemCategory, ItemStatus } from "../../../types/catalog";
 import { useAuth } from "../../../auth/AuthContext";
 
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
-import { deleteItem, fetchItems, patchItem } from "../../../api/catalog";
+import { bulkItems, deleteItem, fetchItems, patchItem } from "../../../api/catalog";
 import { ItemPeek } from "./ItemPeek";
 import placeholder from "../../../assets/placeholder.png";
 import ToastModal from "../../../components/ui/ToastModal";
+import { BulkActionBar } from "../../../components/catalog/bulk/BulkActionBar";
+import { RowSelectCheckbox } from "../../../components/catalog/bulk/RowSelectCheckbox";
+import { BulkEditAvailabilityModal } from "../../../components/catalog/bulk/BulkEditAvailabilityModal";
+import { BulkEditCategoriesModal } from "../../../components/catalog/bulk/BulkEditCategoriesModal";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
@@ -49,6 +53,11 @@ export const ItemListPage: React.FC = () => {
   const [sort, setSort] = useState<SortState<"name" | "sku" | "price" | "stock" | "status" | "categories"> | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
+  const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
 
   const filterColumns: ColumnMeta[] = [
     { id: "name", label: "Name", type: "text" },
@@ -87,6 +96,18 @@ export const ItemListPage: React.FC = () => {
     setToastVariant(variant);
     setToastMessage(message);
   };
+
+  const toggleSelected = (id: number, checked?: boolean) => {
+    setSelectedIds((prev) => {
+      const set = new Set(prev);
+      const nextChecked = checked ?? !set.has(id);
+      if (nextChecked) set.add(id);
+      else set.delete(id);
+      return Array.from(set);
+    });
+  };
+
+  const clearSelection = () => setSelectedIds([]);
 
   const handleStatusChg = async () => {
       if (!selectedItem || !selectedId) return;
@@ -156,6 +177,8 @@ export const ItemListPage: React.FC = () => {
       const data = await fetchItems({ filters });
       if (!cancelled) {
         setItems(data.results);
+        const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
+        setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
       }
     })();
 
@@ -219,11 +242,110 @@ export const ItemListPage: React.FC = () => {
           </div> ) : ""} 
         />
 
+        {!hasPeek && selectedIds.length > 0 && (
+          <BulkActionBar
+            count={selectedIds.length}
+            onClear={clearSelection}
+            actions={[
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <TrashIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "delete"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItems({ ids: selectedIds, action: "delete" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    const failedIds = (res.failed ?? []).map((f) => Number(f.id)).filter(Number.isFinite);
+
+                    if (okSet.size) {
+                      setItems((prev) => prev.filter((it) => !okSet.has(Number(it.id))));
+                      showToast(`Deleted ${okSet.size} item(s).`, "success");
+                    }
+
+                    if (failedIds.length) {
+                      showToast(
+                        "Some items were not deleted since they have recorded transactions. Deactivate them instead.",
+                        "error"
+                      );
+                      setSelectedIds(failedIds);
+                    } else {
+                      clearSelection();
+                    }
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk delete failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "inactive",
+                label: "Make inactive",
+                icon: <PauseIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItems({ ids: selectedIds, action: "make_inactive" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    setItems((prev) =>
+                      prev.map((it) => (okSet.has(Number(it.id)) ? { ...it, status: "INACTIVE" } : it))
+                    );
+                    showToast("Updated item statuses.", "success");
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk update failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "active",
+                label: "Make active",
+                icon: <PlayIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: async () => {
+                  setBulkBusy(true);
+                  try {
+                    const res = await bulkItems({ ids: selectedIds, action: "make_active" });
+                    const okSet = new Set(res.ok_ids ?? []);
+                    setItems((prev) =>
+                      prev.map((it) => (okSet.has(Number(it.id)) ? { ...it, status: "ACTIVE" } : it))
+                    );
+                    showToast("Updated item statuses.", "success");
+                  } catch (e: any) {
+                    showToast(e?.message ?? "Bulk update failed.");
+                  } finally {
+                    setBulkBusy(false);
+                  }
+                },
+              },
+              {
+                key: "availability",
+                label: "Edit availability",
+                icon: <BoltIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Item", "edit"),
+                onClick: () => setAvailabilityModalOpen(true),
+              },
+              {
+                key: "categories",
+                label: "Edit categories",
+                icon: <TagIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Category", "edit"),
+                onClick: () => setCategoriesModalOpen(true),
+              },
+            ]}
+          />
+        )}
+
         {/* Table */}
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden"}>
           <table className="min-w-full">
             <thead>
               <tr>
+                {!hasPeek && <th className="w-10" />}
                 <th
                   className="cursor-pointer select-none"
                   onClick={() => setSort((s) => nextSort(s, "name"))}
@@ -278,9 +400,28 @@ export const ItemListPage: React.FC = () => {
               {sortedItems.map((i) => (
                 <tr
                   key={i.id}
-                  className="cursor-pointer"
-                  onClick={() => openPeek(i)}
+                  className={[
+                    "cursor-pointer group",
+                    !hasPeek && selectedIdSet.has(Number(i.id)) ? "bg-blue-600/10" : "",
+                  ].join(" ")}
+                  onClick={() => {
+                    if (!hasPeek && selectedIds.length) {
+                      toggleSelected(i.id!, !selectedIdSet.has(i.id!));
+                      return;
+                    }
+                    openPeek(i);
+                  }}
                 >
+                  {!hasPeek && (
+                    <td className="w-10 px-2">
+                      <div className={selectedIdSet.has(i.id!) ? "" : "opacity-0 group-hover:opacity-100"}>
+                        <RowSelectCheckbox
+                          checked={selectedIdSet.has(i.id!)}
+                          onChange={(checked) => toggleSelected(i.id!, checked)}
+                        />
+                      </div>
+                    </td>
+                  )}
                   <td>
                     <div className="flex items-center gap-2">
                       {/* Item Image */}
@@ -361,7 +502,7 @@ export const ItemListPage: React.FC = () => {
               {!items.length && (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={hasPeek ? 6 : 7}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
                     No items yet. Click “New" to create your first one.
@@ -429,6 +570,56 @@ export const ItemListPage: React.FC = () => {
         message={toastMessage}
         onClose={() => setToastMessage(null)}
         variant={toastVariant}
+      />
+
+      <BulkEditAvailabilityModal
+        open={availabilityModalOpen}
+        title="Edit availability"
+        onClose={() => setAvailabilityModalOpen(false)}
+        onApply={async (locationIds) => {
+          setBulkBusy(true);
+          try {
+            await bulkItems({ ids: selectedIds, action: "set_availability", location_ids: locationIds });
+            showToast("Availability updated.", "success");
+          } catch (e: any) {
+            showToast(e?.message ?? "Failed to update availability.");
+          } finally {
+            setBulkBusy(false);
+          }
+        }}
+      />
+
+      <BulkEditCategoriesModal
+        open={categoriesModalOpen}
+        title="Edit categories"
+        onClose={() => setCategoriesModalOpen(false)}
+        onApply={async (categoryIds, categories) => {
+          setBulkBusy(true);
+          try {
+            await bulkItems({ ids: selectedIds, action: "set_categories", category_ids: categoryIds });
+            const nextCatsTemplate: ItemCategory[] = categories.map((c: Category) => ({
+              item: 0,
+              category: c.id!,
+              category_name: c.name,
+            })) as any;
+            const idSet = new Set(selectedIds);
+            setItems((prev) =>
+              prev.map((it) =>
+                idSet.has(Number(it.id))
+                  ? {
+                      ...it,
+                      categories: nextCatsTemplate.map((ic) => ({ ...ic, item: it.id! } as any)),
+                    }
+                  : it
+              )
+            );
+            showToast("Categories updated.", "success");
+          } catch (e: any) {
+            showToast(e?.message ?? "Failed to update categories.");
+          } finally {
+            setBulkBusy(false);
+          }
+        }}
       />
     </div>
   );

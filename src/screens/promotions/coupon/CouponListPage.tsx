@@ -7,10 +7,11 @@ import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import type { Coupon } from "../../../types/promotions";
 import { ACTION_CHOICES } from "../../../types/promotions";
-import { fetchCoupons } from "../../../api/promotions";
+import { deleteCoupon, fetchCoupons } from "../../../api/promotions";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 import { CouponPeek } from "./CouponPeek";
-import { PencilSquareIcon } from "@heroicons/react/24/outline";
+import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
+import ToastModal from "../../../components/ui/ToastModal";
 
 const actionLabel = (v?: string) =>
   ACTION_CHOICES.find((a) => a.value === v)?.label ?? v ?? "-";
@@ -31,6 +32,13 @@ export const CouponListPage: React.FC = () => {
   >(null);
 
   const hasPeek = !!selectedCoupon;
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("success");
+
+  const showToast = (message: string, variant: "error" | "success" | "info" = "success") => {
+    setToastVariant(variant);
+    setToastMessage(message);
+  };
 
   useEffect(() => {
     (async () => {
@@ -59,6 +67,30 @@ export const CouponListPage: React.FC = () => {
   const closePeek = () => {
     setSelectedCoupon(null);
     setSelectedId(null);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedId) return;
+    if (!confirm("Delete this coupon? If it has been used, it will be deactivated instead.")) return;
+
+    try {
+      const res: any = await deleteCoupon(selectedId);
+      if (res?.deactivated) {
+        setCoupons((prev) =>
+          prev.map((c) => (c.id === selectedId ? { ...c, active: false } : c))
+        );
+        setSelectedCoupon((c) => (c ? { ...c, active: false } : c));
+        showToast(res?.detail || "Coupon was used and has been deactivated.", "info");
+      } else {
+        setCoupons((prev) => prev.filter((c) => c.id !== selectedId));
+        closePeek();
+        showToast("Coupon deleted.", "success");
+      }
+    } catch (err: any) {
+      const data = err?.response?.data;
+      const detail = typeof data === "string" ? data : data?.detail;
+      showToast(String(detail ?? "Unable to delete coupon."), "error");
+    }
   };
 
   const rows = useMemo(() => {
@@ -240,8 +272,8 @@ export const CouponListPage: React.FC = () => {
           onClose={closePeek}
           widthClass="w-3/4"
           actions={
-            can("Coupons", "edit") ? (
-              <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1">
+              {can("Coupons", "edit") ? (
                 <button
                   type="button"
                   onClick={() => navigate(`/promotions/coupons/${selectedId}/edit`)}
@@ -249,13 +281,24 @@ export const CouponListPage: React.FC = () => {
                   <span className="tooltip-b">Edit</span>
                   <PencilSquareIcon className="h-5 w-5 text-kk-muted" />
                 </button>
-              </div>
-            ) : null
+              ) : null}
+              {can("Coupons", "delete") ? (
+                <button type="button" onClick={handleDelete}>
+                  <span className="tooltip-b">Delete</span>
+                  <TrashIcon className="h-5 w-5 text-kk-muted" />
+                </button>
+              ) : null}
+            </div>
           }
         >
           <CouponPeek coupon={selectedCoupon} />
         </SidePeek>
       )}
+      <ToastModal
+        message={toastMessage}
+        variant={toastVariant}
+        onClose={() => setToastMessage(null)}
+      />
     </div>
   );
 };

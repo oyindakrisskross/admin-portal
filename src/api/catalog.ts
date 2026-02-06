@@ -228,6 +228,59 @@ export async function fetchInventory(params?: Record<string, any>) {
   return res.data;
 }
 
+export async function searchItems(
+  query: string,
+  params?: { page_size?: number; location_id?: number; signal?: AbortSignal }
+): Promise<PaginatedResult<Catalog.Item>> {
+  const res = await api.get<PaginatedResult<Catalog.Item>>("/api/catalog/item-lte/", {
+    params: {
+      search: query,
+      page_size: params?.page_size ?? 25,
+      ...(params?.location_id ? { location_id: params.location_id } : {}),
+    },
+    signal: params?.signal,
+  });
+  return res.data;
+}
+
+// Inventory Transfers
+export async function fetchInventoryTransfers(params?: Record<string, any>) {
+  const res = await api.get<PaginatedResult<Catalog.InventoryTransfer>>(
+    "/api/catalog/inventory-transfers/",
+    { params }
+  );
+  return res.data;
+}
+
+export async function fetchInventoryTransfer(id: number) {
+  const res = await api.get<Catalog.InventoryTransfer>(`/api/catalog/inventory-transfers/${id}/`);
+  return res.data;
+}
+
+export async function createInventoryTransfer(payload: Catalog.InventoryTransfer) {
+  const res = await api.post<Catalog.InventoryTransfer>("/api/catalog/inventory-transfers/", payload);
+  return res.data;
+}
+
+export async function updateInventoryTransfer(id: number, payload: Partial<Catalog.InventoryTransfer>) {
+  const res = await api.patch<Catalog.InventoryTransfer>(`/api/catalog/inventory-transfers/${id}/`, payload);
+  return res.data;
+}
+
+export async function initiateInventoryTransfer(id: number) {
+  const res = await api.post<Catalog.InventoryTransfer>(`/api/catalog/inventory-transfers/${id}/initiate/`);
+  return res.data;
+}
+
+export async function markInventoryTransferTransferred(id: number) {
+  const res = await api.post<Catalog.InventoryTransfer>(`/api/catalog/inventory-transfers/${id}/mark-transferred/`);
+  return res.data;
+}
+
+export async function deleteInventoryTransfer(id: number) {
+  await api.delete(`/api/catalog/inventory-transfers/${id}/`);
+}
+
 export async function createItem(payload: Catalog.ItemGroup) {
   const res = await api.post<Catalog.Item>("/api/catalog/items/", payload);
   return res.data;
@@ -245,6 +298,45 @@ export async function patchItem(id: number, payload: Partial<Catalog.ItemGroup>)
 
 export async function deleteItem(id: number) {
   await api.delete(`/api/catalog/items/${id}/`);
+}
+
+// Bulk actions
+export type BulkCatalogAction =
+  | "delete"
+  | "make_active"
+  | "make_inactive"
+  | "set_availability"
+  | "set_categories";
+
+export type BulkCatalogFailure = {
+  id: number;
+  reason: string;
+  detail?: string;
+};
+
+export type BulkCatalogResult = {
+  ok_ids: number[];
+  failed: BulkCatalogFailure[];
+};
+
+export async function bulkItems(payload: {
+  ids: number[];
+  action: BulkCatalogAction;
+  location_ids?: number[];
+  category_ids?: number[];
+}): Promise<BulkCatalogResult> {
+  const res = await api.post<BulkCatalogResult>("/api/catalog/items/bulk/", payload);
+  return res.data;
+}
+
+export async function bulkItemGroups(payload: {
+  ids: number[];
+  action: BulkCatalogAction;
+  location_ids?: number[];
+  category_ids?: number[];
+}): Promise<BulkCatalogResult> {
+  const res = await api.post<BulkCatalogResult>("/api/catalog/item-groups/bulk/", payload);
+  return res.data;
 }
 
 

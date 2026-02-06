@@ -42,6 +42,7 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                 <th>Quantity</th>
                 <th>Rate</th>
                 <th>Discount</th>
+                <th>Tax</th>
                 <th className="text-right">Amount</th>
               </tr>
             </thead>
@@ -53,7 +54,7 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                       <span>{i.item_name}</span>
                       {i.children && 
                         i.children.map((child: InvoiceItemChild) => (
-                          <span>
+                          <span key={child.id}>
                             - {" "}
                             {child.customization_label
                               ? child.customization_label
@@ -69,6 +70,15 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                       (+i.discount_amount || 0) +
                         (i.children?.reduce(
                           (sum, c) => sum + (+c.discount_amount || 0),
+                          0
+                        ) ?? 0)
+                    )}
+                  </td>
+                  <td>
+                    {formatMoneyNGN(
+                      (+i.tax_amount || 0) +
+                        (i.children?.reduce(
+                          (sum, c) => sum + (+c.tax_amount || 0),
                           0
                         ) ?? 0)
                     )}

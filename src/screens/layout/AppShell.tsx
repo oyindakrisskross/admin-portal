@@ -50,6 +50,7 @@ const portalLinks = [
       { to: "/catalog/item-groups", label: "Item Groups", perm: "Item" },
       { to: "/catalog/items", label: "Items", perm: "Item" },
       { to: "/catalog/categories", label: "Categories", perm: "Category"},
+      { to: "/catalog/transfer-inventory", label: "Transfer Orders", perm: "Transfer Orders" },
     ],
   },
   {
@@ -80,6 +81,7 @@ const portalLinks = [
     children: [
       { to: "/reports/", label: "Overview", perm: "Reports" },
       { to: "/reports/products", label: "Products", perm: "Reports" },
+      { to: "/reports/categories", label: "Categories", perm: "Reports" },
       { to: "/reports/variations", label: "Variations", perm: "Reports" },
       { to: "/reports/invoices", label: "Invoices", perm: "Reports" },
       { to: "/reports/coupons", label: "Coupons", perm: "Reports" },
