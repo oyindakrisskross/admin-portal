@@ -90,6 +90,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [availableLocationIds, setAvailableLocationIds] = useState<number[]>([]);
   const [locationSearch, setLocationSearch] = useState("");
   const [selectedAllLocs, setSelectedAllLocs] = useState(false);
+  const [reorderPointsByLocation, setReorderPointsByLocation] = useState<Record<number, string>>({});
 
   const [categories, setCategories] = useState<Category[]>([]);
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
@@ -121,10 +122,17 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
 
   const handleRemoveAllLocations = () => {
     setAvailableLocationIds([]);
+    setReorderPointsByLocation({});
   };
 
   const handleRemoveLocation = (id: number) => {
     setAvailableLocationIds((prev) => prev.filter((x) => x !== id));
+    setReorderPointsByLocation((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, id)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const toggleCategoryTree = (categoryId: number, checked: boolean) => {
@@ -272,6 +280,13 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
 
   const handleChange = (patch: Partial<ItemGroup>) => {
     setGroup((g) => ({ ...g, ...patch }));
+  };
+
+  const handleReorderPointChange = (locationId: number, value: string) => {
+    setReorderPointsByLocation((prev) => ({
+      ...prev,
+      [locationId]: value,
+    }));
   };
 
   const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -539,6 +554,23 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
       }
     }
 
+    const reorderPointsInput: { location_id: number; reorder_point: string }[] = [];
+    if (trackInventory && availableLocationIds.length) {
+      for (const locationId of availableLocationIds) {
+        const raw = reorderPointsByLocation[locationId];
+        if (raw == null || raw === "") continue;
+        const num = Number(raw);
+        if (!Number.isFinite(num) || num < 0) {
+          setError("Reorder point must be a number greater than or equal to 0.");
+          return;
+        }
+        reorderPointsInput.push({
+          location_id: locationId,
+          reorder_point: raw,
+        });
+      }
+    }
+
     setSaving(true);
     try {
       // 1) attributes_input for the backend
@@ -570,6 +602,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
         attributes_input,
         item_variants_input,
         availability_location_ids_input: availableLocationIds,
+        reorder_points_input: reorderPointsInput.length ? reorderPointsInput : undefined,
         category_ids_input: selectedCategoryIds,
       };
 
@@ -1194,6 +1227,46 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
             </div>
           </div>
         </section>
+
+        {/* Reorder Points */}
+        {selectedType === "GOOD" && trackInventory && (
+          <section className="mt-6">
+            <div className="mb-3 pl-3">
+              <p className="text-xl">Reorder Points</p>
+              <p className="text-xs text-kk-dark-text-muted">
+                Set a reorder point per location for all items in this group.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-kk-dark-input-border p-4">
+              {availableLocationIds.length === 0 ? (
+                <p className="text-xs text-kk-dark-text-muted">
+                  Select locations above to set reorder points.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  {locations
+                    .filter((loc) => availableLocationIds.includes(loc.id!))
+                    .map((loc) => (
+                      <label key={loc.id} className="flex flex-col gap-1 text-xs">
+                        <span className="text-sm font-medium">{loc.name}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          className="rounded-md border border-kk-dark-input-border px-3 py-2"
+                          value={reorderPointsByLocation[loc.id!] ?? ""}
+                          onChange={(e) =>
+                            handleReorderPointChange(loc.id!, e.target.value)
+                          }
+                          placeholder="e.g. 10"
+                        />
+                      </label>
+                    ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* Footer buttons */}
         <div className="flex justify-end gap-2">

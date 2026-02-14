@@ -162,6 +162,11 @@ export interface InventoryInput {
   reference?: string;
 }
 
+export interface ReorderPointInput {
+  location_id: number;
+  reorder_point: string;
+}
+
 export type InventoryTransferStatus = "DRAFT" | "PENDING" | "TRANSFERRED";
 
 export interface InventoryTransferLine {
@@ -232,6 +237,7 @@ export interface ItemGroup {
   attributes: ItemGroupAttribute[];
   items?: Item[] | null;
   sku_pattern?: SkuPattern | null;
+  reorder_points_input?: ReorderPointInput[];
 
   created_on?: string;
   created_by_name?: string;

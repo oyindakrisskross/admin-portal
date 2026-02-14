@@ -424,7 +424,7 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
           </select>
         </div>
         <div className="grid grid-cols-12 gap-2">
-          <p className="col-span-2">Password</p>
+          <p className="col-span-2">Temporary Password</p>
           <div className="col-span-5 flex flex-col gap-1">
             <input 
                 type="password"
@@ -433,6 +433,9 @@ export const UserForm: React.FC<Props> = ({ initial }) => {
                 autoComplete="new-password"
                 onChange={(e) => handleChange({ password: e.target.value })}
               />
+            <p className="text-[11px] text-kk-dark-text-muted">
+              Leave blank to auto-generate and email a temporary password.
+            </p>
             {(() => {
               const selectedPortal = portals.find((p) => p.id === user.portal);
               const isPortalUser = Boolean(selectedPortal && selectedPortal.type_id === "PORTAL");

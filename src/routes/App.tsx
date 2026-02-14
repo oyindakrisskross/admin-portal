@@ -1,6 +1,6 @@
 // src/routes/App.tsx
 
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
 
@@ -53,11 +53,14 @@ import ProfilePage from "../screens/ProfilePage";
 
 function Protected({ children }: { children: JSX.Element }) {
   const { me, loading } = useAuth();
-  if (loading) return <div className="p-8 text-sm text-kk-muted">Loading…</div>;
+  const location = useLocation();
+  if (loading) return <div className="p-8 text-sm text-kk-muted">Loading?</div>;
   if (!me) return <Navigate to="/login" replace />;
+  if (me.must_change_password && location.pathname !== "/profile") {
+    return <Navigate to="/profile" replace state={{ forcePasswordChange: true }} />;
+  }
   return children;
 }
-
 function RequirePerm({ perm, action = "view", children }: {
   perm: string; action?: keyof PermissionBitSet; children: JSX.Element;
 }) {

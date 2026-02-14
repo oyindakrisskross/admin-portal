@@ -83,6 +83,7 @@ export interface UserProfile {
   is_active:  boolean;
   is_staff: boolean;
   status?: string;
+  must_change_password?: boolean;
   allowed_locations?: UserLocation[];
 
   // UserWriteSerializer

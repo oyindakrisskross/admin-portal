@@ -18,6 +18,7 @@ type Me = {
   role: { id: number; name: string } | null;
   permissions: Record<string, PermissionBitset>;
   allowed_location_ids: number[];
+  must_change_password: boolean;
 };
 
 type AuthContextValue = {
@@ -25,6 +26,7 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  refreshMe: () => Promise<void>;
   can: (perm: string, action?: keyof PermissionBitset) => boolean;
 };
 
@@ -50,6 +52,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         : null,
       permissions,
       allowed_location_ids,
+      must_change_password: Boolean(user.must_change_password),
     };
   };
 
@@ -94,7 +97,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ me, loading, login, logout, can }}>
+    <AuthContext.Provider value={{ me, loading, login, logout, refreshMe: fetchMe, can }}>
       {children}
     </AuthContext.Provider>
   );

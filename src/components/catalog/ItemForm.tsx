@@ -26,6 +26,7 @@ import {
   updateItem,
   fetchUnits,
   fetchTaxRules,
+  fetchInventory,
   createItemGallery,
   updateItemGallery,
   deleteItemGallery,
@@ -96,6 +97,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   const [selectedType, setSelectedType] = useState<ItemType>(initial?.type_id ?? INITIAL_TYPE); 
   const [unitChoices, setUnitChoices] = useState<Unit[]>([]); 
   const [taxRuleChoices, setTaxRuleChoices] = useState<TaxRule[]>([]); 
+  const [reorderPointsByLocation, setReorderPointsByLocation] = useState<Record<number, string>>({});
 
   const [selectedImageIdx, setSelectedImageIdx] = useState<number | null>(null);
   const [gallery, setGallery] = useState<GalleryItemLocal[]>([]);
@@ -150,11 +152,18 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   const handleRemoveAllLocations = () => {
     availableLocationIds.map((l)=> handleRemoveAvailibility(l));
     setAvailableLocationIds([]);
+    setReorderPointsByLocation({});
   };
 
   const handleRemoveLocation = (id: number) => {
     setAvailableLocationIds((prev) => prev.filter((x) => x !== id));
     handleRemoveAvailibility(id);
+    setReorderPointsByLocation((prev) => {
+      if (!Object.prototype.hasOwnProperty.call(prev, id)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
 
@@ -207,6 +216,25 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
       setLocations(data.results);
     })();
   }, []);
+
+  useEffect(() => {
+    if (!initial?.id) return;
+
+    (async () => {
+      try {
+        const data = await fetchInventory({ item_id: initial.id });
+        const map: Record<number, string> = {};
+        (data.results ?? []).forEach((row: any) => {
+          if (row?.location != null) {
+            map[row.location] = row.reorder_point != null ? String(row.reorder_point) : "";
+          }
+        });
+        setReorderPointsByLocation(map);
+      } catch {
+        // ignore fetch errors; reorder points are optional
+      }
+    })();
+  }, [initial?.id]);
 
   useEffect(() => {
     if (!gallery.length) {
@@ -323,6 +351,13 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
   const handleChange = (patch: Partial<Item>) => {
     setItem((i) => ({ ...i, ...patch }));
+  };
+
+  const handleReorderPointChange = (locationId: number, value: string) => {
+    setReorderPointsByLocation((prev) => ({
+      ...prev,
+      [locationId]: value,
+    }));
   };
 
   const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => { 
@@ -837,6 +872,23 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     const normalizedPrice = sellable ? item.price : "0";
     const normalizedCost = purchasable ? item.cost : "0";
 
+    const reorderInputs: { location_id: number; reorder_point: string }[] = [];
+    if (trackInventory && availableLocationIds.length) {
+      for (const locationId of availableLocationIds) {
+        const raw = reorderPointsByLocation[locationId];
+        if (raw == null || raw === "") continue;
+        const num = Number(raw);
+        if (!Number.isFinite(num) || num < 0) {
+          setError("Reorder point must be a number greater than or equal to 0.");
+          return;
+        }
+        reorderInputs.push({
+          location_id: locationId,
+          reorder_point: raw,
+        });
+      }
+    }
+
     if (sellable) {
       const priceNum = Number(normalizedPrice);
       if (normalizedPrice == null || normalizedPrice === "" || !Number.isFinite(priceNum) || priceNum < 0) {
@@ -864,7 +916,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
         sale_tax: item.sale_tax,
         returnable: returnable,
         inventory_tracking: trackInventory,
-        inventory_input: item.inventory_input,
+        inventory_input: reorderInputs.length ? reorderInputs : undefined,
         price: normalizedPrice,
         cost: normalizedCost,
         sellable: sellable,
@@ -873,7 +925,6 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
         width: item.width,
         height: item.height,
         length: item.length,
-        reorder_point: item.reorder_point,
         scheduled: scheduled,
         customized: customized,
       };
@@ -1396,6 +1447,43 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
                 </span>
               </label>
             </div>
+            {trackInventory && (
+              <div className="mt-3 w-full">
+                <div className="mb-2 pl-6">
+                  <p className="text-sm font-medium">Reorder Points</p>
+                  <p className="text-xs text-kk-dark-text-muted">
+                    Set a reorder point per location. You'll be alerted when stock drops to or below this value.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-kk-dark-input-border p-4">
+                  {availableLocationIds.length === 0 ? (
+                    <p className="text-xs text-kk-dark-text-muted">
+                      Select locations above to set reorder points.
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      {locations
+                        .filter((loc) => availableLocationIds.includes(loc.id!))
+                        .map((loc) => (
+                          <label key={loc.id} className="flex flex-col gap-1 text-xs">
+                            <span className="text-sm font-medium">{loc.name}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              className="rounded-md border border-kk-dark-input-border px-3 py-2"
+                              value={reorderPointsByLocation[loc.id!] ?? ""}
+                              onChange={(e) =>
+                                handleReorderPointChange(loc.id!, e.target.value)
+                              }
+                              placeholder="e.g. 10"
+                            />
+                          </label>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

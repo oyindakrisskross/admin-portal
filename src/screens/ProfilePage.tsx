@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Camera, User as UserIcon } from "lucide-react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -9,7 +10,8 @@ import type { UserProfile } from "../types/accounts";
 import { validatePortalPassword } from "../utils/passwordPolicy";
 
 export default function ProfilePage() {
-  const { me } = useAuth();
+  const { me, refreshMe } = useAuth();
+  const location = useLocation();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -60,6 +62,13 @@ export default function ProfilePage() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const forced = Boolean((location.state as any)?.forcePasswordChange) || Boolean(me?.must_change_password);
+    if (forced) {
+      setToast({ message: "Please set a new password to continue.", variant: "info" });
+    }
+  }, [location.state, me?.must_change_password]);
 
   const onSaveProfile = async () => {
     if (!profile) return;
@@ -127,6 +136,7 @@ export default function ProfilePage() {
         new_password1: newPw1,
         new_password2: newPw2,
       });
+      await refreshMe();
       setCurrentPw("");
       setNewPw1("");
       setNewPw2("");

@@ -32,6 +32,11 @@ export const ItemInvAdjust: React.FC = () => {
   const [invInput, setInvInput] = useState<InventoryInput | null>(null);
   const [newQty, setNewQty] = useState<number | null>(null);
   const [curInventory, setCurInventory] = useState<Inventory | null>(null);
+  const [adjustDate, setAdjustDate] = useState(() => {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  });
 
   useEffect(() => {
     (async () => {
@@ -105,7 +110,8 @@ export const ItemInvAdjust: React.FC = () => {
           <p className="col-span-2">Date</p>
           <input 
             type="date"
-            value=""
+            value={adjustDate}
+            onChange={(e) => setAdjustDate(e.target.value)}
             className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-4"
           />
         </div>
