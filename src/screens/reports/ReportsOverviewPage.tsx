@@ -277,6 +277,7 @@ export default function ReportsOverviewPage() {
         <ChartCard
           title="Net Sales"
           data={chartData.netSales}
+          dataKey="label"
           valueKey="v"
           compareValueKey={compareEnabled ? "compare_v" : undefined}
           kind="money"
@@ -284,6 +285,7 @@ export default function ReportsOverviewPage() {
         <ChartCard
           title="Orders"
           data={chartData.orders}
+          dataKey="label"
           valueKey="v"
           compareValueKey={compareEnabled ? "compare_v" : undefined}
           kind="count"
@@ -292,6 +294,7 @@ export default function ReportsOverviewPage() {
           <ChartCard
             title="Items Sold"
             data={chartData.items}
+            dataKey="label"
             valueKey="v"
             compareValueKey={compareEnabled ? "compare_v" : undefined}
             kind="count"

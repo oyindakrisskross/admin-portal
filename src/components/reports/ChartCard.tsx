@@ -50,7 +50,15 @@ export const ChartCard: React.FC<Props> = ({
             />
             <Tooltip
               formatter={(v: any) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
-              labelFormatter={(l) => `Time: ${l}`}
+              labelFormatter={(l: any, payload: any) => {
+                const row = payload?.[0]?.payload;
+                if (compareValueKey && row) {
+                  const current = row.current_label ?? row.label ?? String(l);
+                  const compare = row.compare_label ?? "n/a";
+                  return `Current: ${current} | Compare: ${compare}`;
+                }
+                return `Time: ${l}`;
+              }}
             />
             {hasCompare ? <Legend /> : null}
             <Line type="monotone" dataKey={valueKey} name="Current period" dot={false} strokeWidth={2} stroke={currentStroke} />

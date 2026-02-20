@@ -81,10 +81,16 @@ export const buildComparisonChartData = (
   return Array.from({ length: size }).map((_, idx) => {
     const currentPoint = primarySeries[idx];
     const comparePoint = compareSeries[idx];
+    const currentLabel = currentPoint?.t ? isoToLabel(currentPoint.t, granularity) : "";
+    const compareLabel = comparePoint?.t ? isoToLabel(comparePoint.t, granularity) : "";
     const anchorTime = currentPoint?.t ?? comparePoint?.t ?? "";
     return {
       t: anchorTime,
-      label: anchorTime ? isoToLabel(anchorTime, granularity) : `Point ${idx + 1}`,
+      label: currentLabel || compareLabel || `Point ${idx + 1}`,
+      current_t: currentPoint?.t ?? null,
+      compare_t: comparePoint?.t ?? null,
+      current_label: currentLabel || null,
+      compare_label: compareLabel || null,
       v: Number(currentPoint?.v ?? 0),
       compare_v: Number(comparePoint?.v ?? 0),
     };
