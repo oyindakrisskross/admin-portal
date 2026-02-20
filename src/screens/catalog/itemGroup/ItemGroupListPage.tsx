@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 
 import type { ItemGroup, ItemStatus } from "../../../types/catalog";
 import { useAuth } from "../../../auth/AuthContext";
@@ -39,6 +39,8 @@ import {
   PauseIcon,
 } from "@heroicons/react/24/outline";
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 export const ItemGroupListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
@@ -50,6 +52,12 @@ export const ItemGroupListPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [sort, setSort] = useState<SortState<"name" | "stock" | "price" | "status" | "created"> | null>(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -150,11 +158,9 @@ export const ItemGroupListPage: React.FC = () => {
   };
 
   useEffect(() => {
-    (async () => {
-      const data = await fetchItemGroups();
-      setGroups(data.results);
-    })();
-  }, []);
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     if (!hasId || !groups.length) return;
@@ -174,18 +180,35 @@ export const ItemGroupListPage: React.FC = () => {
     let cancelled = false;
 
     (async () => {
-      const data = await fetchItemGroups({ filters });
-      if (!cancelled) {
-        setGroups(data.results);
-        const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
-        setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
+      setLoading(true);
+      try {
+        const data = await fetchItemGroups({
+          filters,
+          search: debouncedSearch || undefined,
+          page,
+          page_size: pageSize,
+        });
+        if (!cancelled) {
+          setGroups(data.results ?? []);
+          setTotalCount(Number(data.count ?? 0));
+          const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
+          setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
+        }
+      } catch {
+        if (!cancelled) {
+          setGroups([]);
+          setTotalCount(0);
+          setSelectedIds([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, debouncedSearch, page, pageSize]);
 
   const sortedGroups = useMemo(() => {
     return sortBy(groups, sort, {
@@ -196,6 +219,52 @@ export const ItemGroupListPage: React.FC = () => {
       created: (g) => (g.created_on ? new Date(g.created_on) : null),
     });
   }, [groups, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = totalCount === 0 ? 0 : Math.min(page * pageSize, totalCount);
+  const paginationControls = !hasPeek && (
+    <div className="flex items-center justify-between px-3 pb-2 text-xs text-kk-dark-text-muted">
+      <div>
+        Showing {rangeStart}-{rangeEnd} of {totalCount}
+      </div>
+      <div className="flex items-center gap-2">
+        <span>Rows</span>
+        <select
+          className="rounded border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-xs"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canPrev || loading}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canNext || loading}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 
 
   return (
@@ -208,11 +277,26 @@ export const ItemGroupListPage: React.FC = () => {
           section= "Catalog"
           title= "Item Groups"
           subtitle= "Manage product families and their variants."
-          right= {!hasPeek ? (<div className="flex items-center gap-1 text-xs">
-            <FilterBar 
+          right= {!hasPeek ? (<div className="flex items-center gap-2 text-xs">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-kk-muted" />
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
+                placeholder="Search group name"
+              />
+            </div>
+            <FilterBar
               columns={filterColumns}
               filters={filters}
-              onChange={setFilters}
+              onChange={(next) => {
+                setFilters(next);
+                setPage(1);
+              }}
             />
             {/* <button>
               <span className="tooltip-t">Sort</span>
@@ -339,6 +423,8 @@ export const ItemGroupListPage: React.FC = () => {
             ]}
           />
         )}
+
+        {paginationControls}
 
         {/* Table */}
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden"}>
@@ -487,20 +573,31 @@ export const ItemGroupListPage: React.FC = () => {
                 </tr>
               ))}
 
-              {!groups.length && (
+                            {loading && (
+                <tr>
+                  <td
+                    colSpan={hasPeek ? 2 : 7}
+                    className="px-3 py-6 text-center text-xs text-kk-dark-text-muted"
+                  >
+                    Loading item groups...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !groups.length && (
                 <tr>
                   <td
                     colSpan={hasPeek ? 2 : 7}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
-                    No item groups yet. Click “New” to create your
-                    first one.
+                    No item groups yet. Click "New" to create your first one.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {paginationControls}
       </div>
       
 
@@ -598,3 +695,4 @@ export const ItemGroupListPage: React.FC = () => {
     </div>
   );
 };
+

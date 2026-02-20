@@ -21,7 +21,11 @@ import { fetchOutlets } from "../../../api/location";
 import type { CategoriesReportResponse, Granularity } from "../../../types/reports";
 import type { Outlet } from "../../../types/location";
 import { formatMoneyNGN, formatNumber, isoToLabel } from "../../../helpers";
+import { KpiCard } from "../../../components/reports/KpiCard";
+import { ComparePeriodControls } from "../../../components/reports/ComparePeriodControls";
+import { buildCompareSub } from "../../../components/reports/periodCompare";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
+import { useComparePeriod } from "../../../hooks/useComparePeriod";
 
 const COLORS = [
   "#8b5cf6", // purple
@@ -46,6 +50,8 @@ export default function CategoryChildrenReportPage() {
     start: sp.get("start") ?? undefined,
     end: sp.get("end") ?? undefined,
   });
+  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
+    useComparePeriod({ start, end });
 
   useEffect(() => {
     const next = new URLSearchParams(sp);
@@ -62,6 +68,7 @@ export default function CategoryChildrenReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<CategoriesReportResponse | null>(null);
+  const [compareData, setCompareData] = useState<CategoriesReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
 
@@ -83,17 +90,30 @@ export default function CategoryChildrenReportPage() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetchCategoriesReport({
-          start,
-          end,
+        const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
           itemsMode,
-          groupBy: "all",
+          groupBy: "all" as const,
           parentCategoryId,
           granularity,
-        });
+        };
+        const [res, compareRes] = await Promise.all([
+          fetchCategoriesReport({
+            ...commonArgs,
+            start,
+            end,
+          }),
+          compareRange
+            ? fetchCategoriesReport({
+                ...commonArgs,
+                start: compareRange.start,
+                end: compareRange.end,
+              })
+            : Promise.resolve(null),
+        ]);
         if (!alive) return;
         setData(res);
+        setCompareData(compareRes);
 
         if (granularity && !res.range.available_granularities.includes(granularity)) {
           setGranularity(res.range.granularity);
@@ -103,6 +123,7 @@ export default function CategoryChildrenReportPage() {
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load");
+        setCompareData(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -110,7 +131,7 @@ export default function CategoryChildrenReportPage() {
     return () => {
       alive = false;
     };
-  }, [parentCategoryId, start, end, itemsMode, locationIds, granularity]);
+  }, [parentCategoryId, start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end]);
 
   const gran = data?.range.granularity ?? granularity ?? "day";
   const categories = data?.categories ?? [];
@@ -152,6 +173,33 @@ export default function CategoryChildrenReportPage() {
   const pieTotal = useMemo(() => pieData.reduce((sum, r) => sum + (r.value || 0), 0), [pieData]);
 
   const tableRows = data?.results ?? [];
+  const summary = useMemo(() => {
+    return tableRows.reduce(
+      (acc, row) => {
+        acc.netSales += Number(row.net_sales ?? 0);
+        acc.orders += Number(row.orders ?? 0);
+        acc.itemsSold += Number(row.items_sold ?? 0);
+        return acc;
+      },
+      { netSales: 0, orders: 0, itemsSold: 0 }
+    );
+  }, [tableRows]);
+  const compareSummary = useMemo(() => {
+    return (compareData?.results ?? []).reduce(
+      (acc, row) => {
+        acc.netSales += Number(row.net_sales ?? 0);
+        acc.orders += Number(row.orders ?? 0);
+        acc.itemsSold += Number(row.items_sold ?? 0);
+        return acc;
+      },
+      { netSales: 0, orders: 0, itemsSold: 0 }
+    );
+  }, [compareData?.results]);
+  const compareSub = (
+    current: number,
+    compare: number | null | undefined,
+    formatter: (value: number) => string
+  ) => (compareEnabled ? buildCompareSub(current, compare, formatter) : undefined);
   const parentName = data?.parent_category?.name ?? `Category #${parentCategoryId}`;
 
   if (!Number.isFinite(parentCategoryId)) {
@@ -177,7 +225,16 @@ export default function CategoryChildrenReportPage() {
 
       {/* Filters */}
       <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <div className="flex flex-wrap items-end gap-4">
+        <ComparePeriodControls
+          enabled={compareEnabled}
+          onToggle={toggleCompare}
+          compareStart={compareStart}
+          compareEnd={compareEnd}
+          periodDays={periodDays}
+          onCompareStartChange={setCompareStart}
+        />
+
+        <div className="mt-3 flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-2">
             <label className="text-xs text-kk-dark-text-muted">Start</label>
             <input
@@ -273,6 +330,24 @@ export default function CategoryChildrenReportPage() {
           {err}
         </div>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <KpiCard
+          label="Net Sales"
+          value={formatMoneyNGN(summary.netSales)}
+          sub={compareSub(summary.netSales, compareSummary.netSales, formatMoneyNGN)}
+        />
+        <KpiCard
+          label="Orders"
+          value={formatNumber(summary.orders)}
+          sub={compareSub(summary.orders, compareSummary.orders, formatNumber)}
+        />
+        <KpiCard
+          label="Products Sold"
+          value={formatNumber(summary.itemsSold)}
+          sub={compareSub(summary.itemsSold, compareSummary.itemsSold, formatNumber)}
+        />
+      </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

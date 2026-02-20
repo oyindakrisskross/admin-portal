@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, TicketPercent } from "lucide-react";
+import { Plus, Search, TicketPercent } from "lucide-react";
 
 import { useAuth } from "../../../auth/AuthContext";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
@@ -12,6 +12,8 @@ import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/
 import { CouponPeek } from "./CouponPeek";
 import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import ToastModal from "../../../components/ui/ToastModal";
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 const actionLabel = (v?: string) =>
   ACTION_CHOICES.find((a) => a.value === v)?.label ?? v ?? "-";
@@ -30,6 +32,12 @@ export const CouponListPage: React.FC = () => {
       "name" | "code" | "id" | "action" | "start" | "end" | "status" | "description"
     > | null
   >(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   const hasPeek = !!selectedCoupon;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -41,11 +49,39 @@ export const CouponListPage: React.FC = () => {
   };
 
   useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      const data = await fetchCoupons();
-      setCoupons(data.results);
+      setLoading(true);
+      try {
+        const data = await fetchCoupons({
+          search: debouncedSearch || undefined,
+          page,
+          page_size: pageSize,
+        });
+        if (!cancelled) {
+          setCoupons(data.results ?? []);
+          setTotalCount(Number(data.count ?? 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setCoupons([]);
+          setTotalCount(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearch, page, pageSize]);
 
   useEffect(() => {
     if (!hasId || !coupons.length) return;
@@ -83,7 +119,9 @@ export const CouponListPage: React.FC = () => {
         showToast(res?.detail || "Coupon was used and has been deactivated.", "info");
       } else {
         setCoupons((prev) => prev.filter((c) => c.id !== selectedId));
-        closePeek();
+        setSelectedCoupon(null);
+        setSelectedId(null);
+        setTotalCount((prev) => Math.max(0, prev - 1));
         showToast("Coupon deleted.", "success");
       }
     } catch (err: any) {
@@ -107,6 +145,51 @@ export const CouponListPage: React.FC = () => {
   }, [coupons, sort]);
 
   const toDate = (v?: string) => (v ? new Date(v).toLocaleString() : "-");
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = totalCount === 0 ? 0 : Math.min(page * pageSize, totalCount);
+  const paginationControls = !hasPeek && (
+    <div className="flex items-center justify-between px-3 pb-2 text-xs text-kk-dark-text-muted">
+      <div>
+        Showing {rangeStart}-{rangeEnd} of {totalCount}
+      </div>
+      <div className="flex items-center gap-2">
+        <span>Rows</span>
+        <select
+          className="rounded border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-xs"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canPrev || loading}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canNext || loading}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex gap-4">
@@ -121,17 +204,35 @@ export const CouponListPage: React.FC = () => {
           title="Coupons"
           subtitle="Manage coupon codes and discounts."
           right={
-            !hasPeek && can("Coupons", "create") ? (
-              <button
-                onClick={() => navigate("/promotions/coupons/new")}
-                className="new inline-flex items-center gap-1 rounded-full"
-              >
-                <Plus className="h-3 w-3" />
-                New
-              </button>
+            !hasPeek ? (
+              <div className="flex items-center gap-2 text-xs">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-kk-muted" />
+                  <input
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
+                    placeholder="Search coupon name or code"
+                  />
+                </div>
+                {can("Coupons", "create") ? (
+                  <button
+                    onClick={() => navigate("/promotions/coupons/new")}
+                    className="new inline-flex items-center gap-1 rounded-full"
+                  >
+                    <Plus className="h-3 w-3" />
+                    New
+                  </button>
+                ) : null}
+              </div>
             ) : null
           }
         />
+
+        {paginationControls}
 
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden px-4"}>
           <table className="min-w-full">
@@ -194,11 +295,7 @@ export const CouponListPage: React.FC = () => {
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr
-                  key={c.id}
-                  className="cursor-pointer"
-                  onClick={() => openCoupon(c)}
-                >
+                <tr key={c.id} className="cursor-pointer" onClick={() => openCoupon(c)}>
                   <td>
                     {!hasPeek ? (
                       c.name
@@ -251,7 +348,18 @@ export const CouponListPage: React.FC = () => {
                 </tr>
               ))}
 
-              {!rows.length && (
+              {loading && (
+                <tr>
+                  <td
+                    colSpan={hasPeek ? 1 : 8}
+                    className="px-3 py-6 text-center text-xs text-kk-dark-text-muted"
+                  >
+                    Loading coupons...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !rows.length && (
                 <tr>
                   <td
                     colSpan={hasPeek ? 1 : 8}
@@ -264,6 +372,8 @@ export const CouponListPage: React.FC = () => {
             </tbody>
           </table>
         </div>
+
+        {paginationControls}
       </div>
 
       {selectedCoupon && (

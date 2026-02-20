@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Sparkles } from "lucide-react";
+import { Plus, Search, Sparkles } from "lucide-react";
 
 import type { Category, Item, ItemCategory, ItemStatus } from "../../../types/catalog";
 import { useAuth } from "../../../auth/AuthContext";
@@ -23,10 +23,6 @@ import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
 import { 
-  ArrowsUpDownIcon,
-  MagnifyingGlassIcon,
-  AdjustmentsHorizontalIcon,
-  ArrowUpTrayIcon,
   HashtagIcon,
   BanknotesIcon,
   BoldIcon,
@@ -37,6 +33,8 @@ import {
   PlayIcon,
   PauseIcon,
 } from "@heroicons/react/24/outline";
+
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
 
 export const ItemListPage: React.FC = () => {
@@ -51,6 +49,12 @@ export const ItemListPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [sort, setSort] = useState<SortState<"name" | "sku" | "price" | "stock" | "status" | "categories"> | null>(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -164,28 +168,43 @@ export const ItemListPage: React.FC = () => {
   }, [hasId, id, items])
 
   useEffect(() => {
-    (async () => {
-      const data = await fetchItems();
-      setItems(data.results);
-    })();
-  }, []);
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const data = await fetchItems({ filters });
-      if (!cancelled) {
-        setItems(data.results);
-        const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
-        setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
+      setLoading(true);
+      try {
+        const data = await fetchItems({
+          filters,
+          search: debouncedSearch || undefined,
+          page,
+          page_size: pageSize,
+        });
+        if (!cancelled) {
+          setItems(data.results ?? []);
+          setTotalCount(Number(data.count ?? 0));
+          const visible = new Set((data.results ?? []).map((r: any) => Number(r.id)).filter(Number.isFinite));
+          setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
+        }
+      } catch {
+        if (!cancelled) {
+          setItems([]);
+          setTotalCount(0);
+          setSelectedIds([]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, debouncedSearch, page, pageSize]);
 
   const sortedItems = useMemo(() => {
     return sortBy(items, sort, {
@@ -198,6 +217,52 @@ export const ItemListPage: React.FC = () => {
     });
   }, [items, sort]);
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = totalCount === 0 ? 0 : Math.min(page * pageSize, totalCount);
+  const paginationControls = !hasPeek && (
+    <div className="flex items-center justify-between px-3 pb-2 text-xs text-kk-dark-text-muted">
+      <div>
+        Showing {rangeStart}-{rangeEnd} of {totalCount}
+      </div>
+      <div className="flex items-center gap-2">
+        <span>Rows</span>
+        <select
+          className="rounded border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-xs"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canPrev || loading}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canNext || loading}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex-1 flex gap-4">
       <div className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${
@@ -208,11 +273,26 @@ export const ItemListPage: React.FC = () => {
           section= "Catalog"
           title= "Items"
           subtitle= "Manage all products."
-          right= {!hasPeek ? (<div className="flex items-center gap-1 text-xs">
-            <FilterBar 
+          right= {!hasPeek ? (<div className="flex items-center gap-2 text-xs">
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-kk-muted" />
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
+                placeholder="Search item name or SKU"
+              />
+            </div>
+            <FilterBar
               columns={filterColumns}
               filters={filters}
-              onChange={setFilters}
+              onChange={(next) => {
+                setFilters(next);
+                setPage(1);
+              }}
             />
             {/* <button>
               <span className="tooltip-t">Sort</span>
@@ -339,6 +419,8 @@ export const ItemListPage: React.FC = () => {
             ]}
           />
         )}
+
+        {paginationControls}
 
         {/* Table */}
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden"}>
@@ -499,19 +581,31 @@ export const ItemListPage: React.FC = () => {
                 </tr>
               ))}
 
-              {!items.length && (
+                            {loading && (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 6 : 7}
+                    colSpan={hasPeek ? 2 : 7}
+                    className="px-3 py-6 text-center text-xs text-kk-dark-text-muted"
+                  >
+                    Loading items...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !items.length && (
+                <tr>
+                  <td
+                    colSpan={hasPeek ? 2 : 7}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
-                    No items yet. Click “New" to create your first one.
+                    No items yet. Click "New" to create your first one.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+        {paginationControls}
       </div>
 
       { selectedItem && (
@@ -624,3 +718,4 @@ export const ItemListPage: React.FC = () => {
     </div>
   );
 };
+

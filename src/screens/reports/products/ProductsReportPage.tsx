@@ -1,4 +1,4 @@
-// src/screens/reports/products/ProductsReportPage.tsx
+﻿// src/screens/reports/products/ProductsReportPage.tsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,10 +10,13 @@ import { ItemSearchSelect, type ItemOption } from "../../../components/catalog/I
 import { KpiCard } from "../../../components/reports/KpiCard";
 import { ChartCard } from "../../../components/reports/ChartCard";
 import { ComparisonChartCard } from "../../../components/reports/ComparisonChartCard";
+import { ComparePeriodControls } from "../../../components/reports/ComparePeriodControls";
+import { buildComparisonChartData, buildCompareSub } from "../../../components/reports/periodCompare";
 import type { Outlet } from "../../../types/location";
 import { fetchOutlets } from "../../../api/location";
 import { CloudDownload, X } from "lucide-react";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
+import { useComparePeriod } from "../../../hooks/useComparePeriod";
 
 const COMPARISON_COLORS = [
   "#38bdf8",
@@ -32,6 +35,8 @@ export default function ProductsReportPage() {
   const navigate = useNavigate();
 
   const { start, end, setStart, setEnd } = useReportDateRange();
+  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
+    useComparePeriod({ start, end });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -47,6 +52,7 @@ export default function ProductsReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ReportResponse | null>(null);
+  const [compareData, setCompareData] = useState<ReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
   const [metric, setMetric] = useState<"net_sales" | "orders" | "items_sold">("net_sales");
@@ -80,6 +86,7 @@ export default function ProductsReportPage() {
 
     if (showMode !== "all" && selectedIds.length === 0) {
       setData(null);
+      setCompareData(null);
       setErr(null);
       setLoading(false);
       return () => {
@@ -91,33 +98,40 @@ export default function ProductsReportPage() {
       setLoading(true);
       setErr(null);
       try {
-        const commonArgs = {
-          start,
-          end,
-          locationIds: locationIds === "ALL" ? undefined : locationIds,
-          itemsMode,
-          granularity,
-          sort,
-          order,
-        };
+        const queryForRange = (rangeStart: string, rangeEnd: string) => {
+          const commonArgs = {
+            start: rangeStart,
+            end: rangeEnd,
+            locationIds: locationIds === "ALL" ? undefined : locationIds,
+            itemsMode,
+            granularity,
+            sort,
+            order,
+          };
 
-        const res =
-          showMode === "all"
-            ? await fetchProductsReport({
+          return showMode === "all"
+            ? fetchProductsReport({
                 ...commonArgs,
                 search: search.trim() || undefined,
                 limit,
                 offset,
               })
-            : await fetchProductsReport({
+            : fetchProductsReport({
                 ...commonArgs,
                 itemIds: selectedIds,
                 seriesByItem: showMode === "comparison",
                 limit: showMode === "comparison" ? Math.max(25, selectedIds.length) : 25,
                 offset: 0,
               });
+        };
+
+        const [res, compareRes] = await Promise.all([
+          queryForRange(start, end),
+          compareRange ? queryForRange(compareRange.start, compareRange.end) : Promise.resolve(null),
+        ]);
         if (!alive) return;
         setData(res);
+        setCompareData(compareRes);
 
         // If current granularity isn't allowed, snap to server-chosen default
         if (granularity && !res.range.available_granularities.includes(granularity)) {
@@ -128,6 +142,7 @@ export default function ProductsReportPage() {
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load");
+        setCompareData(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -149,11 +164,13 @@ export default function ProductsReportPage() {
     showMode,
     selectedItem?.id,
     comparisonItems,
+    compareRange?.start,
+    compareRange?.end,
   ]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show “All locations”
+      // keep non-blocking; selector can still show â€œAll locationsâ€
       setOutlets([]);
     });
   }, []);
@@ -171,12 +188,8 @@ export default function ProductsReportPage() {
   const gran = data?.range.granularity ?? granularity ?? "day";
   const series = data?.series?.[metric] ?? [];
   const chartData = useMemo(() => {
-    return series.map((p) => ({
-      t: p.t,
-      label: isoToLabel(p.t, gran),
-      v: Number(p.v ?? 0),
-    }));
-  }, [series, gran]);
+    return buildComparisonChartData(series, compareData?.series?.[metric], gran);
+  }, [compareData?.series, gran, metric, series]);
 
   const selectedItemIds = useMemo(() => {
     if (showMode === "single") return selectedItem?.id ? [selectedItem.id] : [];
@@ -239,6 +252,12 @@ export default function ProductsReportPage() {
       ? "Select products first"
       : "Load data first"
     : "Export all rows to CSV";
+
+  const compareSub = (
+    current: number,
+    compare: number | null | undefined,
+    formatter: (value: number) => string
+  ) => (compareEnabled ? buildCompareSub(current, compare, formatter) : undefined);
 
   async function handleExportCsv() {
     if (exporting) return;
@@ -305,7 +324,22 @@ export default function ProductsReportPage() {
     <div className="p-4 space-y-4">
       {/* Filters */}
       <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <ComparePeriodControls
+          enabled={compareEnabled}
+          onToggle={() => {
+            setOffset(0);
+            toggleCompare();
+          }}
+          compareStart={compareStart}
+          compareEnd={compareEnd}
+          periodDays={periodDays}
+          onCompareStartChange={(value) => {
+            setOffset(0);
+            setCompareStart(value);
+          }}
+        />
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="md:col-span-1">
             <label className="text-xs text-kk-dark-text-muted ">Start</label>
             <input
@@ -595,10 +629,30 @@ export default function ProductsReportPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KpiCard label="Items Sold" value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"} />
-        <KpiCard label="Net Sales" value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"} />
-        <KpiCard label="Net Discount" value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"} />
-        <KpiCard label="Orders" value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"} />
+        <KpiCard
+          label="Items Sold"
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
+        />
+        <KpiCard
+          label="Net Sales"
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
+        />
+        <KpiCard
+          label="Net Discount"
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          sub={
+            data
+              ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN)
+              : undefined
+          }
+        />
+        <KpiCard
+          label="Orders"
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
+        />
       </div>
 
       {/* Charts */}
@@ -626,6 +680,7 @@ export default function ProductsReportPage() {
           data={chartData}
           dataKey="label"
           valueKey="v"
+          compareValueKey={compareEnabled ? "compare_v" : undefined}
           kind={metric === "net_sales" ? "money" : "count"}
         />
       )}
@@ -748,3 +803,4 @@ export default function ProductsReportPage() {
       </div>
   );
 }
+

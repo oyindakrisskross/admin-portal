@@ -1,7 +1,7 @@
 // src/components/reports/ChartCard.tsx
 
 import React from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMoneyNGN, formatNumber } from "../../helpers";
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   data: any[];
   dataKey?: string;
   valueKey: string;
+  compareValueKey?: string;
+  compareLabel?: string;
   kind: "money" | "count";
 }
 
@@ -17,12 +19,20 @@ export const ChartCard: React.FC<Props> = ({
   data,
   dataKey="tLabel",
   valueKey,
+  compareValueKey,
+  compareLabel = "Compare period",
   kind,
 }) => {
-  const maxV = data.reduce((m, p) => Math.max(m, Number(p[valueKey] ?? 0)), 0);
+  const maxV = data.reduce((m, p) => {
+    const current = Number(p[valueKey] ?? 0);
+    const compare = compareValueKey ? Number(p[compareValueKey] ?? 0) : 0;
+    return Math.max(m, current, compare);
+  }, 0);
   const top = maxV === 0 ? 1 : Math.ceil(maxV * 1.1);
 
-  const lineStroke = "#9f7aea";
+  const currentStroke = "#9f7aea";
+  const compareStroke = "#22c55e";
+  const hasCompare = Boolean(compareValueKey);
 
   return (
     <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm">
@@ -42,7 +52,19 @@ export const ChartCard: React.FC<Props> = ({
               formatter={(v: any) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
               labelFormatter={(l) => `Time: ${l}`}
             />
-            <Line type="monotone" dataKey={valueKey} dot={false} strokeWidth={2} stroke={lineStroke} />
+            {hasCompare ? <Legend /> : null}
+            <Line type="monotone" dataKey={valueKey} name="Current period" dot={false} strokeWidth={2} stroke={currentStroke} />
+            {compareValueKey ? (
+              <Line
+                type="monotone"
+                dataKey={compareValueKey}
+                name={compareLabel}
+                dot={false}
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                stroke={compareStroke}
+              />
+            ) : null}
           </LineChart>
         </ResponsiveContainer>
       </div>

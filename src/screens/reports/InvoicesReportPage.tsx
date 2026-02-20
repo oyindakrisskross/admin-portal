@@ -1,7 +1,7 @@
 // src/screens/reports/InvoicesReportPage.tsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, isoToLabel, makeFilename, toDateStrShort } from "../../helpers";
+import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, makeFilename, toDateStrShort } from "../../helpers";
 import type { Outlet } from "../../types/location";
 import type { Granularity, ReportResponse, InvoiceAdvancedFilters } from "../../types/reports";
 import { fetchInvoicesReport } from "../../api/reports";
@@ -11,9 +11,12 @@ import type { FilterSet } from "../../types/filters";
 import { ItemSearchSelect, type ItemOption } from "../../components/catalog/ItemSearchSelect";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
+import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
 import { CloudDownload, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
+import { useComparePeriod } from "../../hooks/useComparePeriod";
 
 type InvoiceFilterType = "coupon" | "product" | "variation" | "refund" | "status";
 type InvoiceFilterMode = "include" | "exclude" | "is" | "is_not";
@@ -50,11 +53,13 @@ export default function InvoicesReportPage() {
   
   const navigate = useNavigate();
   const { start, end, setStart, setEnd } = useReportDateRange();
+  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
+    useComparePeriod({ start, end });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
 
-  const [search, setSearch] = useState("");
+  const [search] = useState("");
   const [sort, setSort] = useState<"net_sales" | "number" | "items_sold">("number");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState(25);
@@ -63,6 +68,7 @@ export default function InvoicesReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ReportResponse | null>(null);
+  const [compareData, setCompareData] = useState<ReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
   const [metric, setMetric] = useState<"net_sales" | "items_sold">("net_sales");
@@ -185,9 +191,7 @@ export default function InvoicesReportPage() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetchInvoicesReport({
-          start,
-          end,
+        const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
           granularity,
           search: search.trim() || undefined,
@@ -196,9 +200,24 @@ export default function InvoicesReportPage() {
           limit,
           offset,
           advancedFilters,
-        });
+        };
+        const [res, compareRes] = await Promise.all([
+          fetchInvoicesReport({
+            ...commonArgs,
+            start,
+            end,
+          }),
+          compareRange
+            ? fetchInvoicesReport({
+                ...commonArgs,
+                start: compareRange.start,
+                end: compareRange.end,
+              })
+            : Promise.resolve(null),
+        ]);
         if (!alive) return;
         setData(res);
+        setCompareData(compareRes);
 
         // If current granularity isn't allowed, snap to server-chosen default
         if (granularity && !res.range.available_granularities.includes(granularity)) {
@@ -209,6 +228,7 @@ export default function InvoicesReportPage() {
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load");
+        setCompareData(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -216,7 +236,7 @@ export default function InvoicesReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, advancedFilters]);
+  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, advancedFilters, compareRange?.start, compareRange?.end]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
@@ -228,16 +248,17 @@ export default function InvoicesReportPage() {
   const gran = data?.range.granularity ?? granularity ?? "day";
   const series = data?.series?.[metric] ?? [];
   const chartData = useMemo(() => {
-    return series.map((p) => ({
-      t: p.t,
-      label: isoToLabel(p.t, gran),
-      v: Number(p.v ?? 0),
-    }));
-  }, [series, gran]);
+    return buildComparisonChartData(series, compareData?.series?.[metric], gran);
+  }, [compareData?.series, gran, metric, series]);
 
   const total = data?.pagination.total ?? 0;
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
+  const compareSub = (
+    current: number,
+    compare: number | null | undefined,
+    formatter: (value: number) => string
+  ) => (compareEnabled ? buildCompareSub(current, compare, formatter) : undefined);
 
   async function handleExportCsv() {
     if (!data || exporting) return;
@@ -284,7 +305,22 @@ export default function InvoicesReportPage() {
     <div className="p-4 space-y-4">
       {/* Filters */}
       <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <ComparePeriodControls
+          enabled={compareEnabled}
+          onToggle={() => {
+            setOffset(0);
+            toggleCompare();
+          }}
+          compareStart={compareStart}
+          compareEnd={compareEnd}
+          periodDays={periodDays}
+          onCompareStartChange={(value) => {
+            setOffset(0);
+            setCompareStart(value);
+          }}
+        />
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="md:col-span-1">
             <label className="text-xs text-kk-dark-text-muted ">Start</label>
             <input
@@ -769,10 +805,28 @@ export default function InvoicesReportPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KpiCard label="Orders" value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "-"} />
-        <KpiCard label="Net Sales" value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "-"} />
-        <KpiCard label="Avg Sale Value" value={data ? formatMoneyNGN(Number(data.kpi.avg_value ?? 0)) : "-"} />
-        <KpiCard label="Total Refunded" value={data ? formatMoneyNGN(Number(data.kpi.total_refunded ?? 0)) : "-"} />
+        <KpiCard
+          label="Orders"
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "-"}
+          sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
+        />
+        <KpiCard
+          label="Net Sales"
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "-"}
+          sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
+        />
+        <KpiCard
+          label="Avg Sale Value"
+          value={data ? formatMoneyNGN(Number(data.kpi.avg_value ?? 0)) : "-"}
+          sub={data ? compareSub(Number(data.kpi.avg_value ?? 0), Number(compareData?.kpi.avg_value ?? 0), formatMoneyNGN) : undefined}
+        />
+        <KpiCard
+          label="Total Refunded"
+          value={data ? formatMoneyNGN(Number(data.kpi.total_refunded ?? 0)) : "-"}
+          sub={
+            data ? compareSub(Number(data.kpi.total_refunded ?? 0), Number(compareData?.kpi.total_refunded ?? 0), formatMoneyNGN) : undefined
+          }
+        />
       </div>
 
       {/* Charts */}
@@ -781,6 +835,7 @@ export default function InvoicesReportPage() {
         data={chartData}
         dataKey="label"
         valueKey="v"
+        compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_sales" ? "money" : "count"}
       />
 
@@ -835,7 +890,7 @@ export default function InvoicesReportPage() {
                     <td className="px-4 py-2">{r.invoice_number}</td>
                     <td className="px-4 py-2">{r.location}</td>
                     <td className="px-4 py-2">{r.items_sold}</td>
-                    <td className="px-4 py-2"></td>
+                    <td className="px-4 py-2">{(r.coupon_code ?? "").trim() || "-"}</td>
                     <td className="px-4 py-2">{formatMoneyNGN(+r.net_sales)}</td>
                   </tr>
                 );
@@ -843,7 +898,7 @@ export default function InvoicesReportPage() {
 
               {!loading && (data?.results?.length ?? 0) === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-kk-dark-text-muted">
+                  <td colSpan={6} className="px-4 py-6 text-center text-kk-dark-text-muted">
                     No results for this range.
                   </td>
                 </tr>

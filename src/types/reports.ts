@@ -70,6 +70,7 @@ export interface ResponseRow {
   invoice_number: string;
   invoice_date: string;
   location: string;
+  coupon_code?: string | null;
 };
 
 export interface ReportResponse {

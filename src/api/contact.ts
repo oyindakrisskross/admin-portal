@@ -99,7 +99,12 @@ export async function updateAddressBook(id: number, payload: Contact.AddressBook
 }
 
 // Contacts
-export async function fetchContacts(params?: { filters?: FilterSet; search?: string }) {
+export async function fetchContacts(params?: {
+  filters?: FilterSet;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
   const search = new URLSearchParams();
 
   if (params?.filters) {
@@ -119,6 +124,14 @@ export async function fetchContacts(params?: { filters?: FilterSet; search?: str
 
   if (params?.search) {
     search.set("search", params.search);
+  }
+
+  if (params?.page != null) {
+    search.set("page", String(params.page));
+  }
+
+  if (params?.page_size != null) {
+    search.set("page_size", String(params.page_size));
   }
 
   const res = await api.get(

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Outlet } from "../../types/location";
@@ -7,13 +7,18 @@ import { fetchCouponsReport } from "../../api/reports";
 import { fetchOutlets } from "../../api/location";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { formatMoneyNGN, formatNumber, isoToLabel } from "../../helpers";
+import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
+import { formatMoneyNGN, formatNumber } from "../../helpers";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
+import { useComparePeriod } from "../../hooks/useComparePeriod";
 
 export default function CouponsReportPage() {
   const navigate = useNavigate();
 
   const { start, end, setStart, setEnd } = useReportDateRange();
+  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
+    useComparePeriod({ start, end });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
@@ -27,6 +32,7 @@ export default function CouponsReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<CouponReportResponse | null>(null);
+  const [compareData, setCompareData] = useState<CouponReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
   const [metric, setMetric] = useState<"net_discount" | "discounted_orders">("net_discount");
@@ -37,9 +43,7 @@ export default function CouponsReportPage() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetchCouponsReport({
-          start,
-          end,
+        const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
           granularity,
           search: search.trim() || undefined,
@@ -47,9 +51,24 @@ export default function CouponsReportPage() {
           order,
           limit,
           offset,
-        });
+        };
+        const [res, compareRes] = await Promise.all([
+          fetchCouponsReport({
+            ...commonArgs,
+            start,
+            end,
+          }),
+          compareRange
+            ? fetchCouponsReport({
+                ...commonArgs,
+                start: compareRange.start,
+                end: compareRange.end,
+              })
+            : Promise.resolve(null),
+        ]);
         if (!alive) return;
         setData(res);
+        setCompareData(compareRes);
 
         if (granularity && !res.range.available_granularities.includes(granularity)) {
           setGranularity(res.range.granularity);
@@ -59,6 +78,7 @@ export default function CouponsReportPage() {
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load");
+        setCompareData(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -66,7 +86,7 @@ export default function CouponsReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, search, sort, order, limit, offset, granularity]);
+  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => setOutlets([]));
@@ -75,22 +95,38 @@ export default function CouponsReportPage() {
   const gran = data?.range.granularity ?? granularity ?? "day";
   const series = data?.series?.[metric] ?? [];
   const chartData = useMemo(() => {
-    return series.map((p) => ({
-      t: p.t,
-      label: isoToLabel(p.t, gran),
-      v: Number(p.v ?? 0),
-    }));
-  }, [series, gran]);
+    return buildComparisonChartData(series, compareData?.series?.[metric], gran);
+  }, [compareData?.series, gran, metric, series]);
 
   const total = data?.pagination.total ?? 0;
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
+  const compareSub = (
+    current: number,
+    compare: number | null | undefined,
+    formatter: (value: number) => string
+  ) => (compareEnabled ? buildCompareSub(current, compare, formatter) : undefined);
 
   return (
     <div className="p-4 space-y-4">
       {/* Filters */}
       <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <ComparePeriodControls
+          enabled={compareEnabled}
+          onToggle={() => {
+            setOffset(0);
+            toggleCompare();
+          }}
+          compareStart={compareStart}
+          compareEnd={compareEnd}
+          periodDays={periodDays}
+          onCompareStartChange={(value) => {
+            setOffset(0);
+            setCompareStart(value);
+          }}
+        />
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="flex flex-col gap-1">
             <label className="text-xs text-kk-dark-text-muted">Start</label>
             <input
@@ -250,10 +286,16 @@ export default function CouponsReportPage() {
         <KpiCard
           label="Discounted Orders"
           value={data ? formatNumber(Number(data.kpi.discounted_orders ?? 0)) : "—"}
+          sub={
+            data
+              ? compareSub(Number(data.kpi.discounted_orders ?? 0), Number(compareData?.kpi.discounted_orders ?? 0), formatNumber)
+              : undefined
+          }
         />
         <KpiCard
           label="Net Discount"
           value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN) : undefined}
         />
       </div>
 
@@ -263,6 +305,7 @@ export default function CouponsReportPage() {
         data={chartData}
         dataKey="label"
         valueKey="v"
+        compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_discount" ? "money" : "count"}
       />
 
@@ -307,7 +350,7 @@ export default function CouponsReportPage() {
                   title="View coupon details"
                 >
                   <td className="px-4 py-2">
-                    <span className="font-medium">{r.name || "—"}</span>
+                    <span className="font-medium">{r.name || "â€”"}</span>
                   </td>
                   <td className="px-4 py-2">{r.code}</td>
                   <td className="px-4 py-2 text-right">{formatNumber(Number(r.discounted_orders ?? 0))}</td>

@@ -131,7 +131,12 @@ export async function fetchAttributes(params?: Record<string, any>) {
 
 // Item Groups
 
-export async function fetchItemGroups(params?: { filters?:FilterSet }) {
+export async function fetchItemGroups(params?: {
+  filters?: FilterSet;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
   const search = new URLSearchParams();
 
   if (params?.filters) {
@@ -147,6 +152,18 @@ export async function fetchItemGroups(params?: { filters?:FilterSet }) {
       }
       search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
     });
+  }
+
+  if (params?.search) {
+    search.set("search", params.search);
+  }
+
+  if (params?.page != null) {
+    search.set("page", String(params.page));
+  }
+
+  if (params?.page_size != null) {
+    search.set("page_size", String(params.page_size));
   }
 
   const res = await api.get(
@@ -185,7 +202,12 @@ export async function deleteItemGroup(id: number) {
 //   const res = await api.get<PaginatedResult<Catalog.Item>>("/api/catalog/items/", { params });
 //   return res.data;
 // }
-export async function fetchItems(params?: { filters?:FilterSet }) {
+export async function fetchItems(params?: {
+  filters?: FilterSet;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}) {
   const search = new URLSearchParams();
 
   if (params?.filters) {
@@ -201,6 +223,18 @@ export async function fetchItems(params?: { filters?:FilterSet }) {
       }
       search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
     });
+  }
+
+  if (params?.search) {
+    search.set("search", params.search);
+  }
+
+  if (params?.page != null) {
+    search.set("page", String(params.page));
+  }
+
+  if (params?.page_size != null) {
+    search.set("page_size", String(params.page_size));
   }
 
   const res = await api.get(

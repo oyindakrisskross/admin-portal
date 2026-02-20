@@ -1,19 +1,24 @@
-// src/screens/reports/VariationsReportPage.tsx
+﻿// src/screens/reports/VariationsReportPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import type { Granularity, ReportResponse } from "../../types/reports";
-import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, isoToLabel, makeFilename } from "../../helpers";
+import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, makeFilename } from "../../helpers";
 import { fetchVariationsReport } from "../../api/reports";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
+import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
 import { fetchOutlets } from "../../api/location";
 import type { Outlet } from "../../types/location";
 import { CloudDownload } from "lucide-react";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
+import { useComparePeriod } from "../../hooks/useComparePeriod";
 
 export default function VariationsReportPage() {
 
   const { start, end, setStart, setEnd } = useReportDateRange();
+  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
+    useComparePeriod({ start, end });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -29,6 +34,7 @@ export default function VariationsReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [data, setData] = useState<ReportResponse | null>(null);
+  const [compareData, setCompareData] = useState<ReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
   const [metric, setMetric] = useState<"net_sales" | "orders" | "items_sold">("net_sales");
@@ -41,9 +47,7 @@ export default function VariationsReportPage() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetchVariationsReport({
-          start,
-          end,
+        const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
           itemsMode,
           granularity,
@@ -52,9 +56,24 @@ export default function VariationsReportPage() {
           order,
           limit,
           offset,
-        });
+        };
+        const [res, compareRes] = await Promise.all([
+          fetchVariationsReport({
+            ...commonArgs,
+            start,
+            end,
+          }),
+          compareRange
+            ? fetchVariationsReport({
+                ...commonArgs,
+                start: compareRange.start,
+                end: compareRange.end,
+              })
+            : Promise.resolve(null),
+        ]);
         if (!alive) return;
         setData(res);
+        setCompareData(compareRes);
 
         // If current granularity isn't allowed, snap to server-chosen default
         if (granularity && !res.range.available_granularities.includes(granularity)) {
@@ -65,6 +84,7 @@ export default function VariationsReportPage() {
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load");
+        setCompareData(null);
       } finally {
         if (alive) setLoading(false);
       }
@@ -72,11 +92,11 @@ export default function VariationsReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, itemsMode, search, sort, order, limit, offset, granularity]);
+  }, [start, end, locationIds, itemsMode, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show “All locations”
+      // keep non-blocking; selector can still show â€œAll locationsâ€
       setOutlets([]);
     });
   }, []);
@@ -84,16 +104,17 @@ export default function VariationsReportPage() {
   const gran = data?.range.granularity ?? granularity ?? "day";
   const series = data?.series?.[metric] ?? [];
   const chartData = useMemo(() => {
-    return series.map((p) => ({
-      t: p.t,
-      label: isoToLabel(p.t, gran),
-      v: Number(p.v ?? 0),
-    }));
-  }, [series, gran]);
+    return buildComparisonChartData(series, compareData?.series?.[metric], gran);
+  }, [compareData?.series, gran, metric, series]);
 
   const total = data?.pagination.total ?? 0;
   const canPrev = offset > 0;
   const canNext = offset + limit < total;
+  const compareSub = (
+    current: number,
+    compare: number | null | undefined,
+    formatter: (value: number) => string
+  ) => (compareEnabled ? buildCompareSub(current, compare, formatter) : undefined);
 
   async function handleExportCsv() {
     if (!data || exporting) return;
@@ -141,7 +162,22 @@ export default function VariationsReportPage() {
     <div className="p-4 space-y-4">
       {/* Filters */}
       <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
+        <ComparePeriodControls
+          enabled={compareEnabled}
+          onToggle={() => {
+            setOffset(0);
+            toggleCompare();
+          }}
+          compareStart={compareStart}
+          compareEnd={compareEnd}
+          periodDays={periodDays}
+          onCompareStartChange={(value) => {
+            setOffset(0);
+            setCompareStart(value);
+          }}
+        />
+
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
           <div className="md:col-span-1">
             <label className="text-xs text-kk-dark-text-muted ">Start</label>
             <input
@@ -288,7 +324,7 @@ export default function VariationsReportPage() {
           <div className="text-xs text-kk-dark-text-muted">
             {data ? (
               <>
-                Showing {Math.min(offset + 1, total)}–{Math.min(offset + limit, total)} of {total}
+                Showing {Math.min(offset + 1, total)}â€“{Math.min(offset + limit, total)} of {total}
               </>
             ) : (
               " "
@@ -331,10 +367,30 @@ export default function VariationsReportPage() {
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <KpiCard label="Items Sold" value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"} />
-        <KpiCard label="Net Sales" value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"} />
-        <KpiCard label="Net Discount" value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"} />
-        <KpiCard label="Orders" value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"} />
+        <KpiCard
+          label="Items Sold"
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
+        />
+        <KpiCard
+          label="Net Sales"
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
+        />
+        <KpiCard
+          label="Net Discount"
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          sub={
+            data
+              ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN)
+              : undefined
+          }
+        />
+        <KpiCard
+          label="Orders"
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
+          sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
+        />
       </div>
 
       {/* Charts */}
@@ -343,6 +399,7 @@ export default function VariationsReportPage() {
         data={chartData}
         dataKey="label"
         valueKey="v"
+        compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_sales" ? "money" : "count"}
       />
 
@@ -358,12 +415,12 @@ export default function VariationsReportPage() {
             title={!data ? "Load data first" : "Export all rows to CSV"}
           >
             <CloudDownload className="h-5 w-5"/>
-            {exporting ? "Exporting…" : "Export CSV"}
+            {exporting ? "Exportingâ€¦" : "Export CSV"}
           </button>
         </div>
 
         {err ? <div className="p-4 text-sm text-red-600">{err}</div> : null}
-        {loading && !data ? <div className="p-4 text-sm">Loading…</div> : null}
+        {loading && !data ? <div className="p-4 text-sm">Loadingâ€¦</div> : null}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -385,12 +442,12 @@ export default function VariationsReportPage() {
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-kk-dark-bg text-gray-700 text-xs">
-                          •
+                          â€¢
                         </span>
                         <span className="font-medium">{r.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2">{r.sku ?? <span className="text-kk-dark-text-muted">—</span>}</td>
+                    <td className="px-4 py-2">{r.sku ?? <span className="text-kk-dark-text-muted">â€”</span>}</td>
                     <td className="px-4 py-2 text-right">{formatNumber(Number(r.items_sold ?? 0))}</td>
                     <td className="px-4 py-2 text-right">{formatMoneyNGN(Number(r.net_sales ?? 0))}</td>
                     <td className="px-4 py-2 text-right">{formatMoneyNGN(Number(r.net_discount ?? 0))}</td>
@@ -410,7 +467,7 @@ export default function VariationsReportPage() {
           </table>
         </div>
 
-        {loading && data ? <div className="px-4 py-3 text-xs text-kk-dark-text-muted">Refreshing…</div> : null}
+        {loading && data ? <div className="px-4 py-3 text-xs text-kk-dark-text-muted">Refreshingâ€¦</div> : null}
       </div>
     </div>
   );

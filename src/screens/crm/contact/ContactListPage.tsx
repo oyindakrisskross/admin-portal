@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, TrashIcon } from "lucide-react";
+import { Plus, Search, TrashIcon, Users } from "lucide-react";
 
 import { useAuth } from "../../../auth/AuthContext";
 import type { Contact } from "../../../types/contact";
@@ -15,6 +15,8 @@ import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
 export const ContactListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
@@ -22,64 +24,79 @@ export const ContactListPage: React.FC = () => {
   const hasId = Boolean(id);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [sort, setSort] = useState<SortState<"name" | "company" | "email" | "phone"> | null>(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   const filterColumns: ColumnMeta[] = [
     { id: "first_name", label: "First Name", type: "text" },
     { id: "last_name", label: "Last Name", type: "text" },
-    { id: "email", label: "Email", type: "text"},
-    { id: "phone", label: "Phone", type: "text"},
+    { id: "email", label: "Email", type: "text" },
+    { id: "phone", label: "Phone", type: "text" },
   ];
 
   const hasPeek = !!selectedId;
+
   const openPeek = (contact: Contact) => {
-    setSelectedContact(contact);
     setSelectedId(contact.id!);
   };
 
   const closePeek = () => {
-    setSelectedContact(null);
     setSelectedId(null);
   };
 
   useEffect(() => {
-    (async () => {
-      const data = await fetchContacts();
-      setContacts(data.results);
-    })();
-  },[]);
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      const data = await fetchContacts({ filters });
-      if (!cancelled) {
-        setContacts(data.results);
+      setLoading(true);
+      try {
+        const data = await fetchContacts({
+          filters,
+          search: debouncedSearch || undefined,
+          page,
+          page_size: pageSize,
+        });
+        if (!cancelled) {
+          setContacts(data.results ?? []);
+          setTotalCount(Number(data.count ?? 0));
+        }
+      } catch {
+        if (!cancelled) {
+          setContacts([]);
+          setTotalCount(0);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, debouncedSearch, page, pageSize]);
 
   useEffect(() => {
     if (!hasId || !contacts.length) return;
 
     const contactId = Number(id);
-    const match = contacts.find(c => c.id === contactId);
+    const match = contacts.find((c) => c.id === contactId);
 
     if (match) {
-      (async () => {
-        setSelectedContact(match);
-        setSelectedId(match.id!);
-      })();
+      setSelectedId(match.id!);
     }
-  }, [hasId, id, contacts])
+  }, [hasId, id, contacts]);
 
   const sortedContacts = useMemo(() => {
     return sortBy(contacts, sort, {
@@ -90,25 +107,89 @@ export const ContactListPage: React.FC = () => {
     });
   }, [contacts, sort]);
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const canPrev = page > 1;
+  const canNext = page < totalPages;
+  const rangeStart = totalCount === 0 ? 0 : (page - 1) * pageSize + 1;
+  const rangeEnd = totalCount === 0 ? 0 : Math.min(page * pageSize, totalCount);
+  const paginationControls = !hasPeek && (
+    <div className="flex items-center justify-between px-3 pb-2 text-xs text-kk-dark-text-muted">
+      <div>
+        Showing {rangeStart}-{rangeEnd} of {totalCount}
+      </div>
+      <div className="flex items-center gap-2">
+        <span>Rows</span>
+        <select
+          className="rounded border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-xs"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+        >
+          {PAGE_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canPrev || loading}
+          onClick={() => setPage((p) => Math.max(1, p - 1))}
+        >
+          Previous
+        </button>
+        <button
+          type="button"
+          className="rounded border border-kk-dark-input-border px-2 py-1 disabled:opacity-50"
+          disabled={!canNext || loading}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex-1 flex gap-4">
-      <div className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${
-        hasPeek ? "h-screen overflow-hidden" : ""}`}>
-        <ListPageHeader 
-          icon = {<span className="text-lg">👥</span>}
-          section = "CRM"
-          title = "Contacts"
-          right = {
+      <div
+        className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${
+          hasPeek ? "h-screen overflow-hidden" : ""
+        }`}
+      >
+        <ListPageHeader
+          icon={<Users className="h-5 w-5" />}
+          section="CRM"
+          title="Contacts"
+          right={
             !hasPeek ? (
-              <div className="flex items-center gap-1 text-xs">
-                <FilterBar 
+              <div className="flex items-center gap-2 text-xs">
+                <div className="relative">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-kk-muted" />
+                  <input
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
+                    placeholder="Search name or email"
+                  />
+                </div>
+                <FilterBar
                   columns={filterColumns}
                   filters={filters}
-                  onChange={setFilters}
+                  onChange={(next) => {
+                    setFilters(next);
+                    setPage(1);
+                  }}
                 />
                 {can("Contacts", "create") && (
                   <button
-                    onClick={() => navigate("/crm/contacts/new")} 
+                    onClick={() => navigate("/crm/contacts/new")}
                     className="new inline-flex items-center gap-1 rounded-full"
                   >
                     <Plus className="h-3 w-3" />
@@ -116,11 +197,14 @@ export const ContactListPage: React.FC = () => {
                   </button>
                 )}
               </div>
-            ) : ""
+            ) : (
+              ""
+            )
           }
         />
 
-        {/* Table */}
+        {paginationControls}
+
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden"}>
           <table className="min-w-full">
             <thead>
@@ -131,7 +215,7 @@ export const ContactListPage: React.FC = () => {
                 >
                   Name{sortIndicator(sort, "name")}
                 </th>
-                {!hasPeek &&
+                {!hasPeek && (
                   <>
                     <th
                       className="cursor-pointer select-none"
@@ -152,43 +236,58 @@ export const ContactListPage: React.FC = () => {
                       Phone{sortIndicator(sort, "phone")}
                     </th>
                   </>
-                }
+                )}
               </tr>
             </thead>
             <tbody>
               {sortedContacts.map((c) => (
-                <tr
-                  key={c.id}
-                  className="cursor-pointer"
-                  onClick={() => openPeek(c)}
-                >
+                <tr key={c.id} className="cursor-pointer" onClick={() => openPeek(c)}>
                   <td>
-                    <p>{c.first_name} {c.last_name}</p>
+                    <p>
+                      {c.first_name} {c.last_name}
+                    </p>
                   </td>
-                  {!hasPeek && 
+                  {!hasPeek && (
                     <>
                       <td>{c.company_name}</td>
                       <td>{c.email}</td>
-                      <td>{c.phone_1_code_code}{c.phone_1}</td>
+                      <td>
+                        {c.phone_1_code_code}
+                        {c.phone_1}
+                      </td>
                     </>
-                  }
+                  )}
                 </tr>
               ))}
-              {!contacts.length && (
+
+              {loading && (
                 <tr>
                   <td
-                    colSpan={4}
+                    colSpan={hasPeek ? 1 : 4}
+                    className="px-3 py-6 text-center text-xs text-kk-dark-text-muted"
+                  >
+                    Loading contacts...
+                  </td>
+                </tr>
+              )}
+
+              {!loading && !contacts.length && (
+                <tr>
+                  <td
+                    colSpan={hasPeek ? 1 : 4}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
-                    No Contacts yet. Click "New" to create your first one
+                    No contacts yet. Click "New" to create your first one.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        {paginationControls}
       </div>
-      { selectedId && (
+      {selectedId && (
         <SidePeek
           isOpen={hasPeek}
           onClose={closePeek}
