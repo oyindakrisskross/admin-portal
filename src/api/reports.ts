@@ -1,9 +1,10 @@
 // src/api/reports.ts
 
-import type { GroupResponse, OverviewResponse, ReportResponse } from "../types/reports";
+import type { GroupResponse, OverviewResponse, ReportResponse, InvoiceAdvancedFilters } from "../types/reports";
 import type { CouponDetailReportResponse, CouponReportResponse } from "../types/reports";
 import type { CategoriesReportResponse } from "../types/reports";
 import type { DailyReportRunResponse, DailyReportSettings } from "../types/dailyReports";
+import type { MonthlyReportRunResponse, MonthlyReportSettings } from "../types/monthlyReports";
 import api from "./client";
 
 export interface PaginatedResult<T> {
@@ -44,6 +45,8 @@ export async function fetchProductsReport(args: {
   locationIds?: number[];
   itemsMode?: "parents" | "all";
   granularity?: "hour" | "day" | "week" | "month";
+  itemIds?: number[];
+  seriesByItem?: boolean;
   search?: string;
   sort?: "items_sold" | "net_sales" | "orders" | "name";
   order?: "asc" | "desc";
@@ -56,6 +59,8 @@ export async function fetchProductsReport(args: {
   q.set("items_mode", args.itemsMode ?? "parents");
   if (args.granularity) q.set("granularity", args.granularity);
   if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
+  if (args.itemIds?.length) q.set("item_ids", args.itemIds.join(","));
+  if (args.seriesByItem) q.set("series_by_item", "1");
   if (args.search) q.set("search", args.search);
   if (args.sort) q.set("sort", args.sort);
   if (args.order) q.set("order", args.order);
@@ -104,6 +109,7 @@ export async function fetchInvoicesReport(args: {
   order?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  advancedFilters?: InvoiceAdvancedFilters;
 }) {
   const q = new URLSearchParams();
   q.set("start", args.start);
@@ -115,6 +121,7 @@ export async function fetchInvoicesReport(args: {
   if (args.order) q.set("order", args.order);
   q.set("limit", String(args.limit ?? 25));
   q.set("offset", String(args.offset ?? 0));
+  if (args.advancedFilters) q.set("advanced_filters", JSON.stringify(args.advancedFilters));
 
   const res = await api.get<ReportResponse>(`/api/sales/reports/invoices/?${q.toString()}`);
   return res.data;
@@ -233,5 +240,25 @@ export async function runDailyReports(args: {
   location_ids?: number[];
 }): Promise<DailyReportRunResponse> {
   const res = await api.post<DailyReportRunResponse>("/api/sales/reports/daily/run/", args);
+  return res.data;
+}
+
+export async function fetchMonthlyReportSettings(): Promise<MonthlyReportSettings> {
+  const res = await api.get<MonthlyReportSettings>("/api/sales/reports/monthly/settings/");
+  return res.data;
+}
+
+export async function updateMonthlyReportSettings(
+  patch: Partial<MonthlyReportSettings>
+): Promise<MonthlyReportSettings> {
+  const res = await api.put<MonthlyReportSettings>("/api/sales/reports/monthly/settings/", patch);
+  return res.data;
+}
+
+export async function runMonthlyReports(args: {
+  month: string; // YYYY-MM
+  location_ids?: number[];
+}): Promise<MonthlyReportRunResponse> {
+  const res = await api.post<MonthlyReportRunResponse>("/api/sales/reports/monthly/run/", args);
   return res.data;
 }

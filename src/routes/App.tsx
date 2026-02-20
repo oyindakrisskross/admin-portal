@@ -22,6 +22,7 @@ import { UnitListPage } from "../screens/settings/unit/UnitListPage";
 import UnitFormPage from "../screens/settings/unit/UnitFormPage";
 import OrgFormPage from "../screens/settings/OrgFormPage";
 import DailyReportsSettingsPage from "../screens/settings/DailyReportsSettingsPage";
+import MonthlyReportsSettingsPage from "../screens/settings/MonthlyReportsSettingsPage";
 import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
 import RoleFormPage from "../screens/settings/access-control/RoleFormPage";
 import { PermCategoryListPage } from "../screens/settings/access-control/PermCategoryListPage";
@@ -33,6 +34,14 @@ import UserFormPage from "../screens/crm/user/UserFormPage";
 import type { PermissionBitSet } from "../types/accounts";
 import type { JSX } from "react";
 import ReportsOverviewPage from "../screens/reports/ReportsOverviewPage";
+import { EmployeeListPage } from "../screens/ems/employee/EmployeeListPage";
+import EmployeeFormPage from "../screens/ems/employee/EmployeeFormPage";
+import EmployeeDetailPage from "../screens/ems/employee/EmployeeDetailPage";
+import { DepartmentListPage } from "../screens/ems/department/DepartmentListPage";
+import DepartmentFormPage from "../screens/ems/department/DepartmentFormPage";
+import { JobPositionListPage } from "../screens/ems/position/JobPositionListPage";
+import JobPositionFormPage from "../screens/ems/position/JobPositionFormPage";
+import { ScheduleBoardPage } from "../screens/ems/schedule/ScheduleBoardPage";
 import ProductsReportPage from "../screens/reports/products/ProductsReportPage";
 import ProductGroupReportPage from "../screens/reports/products/ProductGroupReportPage";
 import VariationsReportPage from "../screens/reports/VariationsReportPage";
@@ -415,6 +424,96 @@ export default function App() {
           }
         />
 
+        {/* EMS */}
+        <Route
+          path="ems/employees"
+          element={
+            <RequirePerm perm="Employee" action="view">
+              <EmployeeListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/employees/new"
+          element={
+            <RequirePerm perm="Employee" action="create">
+              <EmployeeFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/employees/:id/edit"
+          element={
+            <RequirePerm perm="Employee" action="edit">
+              <EmployeeFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/employees/:id"
+          element={
+            <RequirePerm perm="Employee" action="view">
+              <EmployeeDetailPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/departments"
+          element={
+            <RequirePerm perm="Employee" action="view">
+              <DepartmentListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/departments/new"
+          element={
+            <RequirePerm perm="Employee" action="create">
+              <DepartmentFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/departments/:id/edit"
+          element={
+            <RequirePerm perm="Employee" action="edit">
+              <DepartmentFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/positions"
+          element={
+            <RequirePerm perm="Employee" action="view">
+              <JobPositionListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/positions/new"
+          element={
+            <RequirePerm perm="Employee" action="create">
+              <JobPositionFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/positions/:id/edit"
+          element={
+            <RequirePerm perm="Employee" action="edit">
+              <JobPositionFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="ems/schedule"
+          element={
+            <RequirePerm perm="Employee" action="view">
+              <ScheduleBoardPage />
+            </RequirePerm>
+          }
+        />
+
         {/* Settings */}
         <Route path="settings" element={<SettingsShell />}>
 
@@ -486,6 +585,14 @@ export default function App() {
             element={
               <RequirePerm perm="Reports" action="edit">
                 <DailyReportsSettingsPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="reports/monthly"
+            element={
+              <RequirePerm perm="Reports" action="edit">
+                <MonthlyReportsSettingsPage />
               </RequirePerm>
             }
           />

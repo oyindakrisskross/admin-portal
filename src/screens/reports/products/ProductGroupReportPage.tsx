@@ -2,13 +2,14 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { formatMoneyNGN, formatNumber, isoToLabel, toYMD } from "../../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel } from "../../../helpers";
 import type { GroupResponse } from "../../../types/reports";
 import { fetchGroupReport } from "../../../api/reports";
 import { ChartCard } from "../../../components/reports/ChartCard";
 import { KpiCard } from "../../../components/reports/KpiCard";
 import { fetchOutlets } from "../../../api/location";
 import type { Outlet } from "../../../types/location";
+import { useReportDateRange } from "../../../hooks/useReportDateRange";
 
 
 export default function ProductGroupReportPage() {
@@ -19,8 +20,17 @@ export default function ProductGroupReportPage() {
   const [sp, setSp] = useSearchParams();
 
   // take from query string if present (so clicking from Products page preserves range)
-  const [start, setStart] = useState(() => sp.get("start") ?? toYMD(new Date()));
-  const [end, setEnd] = useState(() => sp.get("end") ?? toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange({
+    start: sp.get("start") ?? undefined,
+    end: sp.get("end") ?? undefined,
+  });
+
+  useEffect(() => {
+    const next = new URLSearchParams(sp);
+    next.set("start", start);
+    next.set("end", end);
+    setSp(next, { replace: true });
+  }, [end, setSp, sp, start]);
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 

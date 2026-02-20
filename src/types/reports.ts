@@ -2,6 +2,25 @@
 
 export interface SeriesPoint { t: string; v: string | number };
 
+export type InvoiceFilterMatch = "all" | "any";
+export type InvoiceFilterType = "coupon" | "product" | "variation" | "refund" | "status";
+export type InvoiceFilterMode = "include" | "exclude" | "is" | "is_not";
+export type InvoiceRefundFilter = "all" | "none" | "partial" | "full";
+
+export interface InvoiceFilterClause {
+  type: InvoiceFilterType;
+  mode?: InvoiceFilterMode;
+  values?: string[];
+  item_ids?: number[];
+  group_ids?: number[];
+  refund?: InvoiceRefundFilter;
+}
+
+export interface InvoiceAdvancedFilters {
+  match: InvoiceFilterMatch;
+  clauses: InvoiceFilterClause[];
+}
+
 export type Granularity = "hour" | "day" | "week" | "month";
 
 export interface OverviewResponse {
@@ -74,6 +93,12 @@ export interface ReportResponse {
     net_sales: SeriesPoint[];
     net_discount: SeriesPoint[];
     orders: SeriesPoint[];
+  };
+  series_by_item?: {
+    items_sold: Record<string, SeriesPoint[]>;
+    net_sales: Record<string, SeriesPoint[]>;
+    net_discount: Record<string, SeriesPoint[]>;
+    orders: Record<string, SeriesPoint[]>;
   };
   pagination: { total: number; limit: number; offset: number };
   results: ResponseRow[];

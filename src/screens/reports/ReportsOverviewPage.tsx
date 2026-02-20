@@ -5,15 +5,14 @@ import { fetchOverviewReport } from "../../api/reports";
 import { type Granularity, type OverviewResponse } from "../../types/reports";
 import { fetchOutlets } from "../../api/location";
 import { type Outlet } from "../../types/location";
-import { formatMoneyNGN, formatNumber, isoToLabel, toYMD } from "../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel } from "../../helpers";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
+import { useReportDateRange } from "../../hooks/useReportDateRange";
 
 
 export default function ReportsOverviewPage() {
-  const today = useMemo(() => new Date(), []);
-  const [start, setStart] = useState<string>(toYMD(today));
-  const [end, setEnd] = useState<string>(toYMD(today));
+  const { start, end, setStart, setEnd } = useReportDateRange();
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);

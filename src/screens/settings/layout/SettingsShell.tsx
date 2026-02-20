@@ -33,6 +33,11 @@ const settingsLinks = [
     perm: "Reports",
   },
   {
+    to: "reports/monthly",
+    label: "Monthly Reports",
+    perm: "Reports",
+  },
+  {
     to: "locations",
     label: "Locations",
     perm: "Locations",

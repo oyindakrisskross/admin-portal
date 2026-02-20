@@ -12,7 +12,7 @@ const DetailField: React.FC<DetailFieldProps> = ({ label, children, value }) => 
       <div className="text-[11px] uppercase tracking-wide text-kk-muted">
         {label}
       </div>
-      <div className="text-sm text-gray-100">
+      <div className="text-sm text-kk-dark-text">
         {children ?? value ?? <span className="text-kk-muted">Empty</span>}
       </div>
     </div>

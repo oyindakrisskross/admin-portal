@@ -1,4 +1,4 @@
-import { Outlet, NavLink } from "react-router-dom";
+import { Outlet, NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
 import { getStoredTheme, setStoredTheme, themeScopeForUser, type Theme } from "../../utils/theme";
@@ -11,9 +11,11 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { clearReportDateRange } from "../../hooks/useReportDateRange";
 import {
   ChartNoAxesCombined,
   Contact,
+  Users,
   ShoppingBag,
   ShoppingCart,
   TicketPercent,
@@ -76,6 +78,16 @@ const portalLinks = [
     ],
   },
   {
+    label: "Employees",
+    icon: <Users className="h-5 w-5" />,
+    children: [
+      { to: "/ems/employees", label: "Directory", perm: "Employee" },
+      { to: "/ems/departments", label: "Departments", perm: "Employee" },
+      { to: "/ems/positions", label: "Job Positions", perm: "Employee" },
+      { to: "/ems/schedule", label: "Schedule Board", perm: "Employee" },
+    ],
+  },
+  {
     label: "Reports",
     icon: <ChartNoAxesCombined className="h-5 w-5" />,
     children: [
@@ -93,6 +105,7 @@ const portalLinks = [
 function ShellInner() {
   const { me, logout, can } = useAuth();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const location = useLocation();
   const themeScope = me ? themeScopeForUser({ id: me.id, portal: me.portal }) : undefined;
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme(themeScope));
 
@@ -104,6 +117,12 @@ function ShellInner() {
     const next = getStoredTheme(themeScopeForUser({ id: me.id, portal: me.portal }));
     setTheme(next);
   }, [me?.id, me?.portal]);
+
+  useEffect(() => {
+    if (!location.pathname.startsWith("/reports")) {
+      clearReportDateRange();
+    }
+  }, [location.pathname]);
 
   const toggleTheme = () => {
     const next: Theme = theme === "dark" ? "light" : "dark";

@@ -20,7 +20,8 @@ import type { CategoriesReportResponse, Granularity } from "../../types/reports"
 import { fetchCategoriesReport } from "../../api/reports";
 import { fetchOutlets } from "../../api/location";
 import type { Outlet } from "../../types/location";
-import { formatMoneyNGN, formatNumber, isoToLabel, toYMD } from "../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel } from "../../helpers";
+import { useReportDateRange } from "../../hooks/useReportDateRange";
 
 const COLORS = [
   "#8b5cf6", // purple
@@ -37,8 +38,7 @@ const COLORS = [
 
 export default function CategoriesReportPage() {
   const nav = useNavigate();
-  const [start, setStart] = useState(() => toYMD(new Date()));
-  const [end, setEnd] = useState(() => toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange();
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
   const [groupBy, setGroupBy] = useState<"top_level" | "all">("top_level");

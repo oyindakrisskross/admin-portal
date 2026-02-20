@@ -15,6 +15,12 @@ The admin portal does not send a `portal_id` on login/password-reset. The backen
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
+## EMS (Employee Management System)
+
+- Apply backend `ems` migrations and seed lookup values before using the EMS UI.
+- Grant the `Employee` permission (view/create/edit/delete/approve) to the roles that should access EMS.
+- EMS pages live under `/ems/*` in the admin portal (Directory, Departments, Positions, Schedule Board, and employee detail tabs).
+
 ## Expanding the ESLint configuration
 
 If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:

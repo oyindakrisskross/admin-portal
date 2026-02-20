@@ -7,7 +7,8 @@ import { fetchCouponDetailReport } from "../../../api/reports";
 import { fetchOutlets } from "../../../api/location";
 import { KpiCard } from "../../../components/reports/KpiCard";
 import { ChartCard } from "../../../components/reports/ChartCard";
-import { formatMoneyNGN, formatNumber, isoToLabel, toDateStrShort, toYMD } from "../../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel, toDateStrShort } from "../../../helpers";
+import { useReportDateRange } from "../../../hooks/useReportDateRange";
 
 export default function CouponDetailReportPage() {
   const nav = useNavigate();
@@ -15,8 +16,17 @@ export default function CouponDetailReportPage() {
   const couponCode = String(code || "").trim();
 
   const [sp, setSp] = useSearchParams();
-  const [start, setStart] = useState(() => sp.get("start") ?? toYMD(new Date()));
-  const [end, setEnd] = useState(() => sp.get("end") ?? toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange({
+    start: sp.get("start") ?? undefined,
+    end: sp.get("end") ?? undefined,
+  });
+
+  useEffect(() => {
+    const next = new URLSearchParams(sp);
+    next.set("start", start);
+    next.set("end", end);
+    setSp(next, { replace: true });
+  }, [end, setSp, sp, start]);
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");

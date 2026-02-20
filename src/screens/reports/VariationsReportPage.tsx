@@ -2,18 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Granularity, ReportResponse } from "../../types/reports";
-import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, isoToLabel, makeFilename, toYMD } from "../../helpers";
+import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, isoToLabel, makeFilename } from "../../helpers";
 import { fetchVariationsReport } from "../../api/reports";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
 import { fetchOutlets } from "../../api/location";
 import type { Outlet } from "../../types/location";
 import { CloudDownload } from "lucide-react";
+import { useReportDateRange } from "../../hooks/useReportDateRange";
 
 export default function VariationsReportPage() {
 
-  const [start, setStart] = useState(() => toYMD(new Date()));
-  const [end, setEnd] = useState(() => toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange();
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 

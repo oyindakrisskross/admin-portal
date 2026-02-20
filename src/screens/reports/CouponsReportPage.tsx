@@ -7,13 +7,13 @@ import { fetchCouponsReport } from "../../api/reports";
 import { fetchOutlets } from "../../api/location";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { formatMoneyNGN, formatNumber, isoToLabel, toYMD } from "../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel } from "../../helpers";
+import { useReportDateRange } from "../../hooks/useReportDateRange";
 
 export default function CouponsReportPage() {
   const navigate = useNavigate();
 
-  const [start, setStart] = useState(() => toYMD(new Date()));
-  const [end, setEnd] = useState(() => toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange();
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");

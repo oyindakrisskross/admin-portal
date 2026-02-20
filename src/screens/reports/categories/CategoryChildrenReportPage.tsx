@@ -20,7 +20,8 @@ import { fetchCategoriesReport } from "../../../api/reports";
 import { fetchOutlets } from "../../../api/location";
 import type { CategoriesReportResponse, Granularity } from "../../../types/reports";
 import type { Outlet } from "../../../types/location";
-import { formatMoneyNGN, formatNumber, isoToLabel, toYMD } from "../../../helpers";
+import { formatMoneyNGN, formatNumber, isoToLabel } from "../../../helpers";
+import { useReportDateRange } from "../../../hooks/useReportDateRange";
 
 const COLORS = [
   "#8b5cf6", // purple
@@ -41,8 +42,17 @@ export default function CategoryChildrenReportPage() {
   const parentCategoryId = Number(categoryId);
 
   const [sp, setSp] = useSearchParams();
-  const [start, setStart] = useState(() => sp.get("start") ?? toYMD(new Date()));
-  const [end, setEnd] = useState(() => sp.get("end") ?? toYMD(new Date()));
+  const { start, end, setStart, setEnd } = useReportDateRange({
+    start: sp.get("start") ?? undefined,
+    end: sp.get("end") ?? undefined,
+  });
+
+  useEffect(() => {
+    const next = new URLSearchParams(sp);
+    next.set("start", start);
+    next.set("end", end);
+    setSp(next, { replace: true });
+  }, [end, setSp, sp, start]);
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -393,4 +403,3 @@ export default function CategoryChildrenReportPage() {
     </div>
   );
 }
-
