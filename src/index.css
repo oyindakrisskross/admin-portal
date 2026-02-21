@@ -295,9 +295,8 @@ input[type="daatetime-local"]::-webkit-calendar-picker-indicator {
   height: 1.08em;
   width: 0.68em;
   overflow: hidden;
-  border-radius: 0.16em;
-  border: 1px solid color-mix(in srgb, var(--color-kk-dark-border) 90%, transparent 10%);
-  background: color-mix(in srgb, var(--color-kk-dark-bg-elevated) 88%, #000 12%);
+  border: 0;
+  background: transparent;
 }
 
 .kk-slot-reel-strip {
