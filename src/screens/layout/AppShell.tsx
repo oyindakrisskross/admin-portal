@@ -51,6 +51,7 @@ const portalLinks = [
     children: [
       { to: "/catalog/item-groups", label: "Item Groups", perm: "Item" },
       { to: "/catalog/items", label: "Items", perm: "Item" },
+      { to: "/catalog/plans", label: "Plans", perm: "Subscriptions" },
       { to: "/catalog/categories", label: "Categories", perm: "Category"},
       { to: "/catalog/transfer-inventory", label: "Transfer Orders", perm: "Transfer Orders" },
     ],

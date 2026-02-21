@@ -17,6 +17,7 @@ import { fetchOutlets } from "../../../api/location";
 import { CloudDownload, X } from "lucide-react";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../../hooks/useReportAutoRefresh";
 
 const COMPARISON_COLORS = [
   "#38bdf8",
@@ -37,6 +38,7 @@ export default function ProductsReportPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -166,6 +168,7 @@ export default function ProductsReportPage() {
     comparisonItems,
     compareRange?.start,
     compareRange?.end,
+    refreshTick,
   ]);
 
   useEffect(() => {

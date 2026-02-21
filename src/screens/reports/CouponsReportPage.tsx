@@ -12,6 +12,7 @@ import { buildComparisonChartData, buildCompareSub } from "../../components/repo
 import { formatMoneyNGN, formatNumber } from "../../helpers";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
 export default function CouponsReportPage() {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ export default function CouponsReportPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
@@ -86,7 +88,7 @@ export default function CouponsReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end]);
+  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => setOutlets([]));

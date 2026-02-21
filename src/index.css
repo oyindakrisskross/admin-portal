@@ -260,3 +260,98 @@ input[type="daatetime-local"]::-webkit-calendar-picker-indicator {
 :root[data-theme="light"] ::-webkit-scrollbar-thumb {
   background-color: rgba(17, 24, 39, 0.18);
 }
+
+/* KPI slot-reel value animation */
+.kk-slot-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.03em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.kk-slot-char {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.08em;
+}
+
+.kk-slot-char-digit {
+  min-width: 0.68em;
+}
+
+.kk-slot-char-symbol {
+  min-width: 0.34em;
+}
+
+.kk-slot-char-reel {
+  min-width: 0.68em;
+}
+
+.kk-slot-reel-window {
+  position: relative;
+  display: block;
+  height: 1.08em;
+  width: 0.68em;
+  overflow: hidden;
+  border-radius: 0.16em;
+  border: 1px solid color-mix(in srgb, var(--color-kk-dark-border) 90%, transparent 10%);
+  background: color-mix(in srgb, var(--color-kk-dark-bg-elevated) 88%, #000 12%);
+}
+
+.kk-slot-reel-strip {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(0);
+  will-change: transform, filter, opacity;
+}
+
+.kk-slot-reel-digit {
+  display: block;
+  height: 1.08em;
+  line-height: 1.08em;
+  text-align: center;
+}
+
+.kk-slot-reel-strip-spinning {
+  animation:
+    kk-slot-spin var(--kk-slot-duration, 760ms) cubic-bezier(0.2, 0.75, 0.2, 1) var(--kk-slot-delay, 0ms) forwards,
+    kk-slot-blur var(--kk-slot-duration, 760ms) ease-in-out var(--kk-slot-delay, 0ms) forwards;
+}
+
+@keyframes kk-slot-spin {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(var(--kk-slot-steps, 0) * -1.08em));
+  }
+}
+
+@keyframes kk-slot-blur {
+  0% {
+    filter: blur(0px);
+    opacity: 1;
+  }
+  18% {
+    filter: blur(1.6px);
+    opacity: 0.9;
+  }
+  62% {
+    filter: blur(1.9px);
+    opacity: 0.9;
+  }
+  100% {
+    filter: blur(0px);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kk-slot-reel-strip-spinning {
+    animation: none;
+    transform: translateY(calc(var(--kk-slot-steps, 0) * -1.08em));
+    filter: none;
+  }
+}

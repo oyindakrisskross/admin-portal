@@ -17,6 +17,7 @@ import { CloudDownload, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
 type InvoiceFilterType = "coupon" | "product" | "variation" | "refund" | "status";
 type InvoiceFilterMode = "include" | "exclude" | "is" | "is_not";
@@ -55,6 +56,7 @@ export default function InvoicesReportPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
@@ -236,7 +238,7 @@ export default function InvoicesReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, advancedFilters, compareRange?.start, compareRange?.end]);
+  }, [start, end, locationIds, search, sort, order, limit, offset, granularity, advancedFilters, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {

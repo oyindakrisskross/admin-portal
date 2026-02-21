@@ -26,6 +26,7 @@ import { ComparePeriodControls } from "../../../components/reports/ComparePeriod
 import { buildCompareSub } from "../../../components/reports/periodCompare";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../../hooks/useReportAutoRefresh";
 
 const COLORS = [
   "#8b5cf6", // purple
@@ -52,6 +53,7 @@ export default function CategoryChildrenReportPage() {
   });
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   useEffect(() => {
     const next = new URLSearchParams(sp);
@@ -131,7 +133,7 @@ export default function CategoryChildrenReportPage() {
     return () => {
       alive = false;
     };
-  }, [parentCategoryId, start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end]);
+  }, [parentCategoryId, start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   const gran = data?.range.granularity ?? granularity ?? "day";
   const categories = data?.categories ?? [];

@@ -13,6 +13,7 @@ import { fetchOutlets } from "../../../api/location";
 import type { Outlet } from "../../../types/location";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../../hooks/useReportAutoRefresh";
 
 
 export default function ProductGroupReportPage() {
@@ -29,6 +30,7 @@ export default function ProductGroupReportPage() {
   });
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   useEffect(() => {
     const next = new URLSearchParams(sp);
@@ -101,7 +103,7 @@ export default function ProductGroupReportPage() {
     return () => {
       alive = false;
     };
-  }, [gid, start, end, locationIds, itemsMode, granularity, compareRange?.start, compareRange?.end]);
+  }, [gid, start, end, locationIds, itemsMode, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {

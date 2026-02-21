@@ -13,12 +13,14 @@ import type { Outlet } from "../../types/location";
 import { CloudDownload } from "lucide-react";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
 export default function VariationsReportPage() {
 
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -92,7 +94,7 @@ export default function VariationsReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, locationIds, itemsMode, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end]);
+  }, [start, end, locationIds, itemsMode, search, sort, order, limit, offset, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {

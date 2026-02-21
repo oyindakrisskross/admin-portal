@@ -51,6 +51,8 @@ import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
 import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
 import { InventoryTransferListPage } from "../screens/catalog/inventoryTransfer/InventoryTransferListPage";
 import { InventoryTransferFormPage } from "../screens/catalog/inventoryTransfer/InventoryTransferFormPage";
+import { PlansListPage } from "../screens/catalog/plan/PlansListPage";
+import PlanFormPage from "../screens/catalog/plan/PlanFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
 import InvoiceRefundPage from "../screens/sales/invoice/InvoiceRefundPage";
 import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
@@ -274,6 +276,32 @@ export default function App() {
           element={
             <RequirePerm perm="Inventory Adjustment" action="edit">
               <ItemInvAdjust />
+            </RequirePerm>
+          }
+        />
+
+        {/* Catalog: Subscription Plans */}
+        <Route
+          path="catalog/plans"
+          element={
+            <RequirePerm perm="Subscriptions" action="view">
+              <PlansListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/plans/new"
+          element={
+            <RequirePerm perm="Subscriptions" action="create">
+              <PlanFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/plans/:id/edit"
+          element={
+            <RequirePerm perm="Subscriptions" action="edit">
+              <PlanFormPage />
             </RequirePerm>
           }
         />

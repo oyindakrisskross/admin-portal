@@ -12,11 +12,13 @@ import { ComparePeriodControls } from "../../components/reports/ComparePeriodCon
 import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
+import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
 export default function ReportsOverviewPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
     useComparePeriod({ start, end });
+  const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -75,7 +77,7 @@ export default function ReportsOverviewPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end]);
+  }, [start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
