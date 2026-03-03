@@ -140,9 +140,13 @@ export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
   }, [tab, productId, plan.id]);
 
   const billingCyclesText = useMemo(() => {
+    if (activePlan.plan_type === "USAGE") {
+      if (activePlan.billing_cycles_mode === "AUTO_RENEW") return "No expiry (ends when included uses are exhausted)";
+      return activePlan.billing_cycles ? `Expires after ${activePlan.billing_cycles} interval(s)` : "-";
+    }
     if (activePlan.billing_cycles_mode === "AUTO_RENEW") return "Auto-renews until canceled";
     return activePlan.billing_cycles ? `Expires after ${activePlan.billing_cycles} billing cycle(s)` : "-";
-  }, [activePlan.billing_cycles, activePlan.billing_cycles_mode]);
+  }, [activePlan.billing_cycles, activePlan.billing_cycles_mode, activePlan.plan_type]);
 
   return (
     <div className="flex h-full flex-col gap-7 p-5 pb-7">
@@ -180,6 +184,18 @@ export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
             <p className="col-span-2 text-kk-dark-text-muted">Status</p>
             <p className="col-span-8">{statusBadge(activePlan.status)}</p>
           </div>
+          <div className="grid grid-cols-10">
+            <p className="col-span-2 text-kk-dark-text-muted">Plan Type</p>
+            <p className="col-span-8">
+              {activePlan.plan_type === "USAGE" ? "Usage-based (Bundle Card)" : "Cycle-based"}
+            </p>
+          </div>
+          {activePlan.plan_type === "USAGE" ? (
+            <div className="grid grid-cols-10">
+              <p className="col-span-2 text-kk-dark-text-muted">Included Uses</p>
+              <p className="col-span-8">{activePlan.included_uses ?? "-"}</p>
+            </div>
+          ) : null}
           <div className="grid grid-cols-10">
             <p className="col-span-2 text-kk-dark-text-muted">Billing Frequency</p>
             <p className="col-span-8">

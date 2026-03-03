@@ -27,6 +27,10 @@ export type ActionDraft = {
     repeat: boolean;
     apply_cheapest: boolean;
   };
+  redeemFreeItems: {
+    item_ids: number[];
+    qty: number;
+  };
 };
 
 type Props = {
@@ -76,6 +80,14 @@ export function CouponActionEditor({ value, onChange, itemOptions, categoryOptio
     if (dt === "PERCENT") return `Buy ${bq} get ${gq} (${value.bxgy.discount_value || "0"}% off)`;
     return `Buy ${bq} get ${gq} (${value.bxgy.discount_value || "0"} off)`;
   }, [selected, value.bxgy]);
+
+  const redeemSummary = useMemo(() => {
+    if (selected !== "REDEEM_FREE_ITEMS") return "";
+    const qty = Number(value.redeemFreeItems.qty || 1);
+    const count = value.redeemFreeItems.item_ids.length;
+    if (!count) return "";
+    return `${count} item(s), ${qty} free each`;
+  }, [selected, value.redeemFreeItems]);
 
   return (
     <section className="flex gap-6 py-7">
@@ -774,6 +786,60 @@ export function CouponActionEditor({ value, onChange, itemOptions, categoryOptio
               <div className="mt-1 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs">
                 <span className="text-kk-dark-text-muted mr-2">Action Summary</span>
                 <span className="text-kk-dark-text font-medium">{bxgySummary}</span>
+              </div>
+            )}
+          </>
+        )}
+
+        {selected === "REDEEM_FREE_ITEMS" && (
+          <>
+            <div className="text-xs text-kk-dark-text-muted">
+              Adds selected products to the cart as free bonus items when this coupon is applied.
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Free Products</p>
+              <div className="col-span-5">
+                <SearchMultiSelectDropdown
+                  options={itemOptions}
+                  selectedIds={value.redeemFreeItems.item_ids}
+                  onChange={(ids) =>
+                    onChange({
+                      ...value,
+                      redeemFreeItems: { ...value.redeemFreeItems, item_ids: ids },
+                    })
+                  }
+                  placeholder="Select products..."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Qty Per Product</p>
+              <input
+                type="number"
+                min={1}
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
+                value={value.redeemFreeItems.qty}
+                onChange={(e) =>
+                  onChange({
+                    ...value,
+                    redeemFreeItems: {
+                      ...value.redeemFreeItems,
+                      qty: Number(e.target.value || 1),
+                    },
+                  })
+                }
+              />
+              <span className="text-xs text-kk-dark-text-muted col-span-3">
+                Each selected product will be added this many times.
+              </span>
+            </div>
+
+            {redeemSummary && (
+              <div className="mt-1 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs">
+                <span className="text-kk-dark-text-muted mr-2">Action Summary</span>
+                <span className="text-kk-dark-text font-medium">{redeemSummary}</span>
               </div>
             )}
           </>

@@ -39,6 +39,11 @@ const EMPTY: Coupon = {
   code: "",
   active: true,
   auto_apply: true,
+  allow_combine: false,
+  max_uses: 0,
+  use_count: 0,
+  available_online: false,
+  auto_apply_online: false,
   description: "",
   start_at: undefined,
   end_at: undefined,
@@ -252,6 +257,14 @@ function actionDraftFromCoupon(c: Coupon): ActionDraft {
       discount_scope,
     },
     bxgy,
+    redeemFreeItems: {
+      item_ids: Array.isArray(cfg.items)
+        ? cfg.items
+            .map((id: any) => Number(id))
+            .filter((id: number) => Number.isFinite(id))
+        : [],
+      qty: Number(cfg.qty ?? 1) || 1,
+    },
   };
 }
 
@@ -392,13 +405,27 @@ function buildActionConfig(draft: ActionDraft): { config: any; error?: string } 
     };
   }
 
+  if (draft.action_type === "REDEEM_FREE_ITEMS") {
+    if (!draft.redeemFreeItems.item_ids.length) {
+      return { config: null, error: "Select at least one free product." };
+    }
+    const qty = Number(draft.redeemFreeItems.qty || 1);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return { config: null, error: "Quantity per free product must be greater than 0." };
+    }
+    return { config: { items: draft.redeemFreeItems.item_ids, qty } };
+  }
+
   return { config: {} };
 }
 
 export const CouponForm: React.FC<Props> = ({ initial }) => {
   const navigate = useNavigate();
 
-  const [coupon, setCoupon] = useState<Coupon>(initial ?? EMPTY);
+  const [coupon, setCoupon] = useState<Coupon>(() => ({
+    ...EMPTY,
+    ...(initial ?? {}),
+  }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -555,12 +582,17 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
 
   const handleSave = async () => {
     const name = coupon.name.trim();
+    const requiresCodeForOnline = Boolean(coupon.available_online) && !Boolean(coupon.auto_apply_online);
     if (!name) return setError("Coupon name is required.");
-    if (!coupon.auto_apply && !coupon.code?.trim()) {
-      return setError("Coupon code is required when Auto Apply is off.");
+    if ((!coupon.auto_apply || requiresCodeForOnline) && !coupon.code?.trim()) {
+      return setError("Coupon code is required when POS or Online Auto Apply is off.");
     }
     if (!coupon.apply_all_locations && !(coupon.locations ?? []).length) {
       return setError("Select at least one location, or enable Apply to all locations.");
+    }
+    const maxUses = Number(coupon.max_uses ?? 0);
+    if (!Number.isFinite(maxUses) || maxUses < 0) {
+      return setError("Usage limit must be 0 or more.");
     }
 
     const conditionError = validateConditions(conditionOp, conditions);
@@ -579,6 +611,10 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
       code: coupon.code?.trim() || null,
       active: Boolean(coupon.active),
       auto_apply: Boolean(coupon.auto_apply),
+      allow_combine: Boolean(coupon.allow_combine),
+      max_uses: Math.floor(Math.max(0, Number(coupon.max_uses ?? 0))),
+      available_online: Boolean(coupon.available_online),
+      auto_apply_online: Boolean(coupon.auto_apply_online),
       description: coupon.description || "",
       start_at: fromInputDateTime(toInputDateTime(coupon.start_at)),
       end_at: fromInputDateTime(toInputDateTime(coupon.end_at)),
@@ -663,7 +699,42 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
                   checked={coupon.auto_apply}
                   onChange={(e) => setCoupon((c) => ({ ...c, auto_apply: e.target.checked }))}
                 />
-                Auto Apply
+                POS Auto Apply
+              </label>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2">
+              <p>Online Store</p>
+              <label className="flex items-center gap-2 col-span-2 text-xs text-kk-dark-text-muted">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={coupon.available_online}
+                  onChange={(e) =>
+                    setCoupon((c) => ({
+                      ...c,
+                      available_online: e.target.checked,
+                      auto_apply_online: e.target.checked ? c.auto_apply_online : false,
+                    }))
+                  }
+                />
+                Available Online
+              </label>
+              <label className="flex items-center gap-2 col-span-2 text-xs text-kk-dark-text-muted">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={coupon.auto_apply_online}
+                  disabled={!coupon.available_online}
+                  onChange={(e) =>
+                    setCoupon((c) => ({
+                      ...c,
+                      available_online: e.target.checked ? true : c.available_online,
+                      auto_apply_online: e.target.checked,
+                    }))
+                  }
+                />
+                Online Auto Apply
               </label>
             </div>
 
@@ -677,6 +748,19 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
                   onChange={(e) => setCoupon((c) => ({ ...c, active: e.target.checked }))}
                 />
                 Active
+              </label>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2">
+              <p>Coupon Combination</p>
+              <label className="flex items-center gap-2 col-span-5 text-xs text-kk-dark-text-muted">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300"
+                  checked={Boolean(coupon.allow_combine)}
+                  onChange={(e) => setCoupon((c) => ({ ...c, allow_combine: e.target.checked }))}
+                />
+                Allow coupon to be combined with another
               </label>
             </div>
 
@@ -823,6 +907,27 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
                 Higher wins when savings are equal.
               </span>
             </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Usage Limit</p>
+              <input
+                type="number"
+                min={0}
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 col-span-2"
+                value={coupon.max_uses ?? 0}
+                onChange={(e) => setCoupon((c) => ({ ...c, max_uses: Number(e.target.value || 0) }))}
+              />
+              <span className="col-span-3 text-xs text-kk-dark-text-muted">
+                0 = unlimited. Coupon auto-disables after this many uses.
+              </span>
+            </div>
+
+            {typeof coupon.use_count === "number" && (
+              <div className="grid grid-cols-6 gap-2 items-center">
+                <p>Current Uses</p>
+                <span className="col-span-5 text-xs text-kk-dark-text-muted">{coupon.use_count}</span>
+              </div>
+            )}
           </div>
 
           <div className="w-1/3" />

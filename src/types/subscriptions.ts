@@ -65,10 +65,19 @@ export interface SubscriptionPlan {
   sales_tax_rule?: number | null;
   sales_tax_rule_name?: string;
   allow_plan_switch: boolean;
+  plan_type: PlanType;
+  included_uses?: number | null;
   status: SubscriptionStatus;
   created_on?: string;
   updated_on?: string;
 }
+
+export type PlanType = "CYCLE" | "USAGE";
+
+export const PLAN_TYPE_CHOICES: { value: PlanType; label: string }[] = [
+  { value: "CYCLE", label: "Cycle-based" },
+  { value: "USAGE", label: "Usage-based (Bundle Card)" },
+];
 
 export type AddonType = "ONE_TIME" | "RECURRING";
 
@@ -134,6 +143,41 @@ export interface SubscriptionPlanTransaction {
   status: PlanTransactionStatus;
   billed_on: string;
   created_on?: string;
+}
+
+export type CustomerSubscriptionStatus = "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
+
+export interface SubscriptionUsageHistoryEntry {
+  id: number;
+  visited_at: string;
+  entry_method: string;
+  location_id: number | null;
+  location_name: string | null;
+  pos_reference: string;
+}
+
+export interface CustomerSubscriptionRecord {
+  id: number;
+  customer: number;
+  customer_name: string;
+  customer_email: string;
+  plan: number;
+  plan_name: string;
+  plan_code: string;
+  plan_type: PlanType;
+  status: CustomerSubscriptionStatus;
+  started_at: string;
+  expires_at: string | null;
+  total_uses: number | null;
+  used_uses: number;
+  remaining_uses: number | null;
+  source_invoice: number | null;
+  source_invoice_number: string | null;
+  source_invoice_date?: string | null;
+  source_invoice_paid_at?: string | null;
+  usage_history?: SubscriptionUsageHistoryEntry[];
+  created_on: string;
+  updated_on: string;
 }
 
 export const PLAN_TRANSACTION_STATUS_CHOICES: { value: PlanTransactionStatus; label: string }[] = [

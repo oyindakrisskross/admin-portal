@@ -38,6 +38,7 @@ import {
   deleteItemCustomization,
   deleteItemAvailability,
   createItemAvailability,
+  updateItemAvailability,
   fetchCategories,
   deleteItemCategory,
   createItemCategory,
@@ -77,6 +78,7 @@ const EMPTY_ITEM: Item = {
   customizations: [],
   categories: [],
   availabilities: [],
+  is_visible_online: false,
 };
 
 type GalleryItemLocal = {
@@ -124,8 +126,22 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
         ...(prev.availabilities ?? []),
         {
           location: id,
+          is_visible_online: isVisibleOnline,
+          is_sellable_online: sellable,
         },
       ],
+    }));
+  };
+
+  const applyOnlineFlagsToAvailabilities = (
+    patch: Pick<ItemAvailability, "is_visible_online" | "is_sellable_online">
+  ) => {
+    setItem((prev) => ({
+      ...prev,
+      availabilities: (prev.availabilities ?? []).map((a) => ({
+        ...a,
+        ...patch,
+      })),
     }));
   };
 
@@ -179,6 +195,11 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   );
   const [trackInventory, setTrackInventory] = useState(
     initial?.inventory_tracking ?? false
+  );
+  const [isVisibleOnline, setIsVisibleOnline] = useState(
+    initial?.is_visible_online ??
+      initial?.availabilities?.some((a) => Boolean(a.is_visible_online)) ??
+      false
   );
 
   const [scheduled, setScheduled] = useState(
@@ -263,12 +284,25 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
       // Get snapshot of initial available locations
       if (initial?.availabilities && initial.availabilities.length) {
-        const mapped = initial.availabilities;
+        const mapped = initial.availabilities.map((availability) => ({
+          ...availability,
+          is_visible_online:
+            availability.is_visible_online ?? initial.is_visible_online ?? false,
+          is_sellable_online:
+            availability.is_sellable_online ?? initial.sellable ?? true,
+        }));
         setAvailableLocationIds(mapped.map((l) => l.location));
+        setItem((prev) => ({ ...prev, availabilities: mapped }));
         initialAvailabilityRef.current = mapped;
       } else {
         initialAvailabilityRef.current = [];
       }
+
+      setIsVisibleOnline(
+        initial.is_visible_online ??
+          initial.availabilities?.some((a) => Boolean(a.is_visible_online)) ??
+          false
+      );
 
       // Get snapshot of initial categories
       if (initial?.categories && initial.categories.length) {
@@ -373,6 +407,10 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
   const handleSellableChg = (event: React.ChangeEvent<HTMLInputElement>) => {
     const checked = event.target.checked;
     setSellable(checked);
+    applyOnlineFlagsToAvailabilities({
+      is_visible_online: isVisibleOnline,
+      is_sellable_online: checked,
+    });
 
     if (!checked) {
       setCustomized(false);
@@ -389,6 +427,15 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
     if (!checked) {
       handleChange({ cost: "0" });
     }
+  };
+
+  const handleVisibleOnlineChg = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = event.target.checked;
+    setIsVisibleOnline(checked);
+    applyOnlineFlagsToAvailabilities({
+      is_visible_online: checked,
+      is_sellable_online: sellable,
+    });
   };
 
   const toggleCategoryTree = (categoryId: number, checked: boolean) => {
@@ -834,7 +881,32 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
       if (!currentById.has(id)) deletions.push(id);
     }
 
-    // 2) Creates
+    // 2) Updates
+    const updates: Array<{
+      id: number;
+      patch: {
+        is_visible_online?: boolean;
+        is_sellable_online?: boolean;
+      };
+    }> = [];
+    for (const [id, orig] of originalById.entries()) {
+      const cur = currentById.get(id);
+      if (!cur) continue;
+      const patch: { is_visible_online?: boolean; is_sellable_online?: boolean } = {};
+      const origVisible = orig.is_visible_online ?? false;
+      const curVisible = cur.is_visible_online ?? false;
+      if (origVisible !== curVisible) patch.is_visible_online = curVisible;
+
+      const origSellable = orig.is_sellable_online ?? sellable;
+      const curSellable = cur.is_sellable_online ?? sellable;
+      if (origSellable !== curSellable) patch.is_sellable_online = curSellable;
+
+      if (Object.keys(patch).length) {
+        updates.push({ id, patch });
+      }
+    }
+
+    // 3) Creates
     const creations = current.filter((a) => !a.id && a.location);
 
     const [created] = await Promise.all([
@@ -843,10 +915,13 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
           createItemAvailability({
             item: itemId,
             location: c.location,
+            is_visible_online: c.is_visible_online ?? isVisibleOnline,
+            is_sellable_online: c.is_sellable_online ?? sellable,
           })
         )
       ),
       Promise.all(deletions.map((id) => deleteItemAvailability(id))),
+      Promise.all(updates.map((u) => updateItemAvailability(u.id, u.patch))),
     ]);
 
     const createdByLocation = new Map<number, ItemAvailability[]>();
@@ -921,6 +996,7 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
         cost: normalizedCost,
         sellable: sellable,
         purchasable: purchasable,
+        is_visible_online: isVisibleOnline,
         weight: item.weight,
         width: item.width,
         height: item.height,
@@ -1042,6 +1118,20 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
                   <option key={u.id} value={u.id}>{u.name}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2">
+              <p></p>
+              <label className="flex gap-1 items-center col-span-5">
+                <input
+                  id="online-visibility"
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 mx-2"
+                  checked={isVisibleOnline}
+                  onChange={handleVisibleOnlineChg}
+                />
+                Visible in Online Store
+              </label>
             </div>
 
             {/* Returnable */}

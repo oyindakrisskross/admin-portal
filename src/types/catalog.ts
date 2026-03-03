@@ -211,6 +211,8 @@ export interface ItemAvailability {
   item_name?: string;
   location: number;
   location_name?: string;
+  is_visible_online?: boolean;
+  is_sellable_online?: boolean;
 }
 
 
@@ -228,6 +230,7 @@ export interface ItemGroup {
   inventory_tracking: boolean;
   sellable: boolean;
   purchasable: boolean; 
+  is_visible_online?: boolean;
   availability_location_ids?: number[];
   image?: string | null;
   gallery?: { id: number; image: string; is_primary: boolean }[];
@@ -258,6 +261,7 @@ export interface Item {
   type_id: ItemType;
   sellable: boolean;
   purchasable: boolean;
+  is_visible_online?: boolean;
   returnable: boolean;
   unit?: number;
   unit_name?: string;

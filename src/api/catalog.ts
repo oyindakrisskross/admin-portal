@@ -417,6 +417,17 @@ export async function createItemAvailability(payload: Catalog.ItemAvailability) 
   return res.data;
 }
 
+export async function updateItemAvailability(
+  id: number,
+  patch: {
+    is_visible_online?: boolean;
+    is_sellable_online?: boolean;
+  }
+) {
+  const res = await api.patch<Catalog.ItemAvailability>(`/api/catalog/availabilities/${id}/`, patch);
+  return res.data;
+}
+
 export async function deleteItemAvailability(id: number) {
   await api.delete(`/api/catalog/availabilities/${id}/`);
 }

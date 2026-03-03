@@ -7,7 +7,8 @@ export type CouponAction =
     | "ITEM_AMOUNT"
     | "CATEGORY_PERCENT"
     | "CATEGORY_AMOUNT"
-    | "BXGY";
+    | "BXGY"
+    | "REDEEM_FREE_ITEMS";
 
 export const ACTION_CHOICES: {value: CouponAction; label: string}[] = [
     {value: "CART_PERCENT", label: "Cart Percent Off"},
@@ -16,7 +17,8 @@ export const ACTION_CHOICES: {value: CouponAction; label: string}[] = [
     {value: "ITEM_AMOUNT", label: "Item Amount Off"},
     {value: "CATEGORY_PERCENT", label: "Category Percent Off"},
     {value: "CATEGORY_AMOUNT", label: "Category Amount Off"},
-    {value: "BXGY", label: "Buy X Get Y"}
+    {value: "BXGY", label: "Buy X Get Y"},
+    {value: "REDEEM_FREE_ITEMS", label: "Redeem Free Item(s)"},
 ];
 
 export type BXGYType = "FREE" | "PERCENT" | "AMOUNT";
@@ -57,6 +59,11 @@ export interface Coupon {
     code?: string;
     active: boolean;
     auto_apply: boolean;
+    allow_combine?: boolean;
+    max_uses?: number;
+    use_count?: number;
+    available_online: boolean;
+    auto_apply_online: boolean;
     description?: string;
     start_at?: string;
     end_at?: string;

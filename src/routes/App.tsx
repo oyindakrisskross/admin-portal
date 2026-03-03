@@ -29,6 +29,7 @@ import { PermCategoryListPage } from "../screens/settings/access-control/PermCat
 import PermCategoryFormPage from "../screens/settings/access-control/PermCategoryFormPage";
 import { ContactListPage } from "../screens/crm/contact/ContactListPage";
 import ContactFormPage from "../screens/crm/contact/ContactFormPage";
+import { CustomerListPage } from "../screens/crm/customer/CustomerListPage";
 import { UserListPage } from "../screens/crm/user/UserListPage";
 import UserFormPage from "../screens/crm/user/UserFormPage";
 import type { PermissionBitSet } from "../types/accounts";
@@ -55,6 +56,7 @@ import { PlansListPage } from "../screens/catalog/plan/PlansListPage";
 import PlanFormPage from "../screens/catalog/plan/PlanFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
 import InvoiceRefundPage from "../screens/sales/invoice/InvoiceRefundPage";
+import { SubscriptionListPage } from "../screens/sales/subscription/SubscriptionListPage";
 import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
 import CouponsReportPage from "../screens/reports/CouponsReportPage";
 import CouponDetailReportPage from "../screens/reports/coupons/CouponDetailReportPage";
@@ -391,6 +393,14 @@ export default function App() {
             </RequirePerm>
           }
         />
+        <Route
+          path="sales/subscriptions"
+          element={
+            <RequirePerm perm="Subscriptions" action="view">
+              <SubscriptionListPage />
+            </RequirePerm>
+          }
+        />
 
         {/* CRM: Contacts */}
         <Route
@@ -422,6 +432,14 @@ export default function App() {
           element={
             <RequirePerm perm="Contacts" action="edit">
               <ContactFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="crm/customers"
+          element={
+            <RequirePerm perm="Contacts" action="view">
+              <CustomerListPage />
             </RequirePerm>
           }
         />

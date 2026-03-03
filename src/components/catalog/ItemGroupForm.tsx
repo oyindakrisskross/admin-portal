@@ -64,6 +64,7 @@ const EMPTY_GROUP: ItemGroup = {
   items: [], 
   sku_pattern: { rows: [] },
   gallery: [],
+  is_visible_online: false,
 };
 
 const INITIAL_TYPE: ItemType = "GOOD";
@@ -108,6 +109,9 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
   const [purchasable, setPurchasable] = useState(initial?.purchasable ?? true);
   const [trackInventory, setTrackInventory] = useState(
     initial?.inventory_tracking ?? true
+  );
+  const [isVisibleOnline, setIsVisibleOnline] = useState(
+    initial?.is_visible_online ?? false
   );
 
   const toggleLocation = (id: number) => {
@@ -164,6 +168,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
 
       setAvailableLocationIds(initial.availability_location_ids ?? []);
       setSelectedCategoryIds((initial.categories ?? []).map((c) => Number(c.id)).filter((n) => Number.isFinite(n)));
+      setIsVisibleOnline(initial.is_visible_online ?? false);
 
       if (initial?.gallery && initial.gallery.length) {
         const mapped = initial.gallery.map((img: any, idx: number) => ({
@@ -298,6 +303,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
     setSellable(checked);
 
     if (!checked) {
+      setIsVisibleOnline(false);
       setTrackInventory(false);
       setPreviewItems((items) =>
         items.map((it) => ({
@@ -598,6 +604,7 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
         inventory_tracking: trackInventory,
         sellable,
         purchasable,
+        is_visible_online: isVisibleOnline,
         sku_pattern: group.sku_pattern,
         attributes_input,
         item_variants_input,
@@ -1011,6 +1018,14 @@ export const ItemGroupForm: React.FC<Props> = ({ initial }) => {
                 }}
               />
               Track Inventory
+            </label>
+            <label className="inline-flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={isVisibleOnline}
+                onChange={(e) => setIsVisibleOnline(e.target.checked)}
+              />
+              Visible Online
             </label>
           </div>
 

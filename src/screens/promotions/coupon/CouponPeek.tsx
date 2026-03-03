@@ -152,6 +152,9 @@ function actionConfigToLines(
     lines.push({ label: "Get discount", value: discountValue });
     lines.push({ label: "Repeat", value: yn((c as any).repeat) });
     lines.push({ label: "Apply cheapest", value: yn((c as any).apply_cheapest) });
+  } else if (t === "REDEEM_FREE_ITEMS") {
+    lines.push({ label: "Free items", value: formatNamedIds((c as any).items, resolveItemName, "Item") });
+    lines.push({ label: "Qty per item", value: String((c as any).qty ?? 1) });
   } else {
     for (const [k, v] of Object.entries(c)) {
       lines.push({
@@ -381,6 +384,18 @@ export const CouponPeek: React.FC<Props> = ({ coupon }) => {
             <p className="col-span-4">{yn(c.auto_apply)}</p>
           </div>
           <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Allow Combine</p>
+            <p className="col-span-4">{yn((c as any).allow_combine)}</p>
+          </div>
+          <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Available Online</p>
+            <p className="col-span-4">{yn(c.available_online)}</p>
+          </div>
+          <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Online Auto Apply</p>
+            <p className="col-span-4">{yn(c.auto_apply_online)}</p>
+          </div>
+          <div className="grid grid-cols-10">
             <p className="text-kk-dark-text-muted col-span-2">Action Type</p>
             <p className="col-span-4">{actionLabel(c.action_type)}</p>
           </div>
@@ -390,6 +405,14 @@ export const CouponPeek: React.FC<Props> = ({ coupon }) => {
               <p className="col-span-4">{c.priority}</p>
             </div>
           )}
+          <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Usage Limit</p>
+            <p className="col-span-4">{Number((c as any).max_uses ?? 0) || 0}</p>
+          </div>
+          <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Current Uses</p>
+            <p className="col-span-4">{Number((c as any).use_count ?? 0) || 0}</p>
+          </div>
           <div className="grid grid-cols-10">
             <p className="text-kk-dark-text-muted col-span-2">Start</p>
             <p className="col-span-4">{toDate(c.start_at)}</p>

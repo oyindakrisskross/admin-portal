@@ -13,11 +13,13 @@ import {
 import {
   BILLING_CYCLES_MODE_CHOICES,
   BILLING_FREQUENCY_UNIT_CHOICES,
+  PLAN_TYPE_CHOICES,
   PLAN_PRICING_MODEL_CHOICES,
   SUBSCRIPTION_STATUS_CHOICES,
   SUBSCRIPTION_TYPE_CHOICES,
   type BillingCyclesMode,
   type BillingFrequencyUnit,
+  type PlanType,
   type PlanPricingModel,
   type SubscriptionPlan,
   type SubscriptionProduct,
@@ -31,6 +33,8 @@ type FormState = {
   product: number | "";
   name: string;
   code: string;
+  plan_type: PlanType;
+  included_uses: number | "";
   billing_frequency_value: number | "";
   billing_frequency_unit: BillingFrequencyUnit;
   billing_cycles_mode: BillingCyclesMode;
@@ -49,6 +53,8 @@ const EMPTY: FormState = {
   product: "",
   name: "",
   code: "",
+  plan_type: "CYCLE",
+  included_uses: "",
   billing_frequency_value: 1,
   billing_frequency_unit: "MONTH",
   billing_cycles_mode: "AUTO_RENEW",
@@ -124,6 +130,8 @@ export default function PlanFormPage() {
           product: data.product ?? "",
           name: data.name ?? "",
           code: data.code ?? "",
+          plan_type: data.plan_type ?? "CYCLE",
+          included_uses: data.included_uses ?? "",
           billing_frequency_value: data.billing_frequency_value ?? 1,
           billing_frequency_unit: data.billing_frequency_unit ?? "MONTH",
           billing_cycles_mode: data.billing_cycles_mode ?? "AUTO_RENEW",
@@ -153,12 +161,26 @@ export default function PlanFormPage() {
     () => products.some((p) => p.id === form.product),
     [form.product, products]
   );
+  const billingModeChoices =
+    form.plan_type === "USAGE"
+      ? [
+          { value: "AUTO_RENEW" as BillingCyclesMode, label: "No expiry (ends when uses are exhausted)" },
+          { value: "FIXED" as BillingCyclesMode, label: "Set a fixed expiry interval" },
+        ]
+      : BILLING_CYCLES_MODE_CHOICES;
+  const showUsageExpiryInterval =
+    form.plan_type !== "USAGE" || form.billing_cycles_mode === "FIXED";
 
   const validate = () => {
     if (!form.product || !selectedProductExists) return "Product is required.";
     if (!form.name.trim()) return "Plan name is required.";
     if (!form.code.trim()) return "Plan code is required.";
-    if (!form.billing_frequency_value || Number(form.billing_frequency_value) < 1) {
+    if (form.plan_type === "USAGE") {
+      if (!form.included_uses || Number(form.included_uses) < 1) {
+        return "Included uses must be at least 1 for usage-based plans.";
+      }
+    }
+    if (showUsageExpiryInterval && (!form.billing_frequency_value || Number(form.billing_frequency_value) < 1)) {
       return "Billing frequency value must be at least 1.";
     }
     if (form.billing_cycles_mode === "FIXED") {
@@ -184,7 +206,11 @@ export default function PlanFormPage() {
       product: Number(form.product),
       name: form.name.trim(),
       code: form.code.trim(),
-      billing_frequency_value: Number(form.billing_frequency_value),
+      plan_type: form.plan_type,
+      included_uses: form.plan_type === "USAGE" ? Number(form.included_uses) : null,
+      billing_frequency_value: Number(
+        showUsageExpiryInterval ? form.billing_frequency_value : form.billing_frequency_value || 1
+      ),
       billing_frequency_unit: form.billing_frequency_unit,
       billing_cycles_mode: form.billing_cycles_mode,
       billing_cycles:
@@ -297,59 +323,111 @@ export default function PlanFormPage() {
                 />
               </label>
 
-              <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs text-kk-dark-text-muted">Plan Type *</span>
+                <select
+                  value={form.plan_type}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      plan_type: e.target.value as PlanType,
+                      included_uses:
+                        e.target.value === "USAGE" ? (prev.included_uses || 1) : "",
+                    }))
+                  }
+                  className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                  disabled={saving}
+                >
+                  {PLAN_TYPE_CHOICES.map((x) => (
+                    <option key={x.value} value={x.value}>
+                      {x.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              {form.plan_type === "USAGE" ? (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-kk-dark-text-muted">Billing Frequency *</span>
+                  <span className="text-xs text-kk-dark-text-muted">Included Uses *</span>
                   <input
                     type="number"
                     min={1}
-                    value={form.billing_frequency_value}
+                    value={form.included_uses}
                     onChange={(e) =>
                       setForm((prev) => ({
                         ...prev,
-                        billing_frequency_value: e.target.value ? Number(e.target.value) : "",
+                        included_uses: e.target.value ? Number(e.target.value) : "",
                       }))
                     }
                     className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
                     disabled={saving}
                   />
                 </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs text-kk-dark-text-muted">&nbsp;</span>
-                  <select
-                    value={form.billing_frequency_unit}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        billing_frequency_unit: e.target.value as BillingFrequencyUnit,
-                      }))
-                    }
-                    className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                    disabled={saving}
-                  >
-                    {BILLING_FREQUENCY_UNIT_CHOICES.map((x) => (
-                      <option key={x.value} value={x.value}>
-                        {x.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              ) : null}
+
+              {showUsageExpiryInterval ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-kk-dark-text-muted">
+                      {form.plan_type === "USAGE" ? "Usage Expiry Interval *" : "Billing Frequency *"}
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={form.billing_frequency_value}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          billing_frequency_value: e.target.value ? Number(e.target.value) : "",
+                        }))
+                      }
+                      className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                      disabled={saving}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs text-kk-dark-text-muted">&nbsp;</span>
+                    <select
+                      value={form.billing_frequency_unit}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          billing_frequency_unit: e.target.value as BillingFrequencyUnit,
+                        }))
+                      }
+                      className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                      disabled={saving}
+                    >
+                      {BILLING_FREQUENCY_UNIT_CHOICES.map((x) => (
+                        <option key={x.value} value={x.value}>
+                          {x.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
 
               <label className="flex flex-col gap-1">
-                <span className="text-xs text-kk-dark-text-muted">Billing Cycles *</span>
+                <span className="text-xs text-kk-dark-text-muted">
+                  {form.plan_type === "USAGE" ? "Usage Expiry Mode *" : "Billing Cycles *"}
+                </span>
                 <select
                   value={form.billing_cycles_mode}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
                       billing_cycles_mode: e.target.value as BillingCyclesMode,
+                      billing_frequency_value:
+                        prev.plan_type === "USAGE" && e.target.value === "AUTO_RENEW"
+                          ? prev.billing_frequency_value || 1
+                          : prev.billing_frequency_value,
                     }))
                   }
                   className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
                   disabled={saving}
                 >
-                  {BILLING_CYCLES_MODE_CHOICES.map((x) => (
+                  {billingModeChoices.map((x) => (
                     <option key={x.value} value={x.value}>
                       {x.label}
                     </option>
@@ -359,7 +437,11 @@ export default function PlanFormPage() {
 
               {form.billing_cycles_mode === "FIXED" ? (
                 <label className="flex flex-col gap-1">
-                  <span className="text-xs text-kk-dark-text-muted">No. of Billing Cycles *</span>
+                  <span className="text-xs text-kk-dark-text-muted">
+                    {form.plan_type === "USAGE"
+                      ? "No. of Expiry Intervals *"
+                      : "No. of Billing Cycles *"}
+                  </span>
                   <input
                     type="number"
                     min={1}

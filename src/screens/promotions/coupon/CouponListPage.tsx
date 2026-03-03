@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Plus, Search, TicketPercent } from "lucide-react";
+import { Plus, RefreshCcw, Search, TicketPercent } from "lucide-react";
 
 import { useAuth } from "../../../auth/AuthContext";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import type { Coupon } from "../../../types/promotions";
 import { ACTION_CHOICES } from "../../../types/promotions";
-import { deleteCoupon, fetchCoupons } from "../../../api/promotions";
+import { deleteCoupon, fetchCoupons, resetCouponUsage } from "../../../api/promotions";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
 import { CouponPeek } from "./CouponPeek";
 import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
@@ -128,6 +128,22 @@ export const CouponListPage: React.FC = () => {
       const data = err?.response?.data;
       const detail = typeof data === "string" ? data : data?.detail;
       showToast(String(detail ?? "Unable to delete coupon."), "error");
+    }
+  };
+
+  const handleResetUsage = async () => {
+    if (!selectedId) return;
+    if (!confirm("Reset coupon usage count to zero and activate this coupon?")) return;
+
+    try {
+      const updated = await resetCouponUsage(selectedId);
+      setCoupons((prev) => prev.map((c) => (c.id === selectedId ? { ...c, ...updated } : c)));
+      setSelectedCoupon((prev) => (prev ? { ...prev, ...updated } : prev));
+      showToast("Coupon usage reset and coupon activated.", "success");
+    } catch (err: any) {
+      const data = err?.response?.data;
+      const detail = typeof data === "string" ? data : data?.detail;
+      showToast(String(detail ?? "Unable to reset coupon usage."), "error");
     }
   };
 
@@ -396,6 +412,12 @@ export const CouponListPage: React.FC = () => {
                 <button type="button" onClick={handleDelete}>
                   <span className="tooltip-b">Delete</span>
                   <TrashIcon className="h-5 w-5 text-kk-muted" />
+                </button>
+              ) : null}
+              {can("Coupons", "edit") ? (
+                <button type="button" onClick={handleResetUsage}>
+                  <span className="tooltip-b">Reset Usage</span>
+                  <RefreshCcw className="h-5 w-5 text-kk-muted" />
                 </button>
               ) : null}
             </div>

@@ -12,6 +12,7 @@ export interface InvoiceItemChild {
   quantity: string;            // decimal as string, e.g. "5.00"
   unit_price: string;          // decimal as string
   discount_amount: string;
+  tax_amount?: string;
   line_total: string;          // decimal as string
   refunded_from_line?: number | null;
 }
@@ -49,6 +50,7 @@ export interface InvoiceResponse {
   type_id: "SALE" | "REFUND";        // currently "SALE" in your examples
   status: "PAID" | "DRAFT" | "VOID" | string;
   coupon_code?: string;
+  coupon_codes?: string[];
   refunded_from?: number | null;
   refunded_total?: string;           // sum of refunds created for this sale invoice
   net_grand_total?: string;          // grand_total - refunded_total (for SALE invoices)

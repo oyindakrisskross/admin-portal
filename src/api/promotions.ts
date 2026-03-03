@@ -38,6 +38,11 @@ export async function deleteCoupon(id: number) {
   return res.data;
 }
 
+export async function resetCouponUsage(id: number) {
+  const res = await api.post<Coupon>(`/api/promotions/coupons/${id}/reset-usage/`);
+  return res.data;
+}
+
 // Coupon Schedules
 export async function fetchCouponSchedules(couponId: number) {
   const res = await api.get<PaginatedResult<CouponSchedule>>(

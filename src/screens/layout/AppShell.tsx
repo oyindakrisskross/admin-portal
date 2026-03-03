@@ -66,6 +66,7 @@ const portalLinks = [
     icon: <ShoppingCart className="h-5 w-5" />,
     children: [
       { to: "/sales/invoices", label: "Invoices", perm: "Invoices" },
+      { to: "/sales/subscriptions", label: "Subscriptions", perm: "Subscriptions" },
     ],
   },
   {
@@ -74,7 +75,7 @@ const portalLinks = [
     children: [
       { to: "/crm/contacts", label: "Contacts", perm: "Contacts" },
       { to: "/crm/users", label: "Portal Users", perm: "Portal Users" },
-      // { to: "/crm/customers", label: "Customers", perm: "Customers" },   // TODO: Phase 2
+      { to: "/crm/customers", label: "Customers", perm: "Contacts" },
       // { to: "/crm/vendors", label: "Vendors", perm: "Vendors" },     // TODO: Phase 2
     ],
   },

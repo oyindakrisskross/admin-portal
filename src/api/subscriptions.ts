@@ -1,5 +1,6 @@
 import api from "./client";
 import type {
+  CustomerSubscriptionRecord,
   SubscriptionAddon,
   SubscriptionCoupon,
   SubscriptionPlan,
@@ -128,3 +129,24 @@ export async function fetchSubscriptionPlanTransactions(params?: Record<string, 
   return res.data;
 }
 
+export async function fetchCustomerSubscriptions(params?: Record<string, unknown>) {
+  const res = await api.get<PaginatedResult<CustomerSubscriptionRecord>>(
+    "/api/subscriptions/subscriptions/",
+    { params }
+  );
+  return res.data;
+}
+
+export async function fetchCustomerSubscription(id: number) {
+  const res = await api.get<CustomerSubscriptionRecord>(`/api/subscriptions/subscriptions/${id}/`);
+  return res.data;
+}
+
+export async function createCustomerSubscription(payload: {
+  customer: number;
+  plan: number;
+  started_at?: string;
+}) {
+  const res = await api.post<CustomerSubscriptionRecord>("/api/subscriptions/subscriptions/", payload);
+  return res.data;
+}

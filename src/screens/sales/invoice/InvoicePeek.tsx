@@ -13,6 +13,12 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
   const topLevelItems = invoice.items.filter((ln) => ln.parent_line === null);
   const refundedTotal = Number(invoice.refunded_total ?? 0);
   const netTotal = Math.max(0, Number(invoice.net_grand_total ?? invoice.grand_total ?? 0));
+  const appliedCouponCodes = (invoice.coupon_codes && invoice.coupon_codes.length
+    ? invoice.coupon_codes
+    : invoice.coupon_code
+      ? [invoice.coupon_code]
+      : []
+  ).filter(Boolean);
 
   return (
     <div className="flex h-full flex-col gap-7 p-5 pb-7">
@@ -100,10 +106,10 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
                 <p>Discount</p>
                 <p>{formatMoneyNGN(+invoice.discount_total)}</p>
               </div>
-              {invoice.coupon_code && +invoice.discount_total > 0 && (
+              {appliedCouponCodes.length > 0 && +invoice.discount_total > 0 && (
                 <div className="flex justify-between text-xs text-kk-dark-text-muted">
-                  <p>Code</p>
-                  <p>{invoice.coupon_code}</p>
+                  <p>Code{appliedCouponCodes.length > 1 ? "s" : ""}</p>
+                  <p>{appliedCouponCodes.join(", ")}</p>
                 </div>
               )}
               <div className="flex justify-between">
