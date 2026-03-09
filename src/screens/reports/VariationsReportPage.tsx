@@ -1,4 +1,4 @@
-﻿// src/screens/reports/VariationsReportPage.tsx
+// src/screens/reports/VariationsReportPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import type { Granularity, ReportResponse } from "../../types/reports";
@@ -6,20 +6,26 @@ import { csvEscape, downloadCsv, formatMoneyNGN, formatNumber, makeFilename } fr
 import { fetchVariationsReport } from "../../api/reports";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { MetricDropdownButton } from "../../components/reports/MetricDropdownButton";
 import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
 import { fetchOutlets } from "../../api/location";
 import type { Outlet } from "../../types/location";
+import { ReportDateRangePicker } from "../../components/date/ReportDateRangePicker";
 import { CloudDownload } from "lucide-react";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
 import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
+const variationMetricOptions = [
+  { value: "net_sales", label: "Net sales" },
+  { value: "orders", label: "Orders" },
+  { value: "items_sold", label: "Items sold" },
+] as const;
+
 export default function VariationsReportPage() {
 
   const { start, end, setStart, setEnd } = useReportDateRange();
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
@@ -98,7 +104,7 @@ export default function VariationsReportPage() {
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show â€œAll locationsâ€
+      // keep non-blocking; selector can still show “All locations”
       setOutlets([]);
     });
   }, []);
@@ -163,46 +169,19 @@ export default function VariationsReportPage() {
   return (
     <div className="p-4 space-y-4">
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={() => {
-            setOffset(0);
-            toggleCompare();
-          }}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={(value) => {
-            setOffset(0);
-            setCompareStart(value);
-          }}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted ">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => {
+          <div className="md:col-span-2">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
                 setOffset(0);
-                setStart(e.target.value);
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
               }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => {
-                setOffset(0);
-                setEnd(e.target.value);
-              }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
             />
           </div>
 
@@ -252,19 +231,6 @@ export default function VariationsReportPage() {
             >
               <option value="parents">Parents only (default)</option>
               <option value="all">All lines (parents + children)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-kk-dark-text-muted">Metric</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value as any)}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-            >
-              <option value="net_sales">Net sales</option>
-              <option value="orders">Orders</option>
-              <option value="items_sold">Items sold</option>
             </select>
           </div>
 
@@ -326,7 +292,7 @@ export default function VariationsReportPage() {
           <div className="text-xs text-kk-dark-text-muted">
             {data ? (
               <>
-                Showing {Math.min(offset + 1, total)}â€“{Math.min(offset + limit, total)} of {total}
+                Showing {Math.min(offset + 1, total)}–{Math.min(offset + limit, total)} of {total}
               </>
             ) : (
               " "
@@ -371,17 +337,17 @@ export default function VariationsReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <KpiCard
           label="Items Sold"
-          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
         />
         <KpiCard
           label="Net Sales"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
         />
         <KpiCard
           label="Net Discount"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "�"}
           sub={
             data
               ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN)
@@ -390,7 +356,7 @@ export default function VariationsReportPage() {
         />
         <KpiCard
           label="Orders"
-          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
         />
       </div>
@@ -403,6 +369,13 @@ export default function VariationsReportPage() {
         valueKey="v"
         compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_sales" ? "money" : "count"}
+        titleAccessory={
+          <MetricDropdownButton
+            value={metric}
+            options={variationMetricOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+            onChange={(value) => setMetric(value as typeof metric)}
+          />
+        }
       />
 
       {/* Table */}
@@ -417,12 +390,12 @@ export default function VariationsReportPage() {
             title={!data ? "Load data first" : "Export all rows to CSV"}
           >
             <CloudDownload className="h-5 w-5"/>
-            {exporting ? "Exportingâ€¦" : "Export CSV"}
+            {exporting ? "Exporting…" : "Export CSV"}
           </button>
         </div>
 
         {err ? <div className="p-4 text-sm text-red-600">{err}</div> : null}
-        {loading && !data ? <div className="p-4 text-sm">Loadingâ€¦</div> : null}
+        {loading && !data ? <div className="p-4 text-sm">Loading…</div> : null}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -444,12 +417,12 @@ export default function VariationsReportPage() {
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <span className="inline-flex h-5 w-5 items-center justify-center rounded bg-kk-dark-bg text-gray-700 text-xs">
-                          â€¢
+                          •
                         </span>
                         <span className="font-medium">{r.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2">{r.sku ?? <span className="text-kk-dark-text-muted">â€”</span>}</td>
+                    <td className="px-4 py-2">{r.sku ?? <span className="text-kk-dark-text-muted">—</span>}</td>
                     <td className="px-4 py-2 text-right">{formatNumber(Number(r.items_sold ?? 0))}</td>
                     <td className="px-4 py-2 text-right">{formatMoneyNGN(Number(r.net_sales ?? 0))}</td>
                     <td className="px-4 py-2 text-right">{formatMoneyNGN(Number(r.net_discount ?? 0))}</td>
@@ -469,7 +442,7 @@ export default function VariationsReportPage() {
           </table>
         </div>
 
-        {loading && data ? <div className="px-4 py-3 text-xs text-kk-dark-text-muted">Refreshingâ€¦</div> : null}
+        {loading && data ? <div className="px-4 py-3 text-xs text-kk-dark-text-muted">Refreshing…</div> : null}
       </div>
     </div>
   );

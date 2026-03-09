@@ -11,8 +11,9 @@ import type { FilterSet } from "../../types/filters";
 import { ItemSearchSelect, type ItemOption } from "../../components/catalog/ItemSearchSelect";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { MetricDropdownButton } from "../../components/reports/MetricDropdownButton";
 import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
+import { ReportDateRangePicker } from "../../components/date/ReportDateRangePicker";
 import { CloudDownload, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
@@ -48,14 +49,18 @@ const INVOICE_STATUS_OPTIONS = [
   { value: "DRAFT", label: "Draft" },
 ];
 
+const invoiceMetricOptions = [
+  { value: "net_sales", label: "Net sales" },
+  { value: "items_sold", label: "Items sold" },
+] as const;
+
 const makeFilterId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 export default function InvoicesReportPage() {
   
   const navigate = useNavigate();
   const { start, end, setStart, setEnd } = useReportDateRange();
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -284,14 +289,14 @@ export default function InvoicesReportPage() {
         offset: 0,
       });
 
-      const header = ["Product", "SKU", "Items sold", "Net sales", "Net discount", "Orders"];
+      const header = ["Date", "Invoice #", "Location", "Items sold", "Coupons", "Subtotal"];
       const rows = (res.results ?? []).map((r) => [
-        csvEscape(r.name),
-        csvEscape(r.sku ?? ""),
+        csvEscape(toDateStrShort(r.invoice_date ?? "")),
+        csvEscape(r.invoice_number ?? ""),
+        csvEscape(r.location ?? ""),
         csvEscape(r.items_sold ?? 0),
-        csvEscape(r.net_sales ?? 0),
-        csvEscape(r.net_discount ?? 0),
-        csvEscape(r.orders ?? 0),
+        csvEscape((r.coupon_code ?? "").trim() || ""),
+        csvEscape(r.subtotal_after_discount ?? 0),
       ]);
 
       const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
@@ -306,46 +311,19 @@ export default function InvoicesReportPage() {
   return (
     <div className="p-4 space-y-4">
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={() => {
-            setOffset(0);
-            toggleCompare();
-          }}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={(value) => {
-            setOffset(0);
-            setCompareStart(value);
-          }}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted ">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => {
+          <div className="md:col-span-2">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
                 setOffset(0);
-                setStart(e.target.value);
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
               }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => {
-                setOffset(0);
-                setEnd(e.target.value);
-              }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
             />
           </div>
 
@@ -395,18 +373,6 @@ export default function InvoicesReportPage() {
             >
               <option value="all">All invoices</option>
               <option value="advanced">Advanced Filters</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-kk-dark-text-muted">Metric</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value as any)}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-            >
-              <option value="net_sales">Net sales</option>
-              <option value="items_sold">Items sold</option>
             </select>
           </div>
 
@@ -839,6 +805,13 @@ export default function InvoicesReportPage() {
         valueKey="v"
         compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_sales" ? "money" : "count"}
+        titleAccessory={
+          <MetricDropdownButton
+            value={metric}
+            options={invoiceMetricOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+            onChange={(value) => setMetric(value as typeof metric)}
+          />
+        }
       />
 
       {/* Table */}
@@ -869,7 +842,7 @@ export default function InvoicesReportPage() {
                 <th className="px-4 py-2 text-right font-medium">Location</th>
                 <th className="px-4 py-2 text-right font-medium">Items Sold</th>
                 <th className="px-4 py-2 text-right font-medium">Coupons</th>
-                <th className="px-4 py-2 text-right font-medium">Net Sales</th>
+                <th className="px-4 py-2 text-right font-medium">Subtotal</th>
               </tr>
             </thead>
 
@@ -893,7 +866,14 @@ export default function InvoicesReportPage() {
                     <td className="px-4 py-2">{r.location}</td>
                     <td className="px-4 py-2">{r.items_sold}</td>
                     <td className="px-4 py-2">{(r.coupon_code ?? "").trim() || "-"}</td>
-                    <td className="px-4 py-2">{formatMoneyNGN(+r.net_sales)}</td>
+                    <td className="px-4 py-2">
+                      {formatMoneyNGN(
+                        Number(
+                          r.subtotal_after_discount ??
+                            Number(r.subtotal ?? 0) - Number(r.discount_total ?? 0)
+                        )
+                      )}
+                    </td>
                   </tr>
                 );
               })}

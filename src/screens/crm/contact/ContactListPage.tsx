@@ -169,19 +169,20 @@ export const ContactListPage: React.FC = () => {
               <div className="flex items-center gap-2 text-xs">
                 <div className="relative">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-kk-muted" />
-                  <input
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(1);
-                    }}
-                    className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
-                    placeholder="Search name or email"
-                  />
-                </div>
+              <input
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="w-56 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-8 py-1.5 text-xs"
+                placeholder="Search name or email"
+              />
+            </div>
                 <FilterBar
                   columns={filterColumns}
                   filters={filters}
+                  showPills={false}
                   onChange={(next) => {
                     setFilters(next);
                     setPage(1);
@@ -201,6 +202,17 @@ export const ContactListPage: React.FC = () => {
               ""
             )
           }
+          below={!hasPeek ? (
+            <FilterBar
+              columns={filterColumns}
+              filters={filters}
+              showTrigger={false}
+              onChange={(next) => {
+                setFilters(next);
+                setPage(1);
+              }}
+            />
+          ) : null}
         />
 
         {paginationControls}

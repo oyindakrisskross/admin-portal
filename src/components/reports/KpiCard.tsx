@@ -5,12 +5,14 @@ import { SplitFlapValue } from "./SplitFlapValue";
 
 interface Props {
   label: string;
+  labelAccessory?: React.ReactNode;
   value: string;
   sub?: string;
 }
 
 export const KpiCard: React.FC<Props> = ({
   label,
+  labelAccessory,
   value,
   sub,
 }) => {
@@ -24,7 +26,10 @@ export const KpiCard: React.FC<Props> = ({
           : "flex flex-col rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm"
       }
     >
-      <div className="text-sm leading-5 text-kk-dark-text-muted">{label}</div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-sm leading-5 text-kk-dark-text-muted">{label}</div>
+        {labelAccessory}
+      </div>
       <div className="mt-2 flex h-10 items-center overflow-hidden">
         <SplitFlapValue
           value={value}

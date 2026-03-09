@@ -9,7 +9,7 @@ import { useAuth } from "../../../auth/AuthContext";
 
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
-import { bulkItems, deleteItem, fetchItems, patchItem } from "../../../api/catalog";
+import { bulkItems, deleteItem, fetchCategories, fetchItems, patchItem } from "../../../api/catalog";
 import { ItemPeek } from "./ItemPeek";
 import placeholder from "../../../assets/placeholder.png";
 import ToastModal from "../../../components/ui/ToastModal";
@@ -62,22 +62,41 @@ export const ItemListPage: React.FC = () => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [categoriesModalOpen, setCategoriesModalOpen] = useState(false);
+  const [categoryChoices, setCategoryChoices] = useState<{ value: string; label: string }[]>([]);
 
-  const filterColumns: ColumnMeta[] = [
-    { id: "name", label: "Name", type: "text" },
-    { id: "type_id", label: "Type", type: "choice", choices: [
-        { value: "GOOD", label: "Good" },
-        { value: "SERVICE", label: "Service" },
-      ]
-    },
-    { id: "status", label: "Status", type: "choice", choices: [
-        { value: "ACTIVE", label: "Active" },
-        { value: "INACTIVE", label: "Inactive" },
-      ]
-    },
-    { id: "price", label: "Price", type: "number" },
-    { id: "created_on", label: "Created date", type: "date" },
-  ];
+  const filterColumns: ColumnMeta[] = useMemo(
+    () => [
+      { id: "name", label: "Name", type: "text" },
+      {
+        id: "type_id",
+        label: "Type",
+        type: "choice",
+        choices: [
+          { value: "GOOD", label: "Good" },
+          { value: "SERVICE", label: "Service" },
+        ],
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "choice",
+        choices: [
+          { value: "ACTIVE", label: "Active" },
+          { value: "INACTIVE", label: "Inactive" },
+        ],
+      },
+      {
+        id: "category_id",
+        label: "Categories",
+        type: "choice",
+        multi: true,
+        choices: categoryChoices,
+      },
+      { id: "price", label: "Price", type: "number" },
+      { id: "created_on", label: "Created date", type: "date" },
+    ],
+    [categoryChoices]
+  );
 
   const hasPeek = !!selectedId;
   const openPeek = (item: Item) => {
@@ -171,6 +190,30 @@ export const ItemListPage: React.FC = () => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchCategories();
+        const rows = Array.isArray(data?.results) ? data.results : [];
+        if (cancelled) return;
+        setCategoryChoices(
+          rows
+            .filter((row: any) => row?.id != null)
+            .map((row: any) => ({
+              value: String(row.id),
+              label: String(row.name || `Category #${row.id}`),
+            }))
+        );
+      } catch {
+        if (!cancelled) setCategoryChoices([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +332,7 @@ export const ItemListPage: React.FC = () => {
             <FilterBar
               columns={filterColumns}
               filters={filters}
+              showPills={false}
               onChange={(next) => {
                 setFilters(next);
                 setPage(1);
@@ -320,6 +364,17 @@ export const ItemListPage: React.FC = () => {
               </button>
             )}
           </div> ) : ""} 
+          below={!hasPeek ? (
+            <FilterBar
+              columns={filterColumns}
+              filters={filters}
+              showTrigger={false}
+              onChange={(next) => {
+                setFilters(next);
+                setPage(1);
+              }}
+            />
+          ) : null}
         />
 
         {!hasPeek && selectedIds.length > 0 && (

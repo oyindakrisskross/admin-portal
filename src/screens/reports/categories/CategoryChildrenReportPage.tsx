@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -22,8 +24,8 @@ import type { CategoriesReportResponse, Granularity } from "../../../types/repor
 import type { Outlet } from "../../../types/location";
 import { formatMoneyNGN, formatNumber, isoToLabel } from "../../../helpers";
 import { KpiCard } from "../../../components/reports/KpiCard";
-import { ComparePeriodControls } from "../../../components/reports/ComparePeriodControls";
 import { buildCompareSub } from "../../../components/reports/periodCompare";
+import { ReportDateRangePicker } from "../../../components/date/ReportDateRangePicker";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../../hooks/useComparePeriod";
 import { useReportAutoRefresh } from "../../../hooks/useReportAutoRefresh";
@@ -51,8 +53,7 @@ export default function CategoryChildrenReportPage() {
     start: sp.get("start") ?? undefined,
     end: sp.get("end") ?? undefined,
   });
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   useEffect(() => {
@@ -73,6 +74,7 @@ export default function CategoryChildrenReportPage() {
   const [compareData, setCompareData] = useState<CategoriesReportResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
+  const [chartMode, setChartMode] = useState<"line" | "grouped" | "stacked">("line");
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => setOutlets([]));
@@ -226,33 +228,18 @@ export default function CategoryChildrenReportPage() {
       </div>
 
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={toggleCompare}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={setCompareStart}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-kk-dark-text-muted">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
+          <div className="min-w-[280px]">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
+              }}
             />
           </div>
 
@@ -356,31 +343,75 @@ export default function CategoryChildrenReportPage() {
         <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold">Net Sales by Category</h2>
-            <div className="text-xs text-kk-dark-text-muted">
-              {data ? `${data.range.start} â†’ ${data.range.end}` : null}
+            <div className="flex items-center gap-3">
+              <div className="inline-flex rounded-md border border-kk-dark-input-border p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("line")}
+                  className={`rounded px-2 py-1 ${chartMode === "line" ? "bg-kk-dark-hover text-kk-dark-text" : "text-kk-dark-text-muted"}`}
+                >
+                  Line
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("grouped")}
+                  className={`rounded px-2 py-1 ${chartMode === "grouped" ? "bg-kk-dark-hover text-kk-dark-text" : "text-kk-dark-text-muted"}`}
+                >
+                  Grouped bars
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("stacked")}
+                  className={`rounded px-2 py-1 ${chartMode === "stacked" ? "bg-kk-dark-hover text-kk-dark-text" : "text-kk-dark-text-muted"}`}
+                >
+                  Stacked bars
+                </button>
+              </div>
+              <div className="text-xs text-kk-dark-text-muted">
+                {data ? `${data.range.start} -> ${data.range.end}` : null}
+              </div>
             </div>
           </div>
 
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lineData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={18} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatNumber(Number(v))} />
-                <Tooltip formatter={(v: any) => formatMoneyNGN(Number(v))} labelFormatter={(l) => String(l)} />
-                <Legend />
-                {categories.map((c) => (
-                  <Line
-                    key={c.category_id}
-                    type="monotone"
-                    dataKey={`c_${c.category_id}`}
-                    name={c.name}
-                    stroke={colorByCategoryId[c.category_id]}
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                ))}
-              </LineChart>
+              {chartMode === "line" ? (
+                <LineChart data={lineData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={18} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatNumber(Number(v))} />
+                  <Tooltip formatter={(v: any) => formatMoneyNGN(Number(v))} labelFormatter={(l) => String(l)} />
+                  <Legend />
+                  {categories.map((c) => (
+                    <Line
+                      key={c.category_id}
+                      type="monotone"
+                      dataKey={`c_${c.category_id}`}
+                      name={c.name}
+                      stroke={colorByCategoryId[c.category_id]}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              ) : (
+                <BarChart data={lineData} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.25} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} minTickGap={18} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatNumber(Number(v))} />
+                  <Tooltip formatter={(v: any) => formatMoneyNGN(Number(v))} labelFormatter={(l) => String(l)} />
+                  <Legend />
+                  {categories.map((c) => (
+                    <Bar
+                      key={c.category_id}
+                      dataKey={`c_${c.category_id}`}
+                      name={c.name}
+                      fill={colorByCategoryId[c.category_id]}
+                      stackId={chartMode === "stacked" ? "sales" : undefined}
+                    />
+                  ))}
+                </BarChart>
+              )}
             </ResponsiveContainer>
           </div>
         </div>

@@ -36,6 +36,16 @@ export const addDaysToYmd = (value: string, days: number) => {
   return toYmdUtc(date);
 };
 
+export const addYearsToYmd = (value: string, years: number) => {
+  const date = parseYmdUtc(value);
+  if (!date) return "";
+  const targetYear = date.getUTCFullYear() + years;
+  const targetMonth = date.getUTCMonth();
+  const targetDay = date.getUTCDate();
+  const maxDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return toYmdUtc(new Date(Date.UTC(targetYear, targetMonth, Math.min(targetDay, maxDay))));
+};
+
 export const periodLengthDays = (start: string, end: string) => {
   const s = parseYmdUtc(start);
   const e = parseYmdUtc(end);

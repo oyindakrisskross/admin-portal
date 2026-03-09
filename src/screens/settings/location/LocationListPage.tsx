@@ -86,9 +86,10 @@ export const LocationListPage: React.FC = () => {
           section= "Business"
           title= "Locations"
           right= {!hasPeek ? (<div className="flex items-center gap-1 text-xs">
-            <FilterBar 
+            <FilterBar
               columns={filterColumns}
               filters={filters}
+              showPills={false}
               onChange={setFilters}
             />
             <button>
@@ -117,6 +118,14 @@ export const LocationListPage: React.FC = () => {
               </button>
             )}
           </div> ) : ""} 
+          below={!hasPeek ? (
+            <FilterBar
+              columns={filterColumns}
+              filters={filters}
+              showTrigger={false}
+              onChange={setFilters}
+            />
+          ) : null}
         />
 
         {/* Table */}

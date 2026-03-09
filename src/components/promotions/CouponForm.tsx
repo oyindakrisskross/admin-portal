@@ -78,7 +78,7 @@ function fromInputDateTime(v: string) {
   return d.toISOString();
 }
 
-function conditionDraftsFromTree(tree: any): { op: ConditionOp; conditions: ConditionDraft[] } {
+export function conditionDraftsFromTree(tree: any): { op: ConditionOp; conditions: ConditionDraft[] } {
   if (!tree || Object.keys(tree).length === 0) return { op: "AND", conditions: [] };
 
   const op: ConditionOp = (tree.op || "AND").toUpperCase() === "OR" ? "OR" : "AND";
@@ -122,7 +122,7 @@ function conditionDraftsFromTree(tree: any): { op: ConditionOp; conditions: Cond
   return { op, conditions };
 }
 
-function buildConditionTree(op: ConditionOp, conditions: ConditionDraft[]) {
+export function buildConditionTree(op: ConditionOp, conditions: ConditionDraft[]) {
   if (!conditions.length) return {};
 
   const children = conditions.map((c) => {
@@ -159,7 +159,7 @@ function buildConditionTree(op: ConditionOp, conditions: ConditionDraft[]) {
   return { op, children };
 }
 
-function validateConditions(op: ConditionOp, conditions: ConditionDraft[]) {
+export function validateConditions(op: ConditionOp, conditions: ConditionDraft[]) {
   void op;
   for (const c of conditions) {
     if (c.type === "CART_MIN_SUBTOTAL" || c.type === "CART_MAX_SUBTOTAL") {
@@ -193,7 +193,7 @@ function validateConditions(op: ConditionOp, conditions: ConditionDraft[]) {
   return null;
 }
 
-function actionDraftFromCoupon(c: Coupon): ActionDraft {
+export function actionDraftFromCoupon(c: Coupon): ActionDraft {
   const cfg: any = c.action_config || {};
   const action_type = c.action_type || "CART_PERCENT";
 
@@ -268,7 +268,7 @@ function actionDraftFromCoupon(c: Coupon): ActionDraft {
   };
 }
 
-function buildActionConfig(draft: ActionDraft): { config: any; error?: string } {
+export function buildActionConfig(draft: ActionDraft): { config: any; error?: string } {
   if (draft.action_type === "CART_PERCENT") {
     const percent = Number(draft.cartPercent.percent || 0);
     if (!Number.isFinite(percent) || percent < 0) return { config: null, error: "Invalid percent value." };

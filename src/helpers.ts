@@ -19,12 +19,43 @@ export function toYMD(d: Date) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export function isoToLabel(iso: string, granularity: "hour" | "day" | "week" | "month") {
+const formatRangeDate = (value: Date) =>
+  `${value.getDate()}/${value.getMonth() + 1}/${value.getFullYear()}`;
+
+const endOfMonth = (value: Date) => new Date(value.getFullYear(), value.getMonth() + 1, 0);
+const endOfYear = (value: Date) => new Date(value.getFullYear(), 11, 31);
+
+export function isoToLabel(iso: string, granularity: "hour" | "day" | "week" | "month" | "year") {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+
   if (granularity === "hour") {
-    return d.toLocaleString("en-NG", { year: "numeric", month: "short" , day: "numeric", hour: "numeric", hour12: true });
+    return d.toLocaleString("en-NG", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      hour12: true,
+    });
   }
-  return d.toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "2-digit" });
+
+  if (granularity === "day") {
+    return d.toLocaleDateString("en-NG", { year: "numeric", month: "short", day: "2-digit" });
+  }
+
+  if (granularity === "week") {
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6);
+    return `${formatRangeDate(d)}-${formatRangeDate(end)}`;
+  }
+
+  if (granularity === "month") {
+    const end = endOfMonth(d);
+    return `${formatRangeDate(d)}-${formatRangeDate(end)}`;
+  }
+
+  const end = endOfYear(d);
+  return `${formatRangeDate(d)}-${formatRangeDate(end)}`;
 }
 
 export function csvEscape(value: any) {

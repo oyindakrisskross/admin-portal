@@ -47,6 +47,67 @@ export interface SubscriptionProduct {
   updated_on?: string;
 }
 
+export type SubscriptionPlanRedeemInterval = "NONE" | "DAY" | "WEEK" | "MONTH";
+
+export const SUBSCRIPTION_PLAN_REDEEM_INTERVAL_CHOICES: {
+  value: SubscriptionPlanRedeemInterval;
+  label: string;
+}[] = [
+  { value: "NONE", label: "No interval limit" },
+  { value: "DAY", label: "Per day" },
+  { value: "WEEK", label: "Per week" },
+  { value: "MONTH", label: "Per month" },
+];
+
+export type SubscriptionPlanWeekday = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+
+export const SUBSCRIPTION_PLAN_WEEKDAY_CHOICES: {
+  value: SubscriptionPlanWeekday;
+  label: string;
+}[] = [
+  { value: "MON", label: "Monday" },
+  { value: "TUE", label: "Tuesday" },
+  { value: "WED", label: "Wednesday" },
+  { value: "THU", label: "Thursday" },
+  { value: "FRI", label: "Friday" },
+  { value: "SAT", label: "Saturday" },
+  { value: "SUN", label: "Sunday" },
+];
+
+export interface SubscriptionPlanRedeemableItemSchedule {
+  id?: number;
+  weekday: SubscriptionPlanWeekday;
+  all_day: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
+export interface SubscriptionPlanRedeemableItem {
+  id?: number;
+  item: number;
+  item_name?: string;
+  item_sku?: string | null;
+  max_redemptions: number;
+  interval_unit: SubscriptionPlanRedeemInterval;
+  interval_value: number;
+  schedules?: SubscriptionPlanRedeemableItemSchedule[];
+  created_on?: string;
+  updated_on?: string;
+}
+
+export type SubscriptionPlanRedeemableItemInput = {
+  item: number;
+  max_redemptions: number;
+  interval_unit: SubscriptionPlanRedeemInterval;
+  interval_value: number;
+  schedules?: Array<{
+    weekday: SubscriptionPlanWeekday;
+    all_day: boolean;
+    start_time?: string | null;
+    end_time?: string | null;
+  }>;
+};
+
 export interface SubscriptionPlan {
   id?: number;
   product: number;
@@ -67,6 +128,10 @@ export interface SubscriptionPlan {
   allow_plan_switch: boolean;
   plan_type: PlanType;
   included_uses?: number | null;
+  redeemable_items?: SubscriptionPlanRedeemableItem[];
+  redeemable_items_input?: SubscriptionPlanRedeemableItemInput[];
+  coupons?: SubscriptionCoupon[];
+  coupon_ids?: number[];
   status: SubscriptionStatus;
   created_on?: string;
   updated_on?: string;
@@ -115,17 +180,55 @@ export const REDEMPTION_TYPE_CHOICES: { value: RedemptionType; label: string }[]
   { value: "RECURRING", label: "Recurring" },
 ];
 
+export type SubscriptionCouponAction =
+  | "CART_PERCENT"
+  | "CART_AMOUNT"
+  | "ITEM_PERCENT"
+  | "ITEM_AMOUNT"
+  | "CATEGORY_PERCENT"
+  | "CATEGORY_AMOUNT"
+  | "BXGY"
+  | "REDEEM_FREE_ITEMS";
+
+export interface SubscriptionCouponSchedule {
+  id?: number;
+  coupon?: number;
+  weekday: SubscriptionPlanWeekday;
+  all_day: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
+}
+
 export interface SubscriptionCoupon {
   id?: number;
   product: number;
   product_name?: string;
+  promotion_coupon_id?: number | null;
   name: string;
-  code: string;
+  code?: string | null;
   description?: string;
   status: SubscriptionStatus;
-  discount_by: DiscountBy;
-  discount_value: string;
-  redemption_type: RedemptionType;
+  active: boolean;
+  auto_apply: boolean;
+  available_online: boolean;
+  auto_apply_online: boolean;
+  allow_combine?: boolean;
+  max_uses?: number;
+  use_count?: number;
+  start_at?: string | null;
+  end_at?: string | null;
+  apply_all_locations: boolean;
+  locations?: number[];
+  excluded_items?: number[];
+  excluded_categories?: number[];
+  excluded_groups?: number[];
+  min_subtotal?: string;
+  min_qty?: number;
+  condition_tree?: any;
+  action_type: SubscriptionCouponAction;
+  action_config?: any;
+  priority?: number;
+  schedules?: SubscriptionCouponSchedule[];
   created_on?: string;
   updated_on?: string;
 }
@@ -156,6 +259,18 @@ export interface SubscriptionUsageHistoryEntry {
   pos_reference: string;
 }
 
+export interface SubscriptionCouponUsageHistoryEntry {
+  coupon_code: string;
+  coupon_name: string;
+  invoice_id: number;
+  invoice_number: string;
+  invoice_date: string;
+  invoice_status: string;
+  location_id: number | null;
+  location_name: string | null;
+  grand_total: string;
+}
+
 export interface CustomerSubscriptionRecord {
   id: number;
   customer: number;
@@ -176,6 +291,7 @@ export interface CustomerSubscriptionRecord {
   source_invoice_date?: string | null;
   source_invoice_paid_at?: string | null;
   usage_history?: SubscriptionUsageHistoryEntry[];
+  coupon_usage_history?: SubscriptionCouponUsageHistoryEntry[];
   created_on: string;
   updated_on: string;
 }

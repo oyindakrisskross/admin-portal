@@ -1,7 +1,7 @@
 // src/components/reports/ComparisonChartCard.tsx
 
-import React from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import React, { useState } from "react";
+import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatMoneyNGN, formatNumber } from "../../helpers";
 
 export type ComparisonSeries = {
@@ -15,6 +15,7 @@ export type ComparisonSeries = {
 
 interface Props {
   title: string;
+  titleAccessory?: React.ReactNode;
   data: any[];
   dataKey?: string;
   kind: "money" | "count";
@@ -25,6 +26,7 @@ interface Props {
 
 export const ComparisonChartCard: React.FC<Props> = ({
   title,
+  titleAccessory,
   data,
   dataKey = "label",
   kind,
@@ -41,10 +43,32 @@ export const ComparisonChartCard: React.FC<Props> = ({
     return localMax;
   }, 0);
   const top = maxV === 0 ? 1 : Math.ceil(maxV * 1.1);
+  const [chartMode, setChartMode] = useState<"line" | "bar">("line");
 
   return (
     <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-4 shadow-sm">
-      <div className="mb-3 text-base font-medium text-kk-dark-text">{title}</div>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <div className="text-base font-medium text-kk-dark-text">{title}</div>
+          {titleAccessory}
+        </div>
+        <div className="inline-flex rounded-md border border-kk-dark-input-border p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setChartMode("line")}
+            className={`rounded px-2 py-1 ${chartMode === "line" ? "bg-kk-dark-hover text-kk-dark-text" : "text-kk-dark-text-muted"}`}
+          >
+            Line
+          </button>
+          <button
+            type="button"
+            onClick={() => setChartMode("bar")}
+            className={`rounded px-2 py-1 ${chartMode === "bar" ? "bg-kk-dark-hover text-kk-dark-text" : "text-kk-dark-text-muted"}`}
+          >
+            Bar
+          </button>
+        </div>
+      </div>
 
       {!series.length ? (
         <div className="flex h-64 items-center justify-center text-sm text-kk-dark-text-muted">
@@ -55,30 +79,57 @@ export const ComparisonChartCard: React.FC<Props> = ({
           <div className="h-64 flex-1">
             {data.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey={dataKey} tickMargin={8} interval="preserveStartEnd" />
-                  <YAxis
-                    domain={[0, top]}
-                    width="auto"
-                    tickMargin={8}
-                    tickFormatter={(v) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
-                  />
-                  <Tooltip
-                    formatter={(v: any) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
-                    labelFormatter={(l) => `Time: ${l}`}
-                  />
-                  {visibleSeries.map((s) => (
-                    <Line
-                      key={s.id}
-                      type="monotone"
-                      dataKey={s.valueKey}
-                      dot={false}
-                      strokeWidth={2}
-                      stroke={s.color}
+                {chartMode === "line" ? (
+                  <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey={dataKey} tickMargin={8} interval="preserveStartEnd" />
+                    <YAxis
+                      domain={[0, top]}
+                      width="auto"
+                      tickMargin={8}
+                      tickFormatter={(v) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
                     />
-                  ))}
-                </LineChart>
+                    <Tooltip
+                      formatter={(v: any) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
+                      labelFormatter={(l) => `Time: ${l}`}
+                    />
+                    {visibleSeries.map((s) => (
+                      <Line
+                        key={s.id}
+                        type="monotone"
+                        dataKey={s.valueKey}
+                        dot={false}
+                        strokeWidth={2}
+                        stroke={s.color}
+                      />
+                    ))}
+                  </LineChart>
+                ) : (
+                  <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey={dataKey} tickMargin={8} interval="preserveStartEnd" />
+                    <YAxis
+                      domain={[0, top]}
+                      width="auto"
+                      tickMargin={8}
+                      tickFormatter={(v) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
+                    />
+                    <Tooltip
+                      formatter={(v: any) => (kind === "money" ? formatMoneyNGN(v) : formatNumber(v))}
+                      labelFormatter={(l) => `Time: ${l}`}
+                    />
+                    <Legend />
+                    {visibleSeries.map((s) => (
+                      <Bar
+                        key={s.id}
+                        dataKey={s.valueKey}
+                        name={s.label}
+                        fill={s.color}
+                        radius={[3, 3, 0, 0]}
+                      />
+                    ))}
+                  </BarChart>
+                )}
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center text-sm text-kk-dark-text-muted">

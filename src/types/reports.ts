@@ -21,7 +21,7 @@ export interface InvoiceAdvancedFilters {
   clauses: InvoiceFilterClause[];
 }
 
-export type Granularity = "hour" | "day" | "week" | "month";
+export type Granularity = "hour" | "day" | "week" | "month" | "year";
 
 export interface OverviewResponse {
   range: { 
@@ -71,6 +71,9 @@ export interface ResponseRow {
   invoice_date: string;
   location: string;
   coupon_code?: string | null;
+  subtotal?: string;
+  discount_total?: string;
+  subtotal_after_discount?: string;
 };
 
 export interface ReportResponse {
@@ -221,4 +224,59 @@ export interface CategoriesReportResponse {
   };
   pie: Array<{ category_id: number; name: string; net_sales: string }>;
   results: CategoryReportRow[];
+}
+
+export interface PrepaidReportRow {
+  invoice_id: number;
+  invoice_number: string;
+  prepaid_number: string;
+  invoice_date: string;
+  location: string;
+  status: "UNUSED" | "PARTIALLY_REDEEMED" | "REDEEMED" | string;
+  last_redeemed_at?: string | null;
+  amount_paid: string;
+  items_purchased: string;
+  redeemed_items: string;
+  refunded_amount: string;
+}
+
+export interface PrepaidRedeemedItemRow {
+  source: "PREPAID" | "SUBSCRIPTION" | string;
+  item_id: number | null;
+  item_name: string;
+  item_sku: string;
+  quantity_redeemed: number;
+  last_redeemed_at?: string | null;
+}
+
+export interface PrepaidReportResponse {
+  range: {
+    start: string;
+    end: string;
+    granularity: Granularity;
+    available_granularities: Array<Granularity>;
+  };
+  scope: { location_ids: number[] | "ALL" };
+  kpi: {
+    invoices_created: number;
+    amount_paid: string;
+    items_purchased: string;
+    redeemed_items: string;
+    used_invoices: number;
+    fully_redeemed_invoices: number;
+    partially_redeemed_invoices: number;
+    unused_invoices: number;
+    refunded_invoices: number;
+    total_refunded: string;
+  };
+  series: {
+    invoices_created: SeriesPoint[];
+    amount_paid: SeriesPoint[];
+    items_purchased: SeriesPoint[];
+    redeemed_items: SeriesPoint[];
+    refunded_amount: SeriesPoint[];
+  };
+  pagination: { total: number; limit: number; offset: number };
+  results: PrepaidReportRow[];
+  redeemed_items_results: PrepaidRedeemedItemRow[];
 }

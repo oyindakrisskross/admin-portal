@@ -7,6 +7,7 @@ export interface ColumnMeta {
   label: string;                 // display label, e.g. "Name"
   type: ColumnDataType;
   choices?: { value: string; label: string }[]; // for "choice"
+  multi?: boolean;               // for multi-select choice filters
 }
 
 export interface FilterClause {

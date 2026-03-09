@@ -1,7 +1,7 @@
 // src/api/invoice.ts
 
 import api from "./client";
-import { type InvoiceResponse } from "../types/invoice";
+import { type InvoiceResponse, type PaymentRecord } from "../types/invoice";
 import type { FilterSet } from "../types/filters";
 
 export interface PaginatedResult<T> {
@@ -64,5 +64,95 @@ export type CreateInvoiceRefundPayload = {
 
 export async function createInvoiceRefund(id: number, payload: CreateInvoiceRefundPayload) {
   const res = await api.post<InvoiceResponse>(`/api/sales/invoices/${id}/refund/`, payload);
+  return res.data;
+}
+
+export type PrepaidCreateItemInput = {
+  item: number;
+  quantity: string | number;
+  unit_price?: string | number;
+  description?: string;
+};
+
+export type CreatePrepaidInvoicePayload = {
+  location: number;
+  customer?: number | null;
+  portal_customer?: number | null;
+  notes?: string;
+  payment_made?: boolean;
+  amount_paid?: string | number;
+  payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER" | string;
+  items: PrepaidCreateItemInput[];
+};
+
+export async function createPrepaidInvoice(payload: CreatePrepaidInvoicePayload) {
+  const res = await api.post<InvoiceResponse>("/api/sales/prepaid/create/", payload);
+  return res.data;
+}
+
+export type UpdatePrepaidInvoicePayload = {
+  location?: number;
+  customer?: number | null;
+  portal_customer?: number | null;
+  notes?: string;
+  payment_made?: boolean;
+  amount_paid?: string | number;
+  payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER" | string;
+  items?: PrepaidCreateItemInput[];
+};
+
+export async function updatePrepaidInvoice(id: number, payload: UpdatePrepaidInvoicePayload) {
+  const res = await api.patch<InvoiceResponse>(`/api/sales/prepaid/${id}/update/`, payload);
+  return res.data;
+}
+
+export type BulkInvoiceAction = "delete" | "assign_customer";
+
+export type BulkInvoiceFailure = {
+  id: number;
+  reason: string;
+  detail?: string;
+};
+
+export type BulkInvoiceResult = {
+  ok_ids: number[];
+  failed: BulkInvoiceFailure[];
+};
+
+export async function bulkInvoices(payload: {
+  ids: number[];
+  action: BulkInvoiceAction;
+  portal_customer?: number;
+  portal_customer_id?: number;
+}): Promise<BulkInvoiceResult> {
+  const res = await api.post<BulkInvoiceResult>("/api/sales/invoices/bulk/", payload);
+  return res.data;
+}
+
+export async function fetchSalesPayments(params?: {
+  search?: string;
+  page?: number;
+  page_size?: number;
+  location_id?: number;
+  method?: string;
+  type_id?: string;
+  start?: string;
+  end?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v === undefined || v === null || v === "") continue;
+      search.set(k, String(v));
+    }
+  }
+  const res = await api.get<PaginatedResult<PaymentRecord>>(
+    `/api/sales/payments/${search.toString() ? `?${search}` : ""}`
+  );
+  return res.data;
+}
+
+export async function fetchSalesPayment(id: number) {
+  const res = await api.get<PaymentRecord>(`/api/sales/payments/${id}/`);
   return res.data;
 }

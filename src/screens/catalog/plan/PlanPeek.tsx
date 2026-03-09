@@ -11,6 +11,8 @@ import {
   formatBillingFrequency,
   formatPricingModel,
   PLAN_TRANSACTION_STATUS_CHOICES,
+  SUBSCRIPTION_PLAN_REDEEM_INTERVAL_CHOICES,
+  SUBSCRIPTION_PLAN_WEEKDAY_CHOICES,
   type SubscriptionAddon,
   type SubscriptionCoupon,
   type SubscriptionPlan,
@@ -45,6 +47,14 @@ function statusBadge(label: string) {
           ? "bg-rose-700 text-rose-100"
           : "bg-slate-500 text-slate-100";
   return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
+}
+
+function intervalUnitLabel(value?: string) {
+  return SUBSCRIPTION_PLAN_REDEEM_INTERVAL_CHOICES.find((x) => x.value === value)?.label ?? value ?? "-";
+}
+
+function weekdayLabel(value?: string) {
+  return SUBSCRIPTION_PLAN_WEEKDAY_CHOICES.find((x) => x.value === value)?.label ?? value ?? "-";
 }
 
 export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
@@ -238,6 +248,54 @@ export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
               <p>{activePlan.description}</p>
             </div>
           ) : null}
+
+          <div className="mt-4 flex flex-col gap-2">
+            <p className="text-kk-dark-text-muted">Redeemable Items</p>
+            {(activePlan.redeemable_items ?? []).length ? (
+              <div className="overflow-hidden rounded-lg border border-kk-dark-border">
+                <table className="min-w-full">
+                  <thead className="bg-kk-dark-bg-elevated">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs">Item</th>
+                      <th className="px-3 py-2 text-left text-xs">Total Limit</th>
+                      <th className="px-3 py-2 text-left text-xs">Interval Restriction</th>
+                      <th className="px-3 py-2 text-left text-xs">Schedule</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activePlan.redeemable_items ?? []).map((row) => {
+                      const schedule = (row.schedules ?? []).length
+                        ? (row.schedules ?? [])
+                            .map((s) =>
+                              s.all_day
+                                ? `${weekdayLabel(s.weekday)} (all day)`
+                                : `${weekdayLabel(s.weekday)} ${s.start_time ?? ""}-${s.end_time ?? ""}`
+                            )
+                            .join(", ")
+                        : "No day/time restriction";
+                      const intervalText =
+                        row.interval_unit === "NONE"
+                          ? "No interval limit"
+                          : `${row.interval_value} per ${intervalUnitLabel(row.interval_unit).toLowerCase().replace("per ", "")}`;
+                      return (
+                        <tr key={row.id ?? `${row.item}-${row.interval_unit}-${row.interval_value}`} className="border-t border-kk-dark-border">
+                          <td className="px-3 py-2 text-xs">
+                            {row.item_name ?? `Item #${row.item}`}
+                            {row.item_sku ? <span className="ml-1 text-kk-dark-text-muted">({row.item_sku})</span> : null}
+                          </td>
+                          <td className="px-3 py-2 text-xs">{row.max_redemptions === 0 ? "Unlimited" : row.max_redemptions}</td>
+                          <td className="px-3 py-2 text-xs">{intervalText}</td>
+                          <td className="px-3 py-2 text-xs">{schedule}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-sm text-kk-dark-text-muted">No redeemable items attached to this plan.</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -359,21 +417,24 @@ export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
               <tr>
                 <th>Name</th>
                 <th>Coupon Code</th>
-                <th>Discount Value</th>
-                <th>Discount By</th>
-                <th>Redemption Type</th>
+                <th>Action Type</th>
+                <th>Status</th>
+                <th>Attached To Plan</th>
               </tr>
             </thead>
             <tbody>
-              {coupons.map((row) => (
-                <tr key={row.id}>
-                  <td>{row.name}</td>
-                  <td>{row.code}</td>
-                  <td>{row.discount_value}</td>
-                  <td>{row.discount_by === "PERCENT" ? "Percentage" : "Amount"}</td>
-                  <td>{row.redemption_type === "ONE_TIME" ? "One-time" : "Recurring"}</td>
-                </tr>
-              ))}
+              {coupons.map((row) => {
+                const attached = (activePlan.coupons ?? []).some((c) => c.id === row.id);
+                return (
+                  <tr key={row.id}>
+                    <td>{row.name}</td>
+                    <td>{row.code || "-"}</td>
+                    <td>{row.action_type}</td>
+                    <td>{statusBadge(row.active ? "ACTIVE" : "INACTIVE")}</td>
+                    <td>{attached ? "Yes" : "No"}</td>
+                  </tr>
+                );
+              })}
               {couponsLoading ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-xs text-kk-dark-text-muted">
@@ -384,7 +445,7 @@ export function PlanPeek({ plan, canCreate, onAssetsChanged }: Props) {
               {!couponsLoading && !coupons.length ? (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-xs text-kk-dark-text-muted">
-                    No coupons found for this product.
+                    No coupons found for this subscription product.
                   </td>
                 </tr>
               ) : null}

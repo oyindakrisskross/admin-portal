@@ -21,6 +21,7 @@ import TaxFormPage from "../screens/settings/tax/TaxFormPage";
 import { UnitListPage } from "../screens/settings/unit/UnitListPage";
 import UnitFormPage from "../screens/settings/unit/UnitFormPage";
 import OrgFormPage from "../screens/settings/OrgFormPage";
+import PaymentsSettingsPage from "../screens/settings/PaymentsSettingsPage";
 import DailyReportsSettingsPage from "../screens/settings/DailyReportsSettingsPage";
 import MonthlyReportsSettingsPage from "../screens/settings/MonthlyReportsSettingsPage";
 import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
@@ -52,12 +53,16 @@ import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
 import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
 import { InventoryTransferListPage } from "../screens/catalog/inventoryTransfer/InventoryTransferListPage";
 import { InventoryTransferFormPage } from "../screens/catalog/inventoryTransfer/InventoryTransferFormPage";
+import { InventoryAdjustmentPage } from "../screens/catalog/inventoryAdjustment/InventoryAdjustmentPage";
 import { PlansListPage } from "../screens/catalog/plan/PlansListPage";
 import PlanFormPage from "../screens/catalog/plan/PlanFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
 import InvoiceRefundPage from "../screens/sales/invoice/InvoiceRefundPage";
+import { PrePaidListPage } from "../screens/sales/prepaid/PrePaidListPage";
+import { PaymentListPage } from "../screens/sales/payment/PaymentListPage";
 import { SubscriptionListPage } from "../screens/sales/subscription/SubscriptionListPage";
 import InvoicesReportPage from "../screens/reports/InvoicesReportPage";
+import PrepaidReportPage from "../screens/reports/PrepaidReportPage";
 import CouponsReportPage from "../screens/reports/CouponsReportPage";
 import CouponDetailReportPage from "../screens/reports/coupons/CouponDetailReportPage";
 import { CouponListPage } from "../screens/promotions/coupon/CouponListPage";
@@ -154,6 +159,14 @@ export default function App() {
               <InvoicesReportPage />
             </RequirePerm>
           } 
+        />
+        <Route
+          path="reports/prepaid"
+          element={
+            <RequirePerm perm="Reports" action="view">
+              <PrepaidReportPage />
+            </RequirePerm>
+          }
         />
         <Route
           path="reports/coupons"
@@ -281,6 +294,14 @@ export default function App() {
             </RequirePerm>
           }
         />
+        <Route
+          path="catalog/inventory-adjustment"
+          element={
+            <RequirePerm perm="Inventory Adjustment" action="create">
+              <InventoryAdjustmentPage />
+            </RequirePerm>
+          }
+        />
 
         {/* Catalog: Subscription Plans */}
         <Route
@@ -390,6 +411,38 @@ export default function App() {
           element={
             <RequirePerm perm="Sales Return" action="create">
               <InvoiceRefundPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="sales/prepaid"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <PrePaidListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="sales/prepaid/:id"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <PrePaidListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="sales/payments"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <PaymentListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="sales/payments/:id"
+          element={
+            <RequirePerm perm="Invoices" action="view">
+              <PaymentListPage />
             </RequirePerm>
           }
         />
@@ -569,6 +622,14 @@ export default function App() {
             element={
               <RequirePerm perm="Organization" action="edit">
                 <OrgFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="payments"
+            element={
+              <RequirePerm perm="Organization" action="edit">
+                <PaymentsSettingsPage />
               </RequirePerm>
             }
           />

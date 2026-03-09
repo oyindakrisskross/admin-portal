@@ -51,6 +51,7 @@ const portalLinks = [
     children: [
       { to: "/catalog/item-groups", label: "Item Groups", perm: "Item" },
       { to: "/catalog/items", label: "Items", perm: "Item" },
+      { to: "/catalog/inventory-adjustment", label: "Inventory Adjustment", perm: "Inventory Adjustment" },
       { to: "/catalog/plans", label: "Plans", perm: "Subscriptions" },
       { to: "/catalog/categories", label: "Categories", perm: "Category"},
       { to: "/catalog/transfer-inventory", label: "Transfer Orders", perm: "Transfer Orders" },
@@ -66,6 +67,8 @@ const portalLinks = [
     icon: <ShoppingCart className="h-5 w-5" />,
     children: [
       { to: "/sales/invoices", label: "Invoices", perm: "Invoices" },
+      { to: "/sales/prepaid", label: "Pre-Paid", perm: "Invoices" },
+      { to: "/sales/payments", label: "Payments", perm: "Invoices" },
       { to: "/sales/subscriptions", label: "Subscriptions", perm: "Subscriptions" },
     ],
   },
@@ -98,6 +101,7 @@ const portalLinks = [
       { to: "/reports/categories", label: "Categories", perm: "Reports" },
       { to: "/reports/variations", label: "Variations", perm: "Reports" },
       { to: "/reports/invoices", label: "Invoices", perm: "Reports" },
+      { to: "/reports/prepaid", label: "Pre-Paid", perm: "Reports" },
       { to: "/reports/coupons", label: "Coupons", perm: "Reports" },
     ],
   },

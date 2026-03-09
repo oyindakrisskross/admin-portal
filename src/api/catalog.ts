@@ -325,7 +325,7 @@ export async function updateItem(id: number, payload: Catalog.ItemGroup) {
   return res.data;
 }
 
-export async function patchItem(id: number, payload: Partial<Catalog.ItemGroup>) {
+export async function patchItem(id: number, payload: Partial<Catalog.Item>) {
   const res = await api.patch<Catalog.Item>(`/api/catalog/items/${id}/`, payload);
   return res.data;
 }

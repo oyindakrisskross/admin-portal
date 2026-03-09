@@ -3,6 +3,7 @@
 import type { GroupResponse, OverviewResponse, ReportResponse, InvoiceAdvancedFilters } from "../types/reports";
 import type { CouponDetailReportResponse, CouponReportResponse } from "../types/reports";
 import type { CategoriesReportResponse } from "../types/reports";
+import type { PrepaidReportResponse } from "../types/reports";
 import type { DailyReportRunResponse, DailyReportSettings } from "../types/dailyReports";
 import type { MonthlyReportRunResponse, MonthlyReportSettings } from "../types/monthlyReports";
 import api from "./client";
@@ -19,7 +20,7 @@ export async function fetchOverviewReport(args: {
   end: string;   // YYYY-MM-DD
   itemsMode: "parents" | "all";
   locationIds?: number[]; // omit => all allowed
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
 }): Promise<OverviewResponse> {
   const params: Record<string, any> = {
     start: args.start,
@@ -44,7 +45,7 @@ export async function fetchProductsReport(args: {
   end: string;
   locationIds?: number[];
   itemsMode?: "parents" | "all";
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   itemIds?: number[];
   seriesByItem?: boolean;
   search?: string;
@@ -76,7 +77,7 @@ export async function fetchVariationsReport(args: {
   end: string;
   locationIds?: number[];
   itemsMode?: "parents" | "all";
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   search?: string;
   sort?: "items_sold" | "net_sales" | "orders" | "name";
   order?: "asc" | "desc";
@@ -103,7 +104,7 @@ export async function fetchInvoicesReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   search?: string;
   sort?: "net_sales" | "number" | "items_sold";
   order?: "asc" | "desc";
@@ -133,7 +134,7 @@ export async function fetchGroupReport(args: {
   end: string;
   locationIds?: number[];
   itemsMode?: "parents" | "all";
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
 }) {
   const q = new URLSearchParams();
   q.set("start", args.start);
@@ -150,7 +151,7 @@ export async function fetchCouponsReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   search?: string;
   sort?: "net_discount" | "discounted_orders" | "code" | "name";
   order?: "asc" | "desc";
@@ -177,7 +178,7 @@ export async function fetchCouponDetailReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   sort?: "date" | "discount" | "net_sales" | "number";
   order?: "asc" | "desc";
   limit?: number;
@@ -204,7 +205,7 @@ export async function fetchCategoriesReport(args: {
   end: string;
   locationIds?: number[];
   itemsMode?: "parents" | "all";
-  granularity?: "hour" | "day" | "week" | "month";
+  granularity?: "hour" | "day" | "week" | "month" | "year";
   groupBy?: "all" | "top_level";
   parentCategoryId?: number;
 }): Promise<CategoriesReportResponse> {
@@ -220,6 +221,32 @@ export async function fetchCategoriesReport(args: {
   if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
 
   const res = await api.get<CategoriesReportResponse>(`/api/sales/reports/categories/?${q.toString()}`);
+  return res.data;
+}
+
+export async function fetchPrepaidReport(args: {
+  start: string;
+  end: string;
+  locationIds?: number[];
+  granularity?: "hour" | "day" | "week" | "month" | "year";
+  search?: string;
+  sort?: "amount_paid" | "number" | "items_purchased" | "redeemed_items" | "status" | "refunded_amount";
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}): Promise<PrepaidReportResponse> {
+  const q = new URLSearchParams();
+  q.set("start", args.start);
+  q.set("end", args.end);
+  if (args.granularity) q.set("granularity", args.granularity);
+  if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
+  if (args.search) q.set("search", args.search);
+  if (args.sort) q.set("sort", args.sort);
+  if (args.order) q.set("order", args.order);
+  q.set("limit", String(args.limit ?? 25));
+  q.set("offset", String(args.offset ?? 0));
+
+  const res = await api.get<PrepaidReportResponse>(`/api/sales/reports/prepaid/?${q.toString()}`);
   return res.data;
 }
 

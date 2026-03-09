@@ -3,10 +3,12 @@ import type {
   CustomerSubscriptionRecord,
   SubscriptionAddon,
   SubscriptionCoupon,
+  SubscriptionCouponSchedule,
   SubscriptionPlan,
   SubscriptionPlanTransaction,
   SubscriptionProduct,
 } from "../types/subscriptions";
+import type { FilterSet } from "../types/filters";
 
 export interface PaginatedResult<T> {
   results: T[];
@@ -121,6 +123,31 @@ export async function deleteSubscriptionCoupon(id: number) {
   await api.delete(`/api/subscriptions/coupons/${id}/`);
 }
 
+export async function fetchSubscriptionCouponSchedules(couponId: number) {
+  const res = await api.get<PaginatedResult<SubscriptionCouponSchedule>>(
+    "/api/subscriptions/coupon-schedules/",
+    { params: { coupon: couponId } }
+  );
+  return res.data;
+}
+
+export async function createSubscriptionCouponSchedule(payload: SubscriptionCouponSchedule) {
+  const res = await api.post<SubscriptionCouponSchedule>("/api/subscriptions/coupon-schedules/", payload);
+  return res.data;
+}
+
+export async function updateSubscriptionCouponSchedule(
+  id: number,
+  patch: Partial<SubscriptionCouponSchedule>
+) {
+  const res = await api.patch<SubscriptionCouponSchedule>(`/api/subscriptions/coupon-schedules/${id}/`, patch);
+  return res.data;
+}
+
+export async function deleteSubscriptionCouponSchedule(id: number) {
+  await api.delete(`/api/subscriptions/coupon-schedules/${id}/`);
+}
+
 export async function fetchSubscriptionPlanTransactions(params?: Record<string, unknown>) {
   const res = await api.get<PaginatedResult<SubscriptionPlanTransaction>>(
     "/api/subscriptions/plan-transactions/",
@@ -129,10 +156,35 @@ export async function fetchSubscriptionPlanTransactions(params?: Record<string, 
   return res.data;
 }
 
-export async function fetchCustomerSubscriptions(params?: Record<string, unknown>) {
+export async function fetchCustomerSubscriptions(
+  params?: (Record<string, unknown> & { filters?: FilterSet })
+) {
+  const search = new URLSearchParams();
+
+  if (params) {
+    const { filters, ...rest } = params;
+    for (const [k, v] of Object.entries(rest)) {
+      if (v === undefined || v === null || v === "") continue;
+      search.set(k, String(v));
+    }
+
+    if (filters) {
+      filters.clauses.forEach((clause) => {
+        let encodedValue: string;
+        if (Array.isArray(clause.value)) {
+          encodedValue = clause.value.join(",");
+        } else if (typeof clause.value === "object") {
+          encodedValue = JSON.stringify(clause.value);
+        } else {
+          encodedValue = clause.value ?? "";
+        }
+        search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
+      });
+    }
+  }
+
   const res = await api.get<PaginatedResult<CustomerSubscriptionRecord>>(
-    "/api/subscriptions/subscriptions/",
-    { params }
+    `/api/subscriptions/subscriptions/${search.toString() ? `?${search}` : ""}`
   );
   return res.data;
 }
@@ -142,10 +194,32 @@ export async function fetchCustomerSubscription(id: number) {
   return res.data;
 }
 
+export interface SubscriptionPassQRResponse {
+  subscription_id: number;
+  subscription_status: string;
+  plan_id: number;
+  plan_name: string;
+  customer_id: number;
+  qr_kind: "SUBSCRIPTION_PASS";
+  qr_value: string;
+  pass_code: string;
+}
+
+export async function generateSubscriptionPassQR(subscriptionId: number) {
+  const res = await api.post<SubscriptionPassQRResponse>(
+    `/api/subscriptions/subscriptions/${subscriptionId}/qr-pass/`
+  );
+  return res.data;
+}
+
 export async function createCustomerSubscription(payload: {
   customer: number;
   plan: number;
   started_at?: string;
+  payment_made?: boolean;
+  amount_paid?: string;
+  payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+  payment_reference?: string;
 }) {
   const res = await api.post<CustomerSubscriptionRecord>("/api/subscriptions/subscriptions/", payload);
   return res.data;

@@ -49,9 +49,10 @@ export const PermCategoryListPage: React.FC = () => {
           title = "Permission Categories"
           right = {
             <div className="flex items-center gap-1 text-xs">
-              <FilterBar 
+              <FilterBar
                 columns={filterColumns}
                 filters={filters}
+                showPills={false}
                 onChange={setFilters}
               />
               {can("Permission Categories", "create") && (
@@ -64,6 +65,14 @@ export const PermCategoryListPage: React.FC = () => {
                 </button>
               )}
             </div>
+          }
+          below={
+            <FilterBar
+              columns={filterColumns}
+              filters={filters}
+              showTrigger={false}
+              onChange={setFilters}
+            />
           }
         />
 

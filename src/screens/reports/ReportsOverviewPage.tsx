@@ -8,16 +8,15 @@ import { type Outlet } from "../../types/location";
 import { formatMoneyNGN, formatNumber } from "../../helpers";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
 import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
+import { ReportDateRangePicker } from "../../components/date/ReportDateRangePicker";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
 import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
 export default function ReportsOverviewPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
@@ -106,32 +105,17 @@ export default function ReportsOverviewPage() {
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div className="flex w-full flex-col gap-3">
-          <ComparePeriodControls
-            enabled={compareEnabled}
-            onToggle={toggleCompare}
-            compareStart={compareStart}
-            compareEnd={compareEnd}
-            periodDays={periodDays}
-            onCompareStartChange={setCompareStart}
-          />
-
           <div className="flex flex-wrap items-end gap-3">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-kk-dark-text-muted">Start</label>
-              <input
-                type="date"
-                value={start}
-                onChange={(e) => setStart(e.target.value)}
-                className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-kk-dark-text-muted">End</label>
-              <input
-                type="date"
-                value={end}
-                onChange={(e) => setEnd(e.target.value)}
-                className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
+            <div className="min-w-[280px]">
+              <ReportDateRangePicker
+                start={start}
+                end={end}
+                compareTo={compareMode}
+                onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
+                  setStart(nextStart);
+                  setEnd(nextEnd);
+                  setCompareMode(compareTo);
+                }}
               />
             </div>
 

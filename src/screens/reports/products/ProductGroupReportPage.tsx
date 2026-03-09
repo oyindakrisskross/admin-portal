@@ -1,16 +1,16 @@
-﻿// src/screens/reports/products/ProductGroupReportPage.tsx
+// src/screens/reports/products/ProductGroupReportPage.tsx
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { formatMoneyNGN, formatNumber } from "../../../helpers";
-import type { GroupResponse } from "../../../types/reports";
+import type { Granularity, GroupResponse } from "../../../types/reports";
 import { fetchGroupReport } from "../../../api/reports";
 import { ChartCard } from "../../../components/reports/ChartCard";
 import { KpiCard } from "../../../components/reports/KpiCard";
-import { ComparePeriodControls } from "../../../components/reports/ComparePeriodControls";
 import { buildComparisonChartData, buildCompareSub } from "../../../components/reports/periodCompare";
 import { fetchOutlets } from "../../../api/location";
 import type { Outlet } from "../../../types/location";
+import { ReportDateRangePicker } from "../../../components/date/ReportDateRangePicker";
 import { useReportDateRange } from "../../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../../hooks/useComparePeriod";
 import { useReportAutoRefresh } from "../../../hooks/useReportAutoRefresh";
@@ -28,8 +28,7 @@ export default function ProductGroupReportPage() {
     start: sp.get("start") ?? undefined,
     end: sp.get("end") ?? undefined,
   });
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   useEffect(() => {
@@ -44,7 +43,7 @@ export default function ProductGroupReportPage() {
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
 
-  const [granularity, setGranularity] = useState<"hour" | "day" | "week" | "month" | undefined>(undefined);
+  const [granularity, setGranularity] = useState<Granularity | undefined>(undefined);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -107,7 +106,7 @@ export default function ProductGroupReportPage() {
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show â€œAll locationsâ€
+      // keep non-blocking; selector can still show “All locations”
       setOutlets([]);
     });
   }, []);
@@ -140,7 +139,7 @@ export default function ProductGroupReportPage() {
             onClick={() => nav(-1)}
             className="text-sm text-purple-500 hover:underline"
           >
-            â† Back
+            ← Back
           </button>
           <h1 className="text-lg font-semibold mt-1">
             {data?.group?.name ?? "Product group"}{" "}
@@ -149,33 +148,18 @@ export default function ProductGroupReportPage() {
       </div>
 
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={toggleCompare}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={setCompareStart}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div>
-            <label className="text-xs text-kk-dark-text-muted">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
+          <div className="md:col-span-2">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
+              }}
             />
           </div>
 
@@ -262,17 +246,17 @@ export default function ProductGroupReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <KpiCard
           label="Items Sold"
-          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
         />
         <KpiCard
           label="Net Sales"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
         />
         <KpiCard
           label="Orders"
-          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
         />
       </div>
@@ -294,7 +278,7 @@ export default function ProductGroupReportPage() {
           <div className="text-xs text-kk-dark-text-muted">All items under this group (each SKU is a variation).</div>
         </div>
 
-        {loading && !data ? <div className="p-4 text-sm">Loadingâ€¦</div> : null}
+        {loading && !data ? <div className="p-4 text-sm">Loading…</div> : null}
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

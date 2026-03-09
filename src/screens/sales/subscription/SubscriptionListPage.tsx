@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Ticket } from "lucide-react";
+import { Download, Plus, Search, Ticket } from "lucide-react";
+import { QRCodeCanvas } from "qrcode.react";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
@@ -7,6 +8,8 @@ import {
   createCustomerSubscription,
   fetchCustomerSubscriptions,
   fetchSubscriptionPlans,
+  fetchSubscriptionProducts,
+  generateSubscriptionPassQR,
 } from "../../../api/subscriptions";
 import type { CustomerRecord } from "../../../types/customerPortal";
 import type { CustomerSubscriptionRecord, SubscriptionPlan } from "../../../types/subscriptions";
@@ -15,8 +18,11 @@ import { useAuth } from "../../../auth/AuthContext";
 import { CustomerCreateModal } from "../../../components/crm/CustomerCreateModal";
 import { CustomerSearchSelect } from "../../../components/crm/CustomerSearchSelect";
 import { SubscriptionPeek } from "./SubscriptionPeek";
+import { FilterBar } from "../../../components/filter/FilterBar";
+import type { ColumnMeta, FilterSet } from "../../../types/filters";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const SUBSCRIPTION_QR_CANVAS_ID = "subscription-pass-qr-canvas";
 
 const statusBadge = (label: string) => {
   const tone =
@@ -44,6 +50,9 @@ export const SubscriptionListPage: React.FC = () => {
   const [sort, setSort] = useState<
     SortState<"customer" | "plan" | "type" | "status" | "started" | "expires" | "uses"> | null
   >(null);
+  const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
+  const [filterPlanChoices, setFilterPlanChoices] = useState<{ value: string; label: string }[]>([]);
+  const [filterProductChoices, setFilterProductChoices] = useState<{ value: string; label: string }[]>([]);
 
   const [showStartModal, setShowStartModal] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -51,17 +60,76 @@ export const SubscriptionListPage: React.FC = () => {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<number | "">("");
   const [startedDate, setStartedDate] = useState("");
+  const [paymentMade, setPaymentMade] = useState(true);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<"CASH" | "CARD" | "TRANSFER" | "OTHER">("OTHER");
+  const [paymentReference, setPaymentReference] = useState("");
   const [planOptions, setPlanOptions] = useState<SubscriptionPlan[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrValue, setQrValue] = useState("");
+  const [qrPassCode, setQrPassCode] = useState("");
+
+  const filterColumns: ColumnMeta[] = useMemo(
+    () => [
+      { id: "assigned_customer", label: "Assigned customer", type: "text" },
+      { id: "started_at", label: "Date started", type: "date" },
+      { id: "expires_at", label: "Date expires", type: "date" },
+      {
+        id: "type",
+        label: "Type",
+        type: "choice",
+        choices: [
+          { value: "CYCLE", label: "Cycle-based" },
+          { value: "USAGE", label: "Usage-based" },
+        ],
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "choice",
+        choices: [
+          { value: "ACTIVE", label: "Active" },
+          { value: "EXPIRED", label: "Expired" },
+          { value: "DEPLETED", label: "Depleted" },
+          { value: "CANCELLED", label: "Cancelled" },
+        ],
+      },
+      {
+        id: "plan",
+        label: "Plan",
+        type: "choice",
+        choices: filterPlanChoices,
+      },
+      {
+        id: "subscription_product",
+        label: "Subscription product",
+        type: "choice",
+        choices: filterProductChoices,
+      },
+    ],
+    [filterPlanChoices, filterProductChoices]
+  );
 
   const hasPeek = Boolean(selectedSubscription);
 
-  const loadRows = async (params: { search?: string; page: number; page_size: number }) => {
+  useEffect(() => {
+    setQrOpen(false);
+    setQrLoading(false);
+    setQrValue("");
+    setQrPassCode("");
+    setQrError(null);
+  }, [selectedSubscription?.id]);
+
+  const loadRows = async (params: { search?: string; page: number; page_size: number; filters?: FilterSet }) => {
     const data = await fetchCustomerSubscriptions({
       search: params.search,
       page: params.page,
       page_size: params.page_size,
+      filters: params.filters,
     });
     setRows(data.results ?? []);
     setTotalCount(Number(data.count ?? 0));
@@ -81,6 +149,7 @@ export const SubscriptionListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          filters,
         });
         if (cancelled) return;
         setRows(data.results ?? []);
@@ -97,7 +166,46 @@ export const SubscriptionListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize]);
+  }, [debouncedSearch, page, pageSize, filters]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [plansData, productsData] = await Promise.all([
+          fetchSubscriptionPlans({ page_size: 500 }),
+          fetchSubscriptionProducts({ page_size: 500 }),
+        ]);
+        if (cancelled) return;
+
+        const planChoices = (plansData.results ?? [])
+          .filter((plan) => plan.id != null)
+          .map((plan) => ({
+            value: String(plan.id),
+            label: `${plan.name}${plan.code ? ` (${plan.code})` : ""}`,
+          }));
+
+        const productChoices = (productsData.results ?? [])
+          .filter((product) => product.id != null)
+          .map((product) => ({
+            value: String(product.id),
+            label: String(product.name || `Product #${product.id}`),
+          }));
+
+        setFilterPlanChoices(planChoices);
+        setFilterProductChoices(productChoices);
+      } catch {
+        if (!cancelled) {
+          setFilterPlanChoices([]);
+          setFilterProductChoices([]);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -190,6 +298,59 @@ export const SubscriptionListPage: React.FC = () => {
     setSelectedCustomer(null);
     setSelectedPlanId("");
     setStartedDate("");
+    setPaymentMade(true);
+    setPaymentAmount("");
+    setPaymentMethod("OTHER");
+    setPaymentReference("");
+  };
+
+  const closeQrModal = () => {
+    setQrOpen(false);
+    setQrError(null);
+  };
+
+  const openSubscriptionQr = async () => {
+    if (!selectedSubscription?.id) return;
+    setQrOpen(true);
+    setQrLoading(true);
+    setQrError(null);
+    setQrValue("");
+    setQrPassCode("");
+    try {
+      const data = await generateSubscriptionPassQR(selectedSubscription.id);
+      setQrValue(String(data?.qr_value || ""));
+      setQrPassCode(String(data?.pass_code || ""));
+    } catch (err: any) {
+      const detail = err?.response?.data;
+      if (typeof detail?.detail === "string") {
+        setQrError(detail.detail);
+      } else {
+        setQrError("Unable to generate subscription pass QR.");
+      }
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const downloadSubscriptionQr = () => {
+    setQrError(null);
+    if (!selectedSubscription?.id) return;
+    if (!qrValue) {
+      setQrError("Unable to generate subscription pass QR.");
+      return;
+    }
+    const canvas = document.getElementById(SUBSCRIPTION_QR_CANVAS_ID) as HTMLCanvasElement | null;
+    if (!canvas) {
+      setQrError("Unable to render QR canvas.");
+      return;
+    }
+    const href = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `SUB-${selectedSubscription.id}-pass.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleCustomerCreated = (customer: CustomerRecord) => {
@@ -213,9 +374,13 @@ export const SubscriptionListPage: React.FC = () => {
         customer: Number(selectedCustomer.id),
         plan: Number(selectedPlanId),
         started_at: startedDate ? new Date(`${startedDate}T00:00:00`).toISOString() : undefined,
+        payment_made: paymentMade,
+        amount_paid: paymentMade && paymentAmount.trim() ? paymentAmount.trim() : undefined,
+        payment_method: paymentMethod,
+        payment_reference: paymentReference.trim() || undefined,
       });
       closeStartModal();
-      await loadRows({ search: debouncedSearch || undefined, page, page_size: pageSize });
+      await loadRows({ search: debouncedSearch || undefined, page, page_size: pageSize, filters });
     } catch (err: any) {
       const detail = err?.response?.data;
       if (typeof detail?.detail === "string") {
@@ -262,6 +427,15 @@ export const SubscriptionListPage: React.FC = () => {
                     placeholder="Search customer or plan"
                   />
                 </div>
+                <FilterBar
+                  columns={filterColumns}
+                  filters={filters}
+                  showPills={false}
+                  onChange={(next) => {
+                    setFilters(next);
+                    setPage(1);
+                  }}
+                />
                 {can("Subscriptions", "create") ? (
                   <button
                     type="button"
@@ -276,6 +450,19 @@ export const SubscriptionListPage: React.FC = () => {
             ) : (
               ""
             )
+          }
+          below={
+            !hasPeek ? (
+              <FilterBar
+                columns={filterColumns}
+                filters={filters}
+                showTrigger={false}
+                onChange={(next) => {
+                  setFilters(next);
+                  setPage(1);
+                }}
+              />
+            ) : null
           }
         />
 
@@ -386,12 +573,84 @@ export const SubscriptionListPage: React.FC = () => {
       {selectedSubscription ? (
         <SidePeek
           isOpen={hasPeek}
-          onClose={() => setSelectedSubscription(null)}
+          onClose={() => {
+            setSelectedSubscription(null);
+            setQrOpen(false);
+            setQrLoading(false);
+            setQrValue("");
+            setQrPassCode("");
+            setQrError(null);
+          }}
           widthClass="w-3/4"
-          actions={<div className="text-xs font-medium text-kk-dark-text">#{selectedSubscription.id}</div>}
+          actions={
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-medium text-kk-dark-text">#{selectedSubscription.id}</div>
+              <button
+                type="button"
+                onClick={() => void openSubscriptionQr()}
+                className="inline-flex items-center gap-1 rounded-md border border-kk-dark-input-border px-3 py-1.5 text-xs hover:bg-kk-dark-hover disabled:opacity-60"
+                disabled={qrLoading}
+              >
+                <Download className="h-3.5 w-3.5" />
+                QR PNG
+              </button>
+            </div>
+          }
         >
           <SubscriptionPeek subscriptionId={selectedSubscription.id} />
         </SidePeek>
+      ) : null}
+
+      {selectedSubscription && qrOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-kk-dark-bg/70 p-4">
+          <div className="w-full max-w-md rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
+            <div className="border-b border-kk-dark-border px-5 py-4">
+              <h2 className="text-lg font-semibold">Subscription Pass QR</h2>
+              <p className="text-xs text-kk-dark-text-muted">
+                This single QR code represents all redeemable items and redemption conditions configured for this
+                subscription.
+              </p>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              {qrLoading ? (
+                <div className="rounded-lg border border-kk-dark-input-border px-3 py-6 text-center text-sm text-kk-dark-text-muted">
+                  Generating QR code...
+                </div>
+              ) : (
+                <div className="flex justify-center rounded-lg border border-kk-dark-input-border bg-white p-3">
+                  <QRCodeCanvas
+                    id={SUBSCRIPTION_QR_CANVAS_ID}
+                    value={qrValue}
+                    size={240}
+                    includeMargin
+                  />
+                </div>
+              )}
+              <div className="text-center text-xs text-kk-dark-text-muted break-all">
+                {qrPassCode || "-"}
+              </div>
+              {qrError ? <p className="text-xs font-medium text-red-500">{qrError}</p> : null}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-kk-dark-border px-5 py-4">
+              <button
+                type="button"
+                onClick={closeQrModal}
+                className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm hover:bg-kk-dark-hover"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={downloadSubscriptionQr}
+                className="inline-flex items-center gap-1 rounded-md bg-kk-accent px-3 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-60"
+                disabled={!qrValue || qrLoading}
+              >
+                <Download className="h-4 w-4" />
+                Download PNG
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {showStartModal ? (
@@ -458,6 +717,64 @@ export const SubscriptionListPage: React.FC = () => {
                   disabled={starting}
                 />
               </label>
+
+              <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs text-kk-dark-text-muted">Record Payment</span>
+                  <label className="inline-flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={paymentMade}
+                      onChange={(e) => setPaymentMade(e.target.checked)}
+                      disabled={starting}
+                    />
+                    Payment made
+                  </label>
+                </div>
+
+                <div className="grid gap-2 md:grid-cols-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] text-kk-dark-text-muted">Amount Paid</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                      placeholder="Leave blank to use plan total"
+                      disabled={starting || !paymentMade}
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] text-kk-dark-text-muted">Payment Method</span>
+                    <select
+                      value={paymentMethod}
+                      onChange={(e) => setPaymentMethod(e.target.value as "CASH" | "CARD" | "TRANSFER" | "OTHER")}
+                      className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                      disabled={starting || !paymentMade}
+                    >
+                      <option value="OTHER">Other</option>
+                      <option value="CASH">Cash</option>
+                      <option value="CARD">Card</option>
+                      <option value="TRANSFER">Transfer</option>
+                    </select>
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11px] text-kk-dark-text-muted">Reference (optional)</span>
+                    <input
+                      type="text"
+                      value={paymentReference}
+                      onChange={(e) => setPaymentReference(e.target.value)}
+                      className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                      placeholder="Txn/ref no."
+                      disabled={starting || !paymentMade}
+                    />
+                  </label>
+                </div>
+              </div>
             </div>
 
             {startError ? (

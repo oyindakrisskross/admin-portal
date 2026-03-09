@@ -266,6 +266,7 @@ export interface Item {
   unit?: number;
   unit_name?: string;
   sale_tax?: number;
+  sale_tax_rate?: string;
   sale_tax_name?: string;
   price?: string;
   cost?: string;

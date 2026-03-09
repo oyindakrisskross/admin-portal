@@ -81,7 +81,8 @@ export default function InvoiceRefundPage() {
     return topLevelItems.map((ln) => {
       const purchasedQty = asNumber(ln.quantity);
       const refundedQty = refundedQtyByLineId.get(ln.id) ?? 0;
-      const remainingQty = Math.max(0, money2(purchasedQty - refundedQty));
+      const redeemedQty = invoice?.type_id === "PREPAID" ? asNumber(ln.redeemed_quantity) : 0;
+      const remainingQty = Math.max(0, money2(purchasedQty - refundedQty - redeemedQty));
 
       const tax = asNumber(ln.tax_amount);
       const lineTotalInclTax = asNumber(ln.line_total);
@@ -114,6 +115,7 @@ export default function InvoiceRefundPage() {
         ln,
         purchasedQty,
         refundedQty,
+        redeemedQty,
         remainingQty,
         basePerUnit,
         taxPerUnit,
@@ -319,6 +321,9 @@ export default function InvoiceRefundPage() {
                           <div className="flex flex-col items-center gap-2">
                             <div className="text-xs text-kk-dark-text-muted">
                               × {row.remainingQty} / {row.purchasedQty}
+                              {invoice?.type_id === "PREPAID" && row.redeemedQty > 0
+                                ? ` (Redeemed: ${row.redeemedQty})`
+                                : ""}
                             </div>
                             <input 
                               type="number" 

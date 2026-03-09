@@ -289,19 +289,19 @@ export function ProductPeek({ product, canCreate, onOpenPlan, onAssetsChanged }:
               <tr>
                 <th>Name</th>
                 <th>Coupon Code</th>
-                <th>Discount Value</th>
-                <th>Discount By</th>
-                <th>Redemption Type</th>
+                <th>Action Type</th>
+                <th>Status</th>
+                <th>POS Auto Apply</th>
               </tr>
             </thead>
             <tbody>
               {coupons.map((row) => (
                 <tr key={row.id}>
                   <td>{row.name}</td>
-                  <td>{row.code}</td>
-                  <td>{row.discount_value}</td>
-                  <td>{row.discount_by === "PERCENT" ? "Percentage" : "Amount"}</td>
-                  <td>{row.redemption_type === "ONE_TIME" ? "One-time" : "Recurring"}</td>
+                  <td>{row.code || "-"}</td>
+                  <td>{row.action_type}</td>
+                  <td>{statusBadge(row.active ? "ACTIVE" : "INACTIVE")}</td>
+                  <td>{row.auto_apply ? "Yes" : "No"}</td>
                 </tr>
               ))}
               {couponsLoading ? (

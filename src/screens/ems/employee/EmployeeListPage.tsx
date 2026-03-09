@@ -95,7 +95,12 @@ export const EmployeeListPage: React.FC = () => {
                   placeholder="Search name or email"
                 />
               </div>
-              <FilterBar columns={filterColumns} filters={filters} onChange={setFilters} />
+              <FilterBar
+                columns={filterColumns}
+                filters={filters}
+                showPills={false}
+                onChange={setFilters}
+              />
               {can("Employee", "create") && (
                 <button
                   onClick={() => navigate("/ems/employees/new")}
@@ -106,6 +111,14 @@ export const EmployeeListPage: React.FC = () => {
                 </button>
               )}
             </div>
+          }
+          below={
+            <FilterBar
+              columns={filterColumns}
+              filters={filters}
+              showTrigger={false}
+              onChange={setFilters}
+            />
           }
         />
 

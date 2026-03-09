@@ -13,6 +13,17 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
   const topLevelItems = invoice.items.filter((ln) => ln.parent_line === null);
   const refundedTotal = Number(invoice.refunded_total ?? 0);
   const netTotal = Math.max(0, Number(invoice.net_grand_total ?? invoice.grand_total ?? 0));
+  const assignedCustomerName = String(
+    invoice.portal_customer_name || invoice.customer_name || ""
+  ).trim();
+  const assignedCustomerRef =
+    invoice.portal_customer != null
+      ? `#${invoice.portal_customer}`
+      : invoice.customer != null
+        ? `#${invoice.customer}`
+        : "";
+  const assignedCustomerLabel =
+    assignedCustomerName || (assignedCustomerRef ? `Customer ${assignedCustomerRef}` : "");
   const appliedCouponCodes = (invoice.coupon_codes && invoice.coupon_codes.length
     ? invoice.coupon_codes
     : invoice.coupon_code
@@ -37,6 +48,12 @@ export const InvoicePeek: React.FC<Props> = ({ invoice }) => {
             <p className="text-kk-dark-text-muted">Sale Location</p>
             <p>{invoice.location_name}</p>
           </div>
+          {assignedCustomerLabel ? (
+            <div className="grid grid-cols-2 gap-2">
+              <p className="text-kk-dark-text-muted">Customer</p>
+              <p>{assignedCustomerLabel}</p>
+            </div>
+          ) : null}
         </div>
 
         {/* Items */}

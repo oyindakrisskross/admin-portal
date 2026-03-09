@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import { fetchCustomerSubscription } from "../../../api/subscriptions";
-import type { CustomerSubscriptionRecord, SubscriptionUsageHistoryEntry } from "../../../types/subscriptions";
+import type {
+  CustomerSubscriptionRecord,
+  SubscriptionCouponUsageHistoryEntry,
+  SubscriptionUsageHistoryEntry,
+} from "../../../types/subscriptions";
 
 interface Props {
   subscriptionId: number;
@@ -49,6 +53,10 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId }) => {
   const usageHistory = useMemo(
     () => (Array.isArray(subscription?.usage_history) ? subscription?.usage_history : []),
     [subscription?.usage_history]
+  );
+  const couponUsageHistory = useMemo(
+    () => (Array.isArray(subscription?.coupon_usage_history) ? subscription?.coupon_usage_history : []),
+    [subscription?.coupon_usage_history]
   );
 
   if (loading && !subscription) {
@@ -104,33 +112,61 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId }) => {
         </p>
       </div>
 
-      {subscription.plan_type === "USAGE" ? (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-lg font-semibold">Usage History</h3>
-          {usageHistory.length ? (
-            <table className="min-w-full">
-              <thead>
-                <tr>
-                  <th>Used At</th>
-                  <th>Location</th>
-                  <th>POS Ref</th>
+      <div className="flex flex-col gap-2">
+        <h3 className="text-lg font-semibold">Usage History</h3>
+        {usageHistory.length ? (
+          <table className="min-w-full">
+            <thead>
+              <tr>
+                <th>Used At</th>
+                <th>Location</th>
+                <th>POS Ref</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usageHistory.map((entry: SubscriptionUsageHistoryEntry) => (
+                <tr key={entry.id}>
+                  <td>{toDateTime(entry.visited_at)}</td>
+                  <td>{entry.location_name || "-"}</td>
+                  <td>{entry.pos_reference || "-"}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {usageHistory.map((entry: SubscriptionUsageHistoryEntry) => (
-                  <tr key={entry.id}>
-                    <td>{toDateTime(entry.visited_at)}</td>
-                    <td>{entry.location_name || "-"}</td>
-                    <td>{entry.pos_reference || "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <p className="text-sm text-kk-dark-text-muted">No usage recorded yet.</p>
-          )}
-        </div>
-      ) : null}
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-kk-dark-text-muted">No usage recorded yet.</p>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h3 className="text-lg font-semibold">Subscription Coupon Usage</h3>
+        {couponUsageHistory.length ? (
+          <table className="min-w-full">
+            <thead>
+              <tr>
+                <th>Coupon</th>
+                <th>Invoice</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Location</th>
+              </tr>
+            </thead>
+            <tbody>
+              {couponUsageHistory.map((entry: SubscriptionCouponUsageHistoryEntry, idx) => (
+                <tr key={`${entry.invoice_id}-${entry.coupon_code}-${idx}`}>
+                  <td>{entry.coupon_name || entry.coupon_code}</td>
+                  <td>{entry.invoice_number}</td>
+                  <td>{toDateTime(entry.invoice_date)}</td>
+                  <td>{entry.invoice_status || "-"}</td>
+                  <td>{entry.location_name || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <p className="text-sm text-kk-dark-text-muted">No subscription coupon usage recorded yet.</p>
+        )}
+      </div>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-﻿// src/screens/reports/products/ProductsReportPage.tsx
+// src/screens/reports/products/ProductsReportPage.tsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -10,8 +10,9 @@ import { ItemSearchSelect, type ItemOption } from "../../../components/catalog/I
 import { KpiCard } from "../../../components/reports/KpiCard";
 import { ChartCard } from "../../../components/reports/ChartCard";
 import { ComparisonChartCard } from "../../../components/reports/ComparisonChartCard";
-import { ComparePeriodControls } from "../../../components/reports/ComparePeriodControls";
+import { MetricDropdownButton } from "../../../components/reports/MetricDropdownButton";
 import { buildComparisonChartData, buildCompareSub } from "../../../components/reports/periodCompare";
+import { ReportDateRangePicker } from "../../../components/date/ReportDateRangePicker";
 import type { Outlet } from "../../../types/location";
 import { fetchOutlets } from "../../../api/location";
 import { CloudDownload, X } from "lucide-react";
@@ -32,12 +33,17 @@ const COMPARISON_COLORS = [
   "#60a5fa",
 ];
 
+const productMetricOptions = [
+  { value: "net_sales", label: "Net sales" },
+  { value: "orders", label: "Orders" },
+  { value: "items_sold", label: "Items sold" },
+] as const;
+
 export default function ProductsReportPage() {
   const navigate = useNavigate();
 
   const { start, end, setStart, setEnd } = useReportDateRange();
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
@@ -173,7 +179,7 @@ export default function ProductsReportPage() {
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show â€œAll locationsâ€
+      // keep non-blocking; selector can still show “All locations”
       setOutlets([]);
     });
   }, []);
@@ -326,46 +332,19 @@ export default function ProductsReportPage() {
   return (
     <div className="p-4 space-y-4">
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={() => {
-            setOffset(0);
-            toggleCompare();
-          }}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={(value) => {
-            setOffset(0);
-            setCompareStart(value);
-          }}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted ">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => {
+          <div className="md:col-span-2">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
                 setOffset(0);
-                setStart(e.target.value);
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
               }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => {
-                setOffset(0);
-                setEnd(e.target.value);
-              }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border px-3 py-2 text-sm"
             />
           </div>
 
@@ -431,19 +410,6 @@ export default function ProductsReportPage() {
               <option value="all">All Products</option>
               <option value="single">Single Product</option>
               <option value="comparison">Comparison</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="text-xs text-kk-dark-text-muted">Metric</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value as any)}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-            >
-              <option value="net_sales">Net sales</option>
-              <option value="orders">Orders</option>
-              <option value="items_sold">Items sold</option>
             </select>
           </div>
 
@@ -634,17 +600,17 @@ export default function ProductsReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <KpiCard
           label="Items Sold"
-          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
         />
         <KpiCard
           label="Net Sales"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
         />
         <KpiCard
           label="Net Discount"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "�"}
           sub={
             data
               ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN)
@@ -653,7 +619,7 @@ export default function ProductsReportPage() {
         />
         <KpiCard
           label="Orders"
-          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
         />
       </div>
@@ -665,6 +631,13 @@ export default function ProductsReportPage() {
           data={comparisonChartData}
           dataKey="label"
           kind={metric === "net_sales" ? "money" : "count"}
+          titleAccessory={
+            <MetricDropdownButton
+              value={metric}
+              options={productMetricOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+              onChange={(value) => setMetric(value as typeof metric)}
+            />
+          }
           series={comparisonSeries}
           onToggle={(id) => {
             setComparisonVisibility((prev) => ({ ...prev, [id]: !(prev[id] ?? true) }));
@@ -685,6 +658,13 @@ export default function ProductsReportPage() {
           valueKey="v"
           compareValueKey={compareEnabled ? "compare_v" : undefined}
           kind={metric === "net_sales" ? "money" : "count"}
+          titleAccessory={
+            <MetricDropdownButton
+              value={metric}
+              options={productMetricOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+              onChange={(value) => setMetric(value as typeof metric)}
+            />
+          }
         />
       )}
 

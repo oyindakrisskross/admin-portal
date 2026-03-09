@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Outlet } from "../../types/location";
@@ -7,19 +7,24 @@ import { fetchCouponsReport } from "../../api/reports";
 import { fetchOutlets } from "../../api/location";
 import { KpiCard } from "../../components/reports/KpiCard";
 import { ChartCard } from "../../components/reports/ChartCard";
-import { ComparePeriodControls } from "../../components/reports/ComparePeriodControls";
+import { MetricDropdownButton } from "../../components/reports/MetricDropdownButton";
 import { buildComparisonChartData, buildCompareSub } from "../../components/reports/periodCompare";
+import { ReportDateRangePicker } from "../../components/date/ReportDateRangePicker";
 import { formatMoneyNGN, formatNumber } from "../../helpers";
 import { useReportDateRange } from "../../hooks/useReportDateRange";
 import { useComparePeriod } from "../../hooks/useComparePeriod";
 import { useReportAutoRefresh } from "../../hooks/useReportAutoRefresh";
 
+const couponMetricOptions = [
+  { value: "net_discount", label: "Net discount" },
+  { value: "discounted_orders", label: "Discounted orders" },
+] as const;
+
 export default function CouponsReportPage() {
   const navigate = useNavigate();
 
   const { start, end, setStart, setEnd } = useReportDateRange();
-  const { compareEnabled, compareRange, compareStart, compareEnd, periodDays, setCompareStart, toggleCompare } =
-    useComparePeriod({ start, end });
+  const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -112,45 +117,19 @@ export default function CouponsReportPage() {
   return (
     <div className="p-4 space-y-4">
       {/* Filters */}
-      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-4 shadow-sm">
-        <ComparePeriodControls
-          enabled={compareEnabled}
-          onToggle={() => {
-            setOffset(0);
-            toggleCompare();
-          }}
-          compareStart={compareStart}
-          compareEnd={compareEnd}
-          periodDays={periodDays}
-          onCompareStartChange={(value) => {
-            setOffset(0);
-            setCompareStart(value);
-          }}
-        />
-
+      <div className="rounded-md bg-kk-dark-bg p-4">
         <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-kk-dark-text-muted">Start</label>
-            <input
-              type="date"
-              value={start}
-              onChange={(e) => {
+          <div className="md:col-span-2">
+            <ReportDateRangePicker
+              start={start}
+              end={end}
+              compareTo={compareMode}
+              onApply={({ start: nextStart, end: nextEnd, compareTo }) => {
                 setOffset(0);
-                setStart(e.target.value);
+                setStart(nextStart);
+                setEnd(nextEnd);
+                setCompareMode(compareTo);
               }}
-              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-sm"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-kk-dark-text-muted">End</label>
-            <input
-              type="date"
-              value={end}
-              onChange={(e) => {
-                setOffset(0);
-                setEnd(e.target.value);
-              }}
-              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-sm"
             />
           </div>
 
@@ -237,18 +216,6 @@ export default function CouponsReportPage() {
             </select>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs text-kk-dark-text-muted">Metric</label>
-            <select
-              value={metric}
-              onChange={(e) => setMetric(e.target.value as any)}
-              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-2 py-1 text-sm"
-            >
-              <option value="net_discount">Net discount</option>
-              <option value="discounted_orders">Discounted orders</option>
-            </select>
-          </div>
-
           <div className="flex items-end justify-end gap-2 md:col-span-6">
             <select
               value={limit}
@@ -287,7 +254,7 @@ export default function CouponsReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <KpiCard
           label="Discounted Orders"
-          value={data ? formatNumber(Number(data.kpi.discounted_orders ?? 0)) : "—"}
+          value={data ? formatNumber(Number(data.kpi.discounted_orders ?? 0)) : "�"}
           sub={
             data
               ? compareSub(Number(data.kpi.discounted_orders ?? 0), Number(compareData?.kpi.discounted_orders ?? 0), formatNumber)
@@ -296,7 +263,7 @@ export default function CouponsReportPage() {
         />
         <KpiCard
           label="Net Discount"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "�"}
           sub={data ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN) : undefined}
         />
       </div>
@@ -309,6 +276,13 @@ export default function CouponsReportPage() {
         valueKey="v"
         compareValueKey={compareEnabled ? "compare_v" : undefined}
         kind={metric === "net_discount" ? "money" : "count"}
+        titleAccessory={
+          <MetricDropdownButton
+            value={metric}
+            options={couponMetricOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+            onChange={(value) => setMetric(value as typeof metric)}
+          />
+        }
       />
 
       {/* Table */}
@@ -352,7 +326,7 @@ export default function CouponsReportPage() {
                   title="View coupon details"
                 >
                   <td className="px-4 py-2">
-                    <span className="font-medium">{r.name || "â€”"}</span>
+                    <span className="font-medium">{r.name || "—"}</span>
                   </td>
                   <td className="px-4 py-2">{r.code}</td>
                   <td className="px-4 py-2 text-right">{formatNumber(Number(r.discounted_orders ?? 0))}</td>
