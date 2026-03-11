@@ -264,13 +264,19 @@ export async function fetchInventory(params?: Record<string, any>) {
 
 export async function searchItems(
   query: string,
-  params?: { page_size?: number; location_id?: number; signal?: AbortSignal }
+  params?: {
+    page_size?: number;
+    location_id?: number;
+    include_zero_stock?: boolean;
+    signal?: AbortSignal;
+  }
 ): Promise<PaginatedResult<Catalog.Item>> {
   const res = await api.get<PaginatedResult<Catalog.Item>>("/api/catalog/item-lte/", {
     params: {
       search: query,
       page_size: params?.page_size ?? 25,
       ...(params?.location_id ? { location_id: params.location_id } : {}),
+      ...(params?.include_zero_stock ? { include_zero_stock: 1 } : {}),
     },
     signal: params?.signal,
   });

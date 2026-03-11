@@ -62,11 +62,12 @@ export const InventoryAdjustmentPage: React.FC = () => {
     const res = await searchItems(query, {
       page_size: 25,
       location_id: Number(locationId),
+      include_zero_stock: true,
       signal,
     });
     const results = res.results ?? [];
     return results
-      .filter((item) => Boolean(item.inventory_tracking))
+      .filter((item) => Boolean(item.inventory_tracking) && item.type_id === "GOOD")
       .map((item) => ({
         id: item.id!,
         label: `${item.name}${item.sku ? ` (${item.sku})` : ""}`,
@@ -403,4 +404,3 @@ export const InventoryAdjustmentPage: React.FC = () => {
     </>
   );
 };
-
