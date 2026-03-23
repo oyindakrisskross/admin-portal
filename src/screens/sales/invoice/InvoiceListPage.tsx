@@ -4,10 +4,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../../auth/AuthContext";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import type { InvoiceResponse } from "../../../types/invoice";
-import { bulkInvoices, fetchOrders } from "../../../api/invoice";
+import { bulkInvoices, fetchInvoice, fetchOrders } from "../../../api/invoice";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import { Plus, ReceiptText, Search, Trash2, UserPlus } from "lucide-react";
-import { formatMoneyNGN } from "../../../helpers";
+import { formatMoneyNGN, getPrepaidDisplayStatus, humanizeStatus } from "../../../helpers";
 import SidePeek from "../../../components/layout/SidePeek";
 import { InvoicePeek } from "./InvoicePeek";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
@@ -78,6 +78,10 @@ export const InvoiceListPage: React.FC = () => {
   };
 
   const closePeek = () => {
+    if (hasId) {
+      navigate("/sales/invoices", { replace: true });
+      return;
+    }
     setSelectedInvoice(null);
   };
 
@@ -184,6 +188,34 @@ export const InvoiceListPage: React.FC = () => {
       setSelectedInvoice(match);
     }
   }, [hasId, id, invoices]);
+
+  useEffect(() => {
+    if (!hasId) return;
+
+    const invoiceId = Number(id);
+    if (!Number.isFinite(invoiceId) || invoiceId <= 0) return;
+    if (selectedInvoice?.id === invoiceId) return;
+
+    const match = invoices.find((inv) => inv.id === invoiceId);
+    if (match) {
+      setSelectedInvoice(match);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchInvoice(invoiceId);
+        if (!cancelled) setSelectedInvoice(data);
+      } catch {
+        if (!cancelled) setSelectedInvoice(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasId, id, invoices, selectedInvoice?.id]);
 
   const sortedInvoices = useMemo(() => {
     return sortBy(invoices, sort, {
@@ -315,14 +347,16 @@ export const InvoiceListPage: React.FC = () => {
   const netTotal = (inv: InvoiceResponse) =>
     Math.max(0, Number(inv.net_grand_total ?? (Number(inv.grand_total ?? 0) - refundedTotal(inv))));
   const displayStatus = (inv: InvoiceResponse): string => {
-    if (inv.type_id === "PREPAID") return String(inv.prepaid_redeem_status || "UNUSED").toUpperCase();
+    if (inv.type_id === "PREPAID") return getPrepaidDisplayStatus(inv);
     if (inv.type_id === "SALE" && refundedTotal(inv) > 0.01) return "REFUNDED";
     return String(inv.status || "").toUpperCase();
   };
-  const statusLabel = (status: string) => status.replace(/_/g, " ");
+  const statusLabel = (status: string) => humanizeStatus(status, status);
   const statusBadgeClass = (status: string) => {
     if (status === "PAID" || status === "REDEEMED") return "bg-emerald-50 text-emerald-700";
-    if (status === "REFUNDED" || status === "PARTIALLY_REDEEMED") return "bg-orange-50 text-orange-700";
+    if (status === "PARTIALLY_PAID" || status === "PARTIALLY_REDEEMED") return "bg-orange-50 text-orange-700";
+    if (status === "UNPAID") return "bg-slate-100 text-slate-600";
+    if (status === "REFUNDED") return "bg-red-100 text-red-700";
     if (status === "VOID") return "bg-red-400 text-red-50";
     if (status === "UNUSED") return "bg-blue-50 text-blue-700";
     return "bg-slate-100 text-slate-500";

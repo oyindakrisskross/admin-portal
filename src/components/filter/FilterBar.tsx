@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import type { FilterSet, ColumnMeta, FilterClause } from "../../types/filters";
+import { shouldOpenDropdownAbove } from "../../hooks/useDropdownPlacement";
 import { FilterPill } from "./FilterPill";
 import { FilterDropdown } from "./FilterDropdown";
 import { FunnelIcon } from "@heroicons/react/24/outline";
@@ -24,6 +25,7 @@ export const FilterBar: React.FC<Props> = ({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [dropdownAnchorLeft, setDropdownAnchorLeft] = useState(0);
+  const [dropdownOpenAbove, setDropdownOpenAbove] = useState(false);
 
   const handleAddOrEdit = (clause: FilterClause) => {
     if (editingIndex != null) {
@@ -46,6 +48,7 @@ export const FilterBar: React.FC<Props> = ({
     const barRect = barRef.current.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
     const desiredLeft = targetRect.left - barRect.left;
+    setDropdownOpenAbove(shouldOpenDropdownAbove(targetRect));
 
     const minLeft = viewportPadding - barRect.left;
     const maxLeft = window.innerWidth - viewportPadding - maxDropdownWidth - barRect.left;
@@ -156,6 +159,7 @@ export const FilterBar: React.FC<Props> = ({
         columns={columns}
         initial={currentInitial}
         anchorLeft={dropdownAnchorLeft}
+        openAbove={dropdownOpenAbove}
         onSubmit={handleAddOrEdit}
         onClose={() => {
           setDropdownOpen(false);

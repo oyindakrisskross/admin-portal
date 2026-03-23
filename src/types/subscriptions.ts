@@ -125,6 +125,7 @@ export interface SubscriptionPlan {
   type_id: SubscriptionType;
   sales_tax_rule?: number | null;
   sales_tax_rule_name?: string;
+  sales_tax_rate?: string | null;
   allow_plan_switch: boolean;
   plan_type: PlanType;
   included_uses?: number | null;
@@ -294,6 +295,14 @@ export interface CustomerSubscriptionRecord {
   coupon_usage_history?: SubscriptionCouponUsageHistoryEntry[];
   created_on: string;
   updated_on: string;
+}
+
+export interface SubscriptionCheckoutResult {
+  subscriptions: CustomerSubscriptionRecord[];
+  source_invoice: {
+    id: number;
+    number: string;
+  } | null;
 }
 
 export const PLAN_TRANSACTION_STATUS_CHOICES: { value: PlanTransactionStatus; label: string }[] = [

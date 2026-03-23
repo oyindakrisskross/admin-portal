@@ -1,14 +1,8 @@
 // src/api/promotions.ts
 
 import api from "./client";
+import type { PaginatedResult } from "./types";
 import type { Coupon, CouponSchedule } from "../types/promotions";
-
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
 
 // Coupons
 export async function fetchCoupons(params?: Record<string, any>) {

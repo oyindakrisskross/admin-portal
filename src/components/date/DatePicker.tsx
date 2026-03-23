@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toYMD } from "../../helpers";
+import { useDropdownOpenAbove } from "../../hooks/useDropdownPlacement";
 
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
@@ -165,6 +166,8 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState<Date>(() => parseYmd(value) ?? new Date());
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const openAbove = useDropdownOpenAbove(open, buttonRef);
 
   useEffect(() => {
     const next = parseYmd(value);
@@ -187,6 +190,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
     <div className="relative" ref={containerRef}>
       <button
         type="button"
+        ref={buttonRef}
         onClick={() => setOpen((prev) => !prev)}
         className={[
           "w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-left text-sm",
@@ -199,7 +203,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
       </button>
 
       {open ? (
-        <div className="absolute z-50 mt-2">
+        <div className={`absolute left-0 z-50 ${openAbove ? "bottom-full mb-2" : "top-full mt-2"}`}>
           <CalendarGrid
             month={month}
             onMonthChange={setMonth}
@@ -216,4 +220,3 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
     </div>
   );
 };
-

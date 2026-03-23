@@ -1,5 +1,3 @@
-// src/routes/App.tsx
-
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { useAuth } from "../auth/AuthContext";
@@ -21,7 +19,11 @@ import TaxFormPage from "../screens/settings/tax/TaxFormPage";
 import { UnitListPage } from "../screens/settings/unit/UnitListPage";
 import UnitFormPage from "../screens/settings/unit/UnitFormPage";
 import OrgFormPage from "../screens/settings/OrgFormPage";
-import PaymentsSettingsPage from "../screens/settings/PaymentsSettingsPage";
+import { ConnectionsPage } from "../screens/settings/connections/ConnectionsPage";
+import { ConnectionDetailPage } from "../screens/settings/connections/ConnectionDetailPage";
+import { ConnectionConnectFormPage } from "../screens/settings/connections/ConnectionConnectFormPage";
+import { CRMSettingsPage } from "../screens/settings/crm/CRMSettingsPage";
+import { ZohoCRMImportManagementPage } from "../screens/settings/crm/ZohoCRMImportManagementPage";
 import DailyReportsSettingsPage from "../screens/settings/DailyReportsSettingsPage";
 import MonthlyReportsSettingsPage from "../screens/settings/MonthlyReportsSettingsPage";
 import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
@@ -69,6 +71,10 @@ import { CouponListPage } from "../screens/promotions/coupon/CouponListPage";
 import CouponFormPage from "../screens/promotions/coupon/CouponFormPage";
 import ProfilePage from "../screens/ProfilePage";
 
+/**
+ * Central route registry for the admin portal. The feature pages stay in their
+ * own folders, while auth and permission guards are applied here consistently.
+ */
 function Protected({ children }: { children: JSX.Element }) {
   const { me, loading } = useAuth();
   const location = useLocation();
@@ -79,6 +85,7 @@ function Protected({ children }: { children: JSX.Element }) {
   }
   return children;
 }
+
 function RequirePerm({ perm, action = "view", children }: {
   perm: string; action?: keyof PermissionBitSet; children: JSX.Element;
 }) {
@@ -454,6 +461,14 @@ export default function App() {
             </RequirePerm>
           }
         />
+        <Route
+          path="sales/subscriptions/:id"
+          element={
+            <RequirePerm perm="Subscriptions" action="view">
+              <SubscriptionListPage />
+            </RequirePerm>
+          }
+        />
 
         {/* CRM: Contacts */}
         <Route
@@ -627,9 +642,45 @@ export default function App() {
           />
           <Route
             path="payments"
+            element={<Navigate to="/settings/connections" replace />}
+          />
+          <Route
+            path="connections"
             element={
               <RequirePerm perm="Organization" action="edit">
-                <PaymentsSettingsPage />
+                <ConnectionsPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="connections/:appId"
+            element={
+              <RequirePerm perm="Organization" action="edit">
+                <ConnectionDetailPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="connections/:appId/connect"
+            element={
+              <RequirePerm perm="Organization" action="edit">
+                <ConnectionConnectFormPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="crm-settings"
+            element={
+              <RequirePerm perm="Contacts" action="view">
+                <CRMSettingsPage />
+              </RequirePerm>
+            }
+          />
+          <Route
+            path="crm-settings/import-connections/:serviceKey"
+            element={
+              <RequirePerm perm="Contacts" action="edit">
+                <ZohoCRMImportManagementPage />
               </RequirePerm>
             }
           />

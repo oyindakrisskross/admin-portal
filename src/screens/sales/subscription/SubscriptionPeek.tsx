@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import { fetchCustomerSubscription } from "../../../api/subscriptions";
+import ToastModal from "../../../components/ui/ToastModal";
+import { fetchCustomerSubscription, resendSubscriptionPassEmail } from "../../../api/subscriptions";
 import type {
   CustomerSubscriptionRecord,
   SubscriptionCouponUsageHistoryEntry,
@@ -31,6 +32,9 @@ const statusBadge = (label: string) => {
 export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId }) => {
   const [subscription, setSubscription] = useState<CustomerSubscriptionRecord | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("info");
 
   useEffect(() => {
     let cancelled = false;
@@ -67,11 +71,35 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId }) => {
     return <div className="px-3 py-6 text-sm text-kk-dark-text-muted">Unable to load subscription.</div>;
   }
 
+  const handleSendEmail = async () => {
+    setSendingEmail(true);
+    try {
+      const result = await resendSubscriptionPassEmail(subscription.id);
+      setToastVariant("success");
+      setToastMessage(result.detail || "Subscription QR email sent.");
+    } catch (err: any) {
+      setToastVariant("error");
+      setToastMessage(err?.response?.data?.detail || "Failed to send subscription QR email.");
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   return (
     <div className="flex h-full flex-col gap-6 p-5 pb-7">
-      <div>
-        <h2 className="text-2xl font-semibold">{subscription.plan_name}</h2>
-        <p className="text-sm text-kk-dark-text-muted">{subscription.plan_code}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold">{subscription.plan_name}</h2>
+          <p className="text-sm text-kk-dark-text-muted">{subscription.plan_code}</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSendEmail()}
+          disabled={sendingEmail || !subscription.customer_email}
+          className="rounded-full border border-kk-dark-input-border px-4 py-2 text-xs font-medium hover:bg-kk-dark-hover disabled:opacity-60"
+        >
+          {sendingEmail ? "Sending..." : "Send Email"}
+        </button>
       </div>
 
       <div className="grid grid-cols-10 gap-y-2">
@@ -167,6 +195,8 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId }) => {
           <p className="text-sm text-kk-dark-text-muted">No subscription coupon usage recorded yet.</p>
         )}
       </div>
+
+      <ToastModal message={toastMessage} variant={toastVariant} onClose={() => setToastMessage(null)} />
     </div>
   );
 };

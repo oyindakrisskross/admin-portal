@@ -2,6 +2,10 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import api, { setAccessToken, setRefreshToken } from "../api/client"; 
 import { applyTheme, DEFAULT_THEME, getStoredTheme, themeScopeForUser } from "../utils/theme";
 
+/**
+ * AuthContext keeps session state, the normalized current-user payload, and the
+ * permission helper consumed by the route guards.
+ */
 type PermissionBitset = {
   view: boolean;
   create: boolean;
@@ -37,6 +41,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Collapse the backend login/me payload into the stable shape the UI expects.
   const normalizeMe = (payload: any): Me => {
     const user = payload.user;
     const permissions = payload.permissions || {};
@@ -55,7 +60,6 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       must_change_password: Boolean(user.must_change_password),
     };
   };
-
 
   const fetchMe = async () => {
     try {

@@ -33,3 +33,56 @@ export type PaystackGatewaySettingsPatch = Partial<{
   use_online_store: boolean;
   pos_location_ids: number[];
 }>;
+
+export type ConnectionStatus = "CONNECTED" | "DISCONNECTED";
+
+export type ConnectionService = {
+  id: number;
+  key: string;
+  name: string;
+  service_type: string;
+  required_connection_inputs: string[];
+  required_connection_outputs: string[];
+  integration_options: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConnectionSetting = {
+  id: number | null;
+  portal_id: number;
+  service_id: number;
+  service_key: string;
+  service_name: string;
+  service_type: string;
+  required_connection_inputs: string[];
+  required_connection_outputs: string[];
+  integration_options: string[];
+  status: ConnectionStatus;
+  connection_name: string;
+  scope: string;
+  service_link_name: string;
+  connections_associated: string;
+  connection_inputs: Record<string, unknown>;
+  connection_outputs: Record<string, unknown>;
+  integration_targets: string[];
+  last_ping_at: string | null;
+  last_ping_success: boolean;
+  last_ping_message: string;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type ConnectionSettingUpsertPayload = Partial<{
+  status: ConnectionStatus;
+  connection_name: string;
+  scope: string;
+  service_link_name: string;
+  connections_associated: string;
+  connection_inputs: Record<string, unknown>;
+  connection_outputs: Record<string, unknown>;
+  integration_targets: string[];
+  last_ping_success: boolean;
+  last_ping_message: string;
+}>;

@@ -3,13 +3,6 @@
 import api from "./client";
 import { type Organization } from "../types/core";
 
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
 export async function fetchOrg(id: number) {
   const res = await api.get<Organization>(`/api/core/organization/${id}/`);
   return res.data;

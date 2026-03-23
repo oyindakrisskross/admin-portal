@@ -8,13 +8,6 @@ import type { DailyReportRunResponse, DailyReportSettings } from "../types/daily
 import type { MonthlyReportRunResponse, MonthlyReportSettings } from "../types/monthlyReports";
 import api from "./client";
 
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
 export async function fetchOverviewReport(args: {
   start: string; // YYYY-MM-DD
   end: string;   // YYYY-MM-DD

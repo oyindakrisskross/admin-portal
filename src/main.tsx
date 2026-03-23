@@ -8,6 +8,7 @@ import App from './routes/App.tsx'
 import { AuthProvider } from './auth/AuthContext.tsx'
 import { applyTheme, DEFAULT_THEME } from './utils/theme.ts'
 
+// The app bootstraps providers here so routing, auth, and React Query share one root.
 const queryClient = new QueryClient()
 
 applyTheme(DEFAULT_THEME)

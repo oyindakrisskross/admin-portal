@@ -1,36 +1,15 @@
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import type { FilterSet } from "../types/filters";
 import type * as EMS from "../types/ems";
 
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
-function buildFilterParams(filters?: FilterSet) {
-  const search = new URLSearchParams();
-  if (!filters) return search;
-  filters.clauses.forEach((clause) => {
-    let encodedValue: string;
-    if (Array.isArray(clause.value)) {
-      encodedValue = clause.value.join(",");
-    } else if (typeof clause.value === "object") {
-      encodedValue = JSON.stringify(clause.value);
-    } else {
-      encodedValue = clause.value ?? "";
-    }
-    search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-  });
-  return search;
-}
-
 // Departments
 export async function fetchDepartments(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.Department>>(
-    `/api/ems/departments/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/departments/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -56,9 +35,10 @@ export async function deleteDepartment(id: number) {
 
 // Positions
 export async function fetchPositions(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.JobPosition>>(
-    `/api/ems/positions/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/positions/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -84,10 +64,11 @@ export async function deletePosition(id: number) {
 
 // Employees
 export async function fetchEmployees(params?: { filters?: FilterSet; search?: string }) {
-  const searchParams = buildFilterParams(params?.filters);
-  if (params?.search) searchParams.set("search", params.search);
   const res = await api.get<PaginatedResult<EMS.Employee>>(
-    `/api/ems/employees/${searchParams.toString() ? `?${searchParams}` : ""}`
+    buildQueryPath("/api/ems/employees/", {
+      params: { search: params?.search },
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -120,9 +101,10 @@ export async function fetchEmployeeLocations(employeeId: number) {
 
 // Shifts
 export async function fetchShifts(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.EmployeeShift>>(
-    `/api/ems/shifts/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/shifts/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -154,9 +136,10 @@ export async function fetchShiftInstances(params: {
 
 // Shift overrides
 export async function fetchShiftOverrides(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.EmployeeShiftOverride>>(
-    `/api/ems/shift-overrides/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/shift-overrides/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -177,9 +160,10 @@ export async function deleteShiftOverride(id: number) {
 
 // Time off
 export async function fetchTimeOff(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.TimeOffRequest>>(
-    `/api/ems/time-off/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/time-off/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -206,9 +190,10 @@ export async function cancelTimeOff(id: number, note?: string) {
 
 // Attendance
 export async function fetchAttendance(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.Attendance>>(
-    `/api/ems/attendance/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/attendance/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -232,9 +217,10 @@ export async function fetchAttendanceEdits(attendanceId: number) {
 
 // Overtime
 export async function fetchOvertime(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.Overtime>>(
-    `/api/ems/overtime/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/overtime/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -256,9 +242,10 @@ export async function declineOvertime(id: number, note?: string) {
 
 // Payroll payments
 export async function fetchPayments(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.SalaryPayment>>(
-    `/api/ems/payments/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/payments/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -270,9 +257,10 @@ export async function createPayment(payload: EMS.SalaryPayment) {
 
 // Salary advances
 export async function fetchAdvances(params?: { filters?: FilterSet }) {
-  const search = buildFilterParams(params?.filters);
   const res = await api.get<PaginatedResult<EMS.SalaryAdvance>>(
-    `/api/ems/advances/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/ems/advances/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }

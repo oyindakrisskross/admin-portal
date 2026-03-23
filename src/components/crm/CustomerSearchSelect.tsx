@@ -4,6 +4,7 @@ import { ChevronDown, Search, X } from "lucide-react";
 
 import type { CustomerRecord } from "../../types/customerPortal";
 import { fetchCustomers } from "../../api/customerPortal";
+import { getFixedDropdownStyle } from "../../hooks/useDropdownPlacement";
 
 type Props = {
   value: CustomerRecord | null;
@@ -62,13 +63,7 @@ export function CustomerSearchSelect({
       const btn = buttonRef.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
-      setMenuStyle({
-        position: "fixed",
-        left: rect.left,
-        top: rect.bottom + 6,
-        width: rect.width,
-        zIndex: 9999,
-      });
+      setMenuStyle(getFixedDropdownStyle(rect));
     };
 
     updatePosition();

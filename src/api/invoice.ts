@@ -1,43 +1,21 @@
 // src/api/invoice.ts
 
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import { type InvoiceResponse, type PaymentRecord } from "../types/invoice";
 import type { FilterSet } from "../types/filters";
 
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
 export async function fetchOrders(params?: (Record<string, any> & { filters?: FilterSet })) {
-  const search = new URLSearchParams();
-
-  if (params) {
-    const { filters, ...rest } = params;
-    for (const [k, v] of Object.entries(rest)) {
-      if (v === undefined || v === null || v === "") continue;
-      search.set(k, String(v));
-    }
-
-    if (filters) {
-      filters.clauses.forEach((clause) => {
-        let encodedValue: string;
-        if (Array.isArray(clause.value)) {
-          encodedValue = clause.value.join(",");
-        } else if (typeof clause.value === "object") {
-          encodedValue = JSON.stringify(clause.value);
-        } else {
-          encodedValue = clause.value ?? "";
-        }
-        search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-      });
-    }
-  }
-
   const res = await api.get<PaginatedResult<InvoiceResponse>>(
-    `/api/sales/invoices/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/sales/invoices/", {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params).filter(([key]) => key !== "filters")
+          )
+        : undefined,
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -106,6 +84,16 @@ export async function updatePrepaidInvoice(id: number, payload: UpdatePrepaidInv
   return res.data;
 }
 
+export async function resendPrepaidPassEmail(id: number) {
+  const res = await api.post<{
+    detail: string;
+    recipient: string;
+    invoice_id: number;
+    prepaid_number: string | null;
+  }>(`/api/sales/invoices/${id}/resend-email/`);
+  return res.data;
+}
+
 export type BulkInvoiceAction = "delete" | "assign_customer";
 
 export type BulkInvoiceFailure = {
@@ -139,15 +127,10 @@ export async function fetchSalesPayments(params?: {
   start?: string;
   end?: string;
 }) {
-  const search = new URLSearchParams();
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v === undefined || v === null || v === "") continue;
-      search.set(k, String(v));
-    }
-  }
   const res = await api.get<PaginatedResult<PaymentRecord>>(
-    `/api/sales/payments/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/sales/payments/", {
+      params,
+    })
   );
   return res.data;
 }

@@ -1,15 +1,10 @@
 // src/api/location.ts
 
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import * as Location from "../types/location";
 import type { FilterSet } from "../types/filters";
-
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
 
 
 
@@ -27,25 +22,10 @@ export async function fetchPortals(params?: Record<string, any>) {
 }
 
 export async function fetchLocations(params?: { filters?:FilterSet }) {
-  const search = new URLSearchParams();
-
-  if (params?.filters) {
-    params.filters.clauses.forEach((clause) => {
-      // simple encoding: field|op|value
-      let encodedValue: string;
-      if (Array.isArray(clause.value)) {
-        encodedValue = clause.value.join(",");
-      } else if (typeof clause.value === "object") {
-        encodedValue = JSON.stringify(clause.value);
-      } else {
-        encodedValue = clause.value ?? "";
-      }
-      search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-    });
-  }
-
   const res = await api.get(
-    `/api/locations/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/locations/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }

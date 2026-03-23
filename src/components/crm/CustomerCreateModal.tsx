@@ -87,7 +87,7 @@ export const CustomerCreateModal: React.FC<Props> = ({ open, onClose, onCreated 
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
         className="w-full max-w-xl rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-5"
         onClick={(e) => e.stopPropagation()}

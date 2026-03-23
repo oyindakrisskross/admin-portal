@@ -1,11 +1,26 @@
 import axios, { AxiosError } from "axios";
 
+/**
+ * Shared Axios client for the admin portal. Feature modules import this client
+ * so token persistence and refresh behavior stay consistent across the app.
+ */
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000",
 });
 
+const AUTH_FREE_PATHS = [
+  "/api/auth/login",
+  "/api/auth/refresh",
+  "/api/auth/password-reset/request",
+  "/api/auth/password-reset/confirm",
+];
+
 let accessToken: string | null = localStorage.getItem("kk_access") || null;
 let refreshToken: string | null = localStorage.getItem("kk_refresh") || null;
+
+function isAuthFreePath(url: string) {
+  return AUTH_FREE_PATHS.some((path) => url.includes(path));
+}
 
 export const setAccessToken = (t: string | null) => {
   accessToken = t;
@@ -22,26 +37,19 @@ export const setRefreshToken = (t: string | null) => {
 api.interceptors.request.use((config) => {
   const url = config.url ?? "";
 
-  // Skip attaching JWT to login & refresh requests
-  if (
-    url.includes("/api/auth/login") ||
-    url.includes("/api/auth/refresh") ||
-    url.includes("/api/auth/password-reset/request") ||
-    url.includes("/api/auth/password-reset/confirm")
-  ) {
+  if (isAuthFreePath(url)) {
     return config;
   }
 
-  // Otherwise attach access token
   if (accessToken) {
     config.headers = config.headers ?? {};
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
-  
+
   return config;
 });
 
-// Auto-refresh on 401 using the refresh token
+// Auto-refresh on 401 responses using the refresh token.
 let refreshPromise: Promise<string> | null = null;
 
 api.interceptors.response.use(
@@ -52,15 +60,8 @@ api.interceptors.response.use(
 
     const url = originalRequest.url ?? "";
 
-    if (
-      status === 401 &&
-      !originalRequest._retry &&
-      !url.includes("/api/auth/login") &&
-      !url.includes("/api/auth/refresh") &&
-      !url.includes("/api/auth/password-reset/request") &&
-      !url.includes("/api/auth/password-reset/confirm")
-    ) {
-      // no refresh token – just fail and let app log out
+    if (status === 401 && !originalRequest._retry && !isAuthFreePath(url)) {
+      // No refresh token: fail fast and let the app clear the session.
       if (!refreshToken) {
         setAccessToken(null);
         setRefreshToken(null);
@@ -69,7 +70,7 @@ api.interceptors.response.use(
 
       originalRequest._retry = true;
 
-      // de‑dupe concurrent refreshes
+      // Deduplicate concurrent refresh attempts so only one refresh request runs.
       if (!refreshPromise) {
         refreshPromise = api
           .post("/api/auth/refresh", { refresh: refreshToken })
@@ -79,7 +80,6 @@ api.interceptors.response.use(
             return newAccess;
           })
           .catch((err) => {
-            // refresh failed (expired/invalid) -> clear tokens
             setAccessToken(null);
             setRefreshToken(null);
             throw err;

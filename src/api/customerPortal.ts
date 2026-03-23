@@ -1,12 +1,7 @@
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import type { CustomerRecord } from "../types/customerPortal";
-
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
 
 export interface CreateCustomerPayload {
   email: string;
@@ -23,23 +18,15 @@ export async function fetchCustomers(params?: {
   page_size?: number;
   is_active?: boolean;
 }) {
-  const search = new URLSearchParams();
-
-  if (params?.search) {
-    search.set("search", params.search);
-  }
-  if (params?.page != null) {
-    search.set("page", String(params.page));
-  }
-  if (params?.page_size != null) {
-    search.set("page_size", String(params.page_size));
-  }
-  if (params?.is_active != null) {
-    search.set("is_active", String(params.is_active));
-  }
-
   const res = await api.get<PaginatedResult<CustomerRecord>>(
-    `/api/customer-portal/customers/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/customer-portal/customers/", {
+      params: {
+        search: params?.search,
+        page: params?.page,
+        page_size: params?.page_size,
+        is_active: params?.is_active,
+      },
+    })
   );
   return res.data;
 }

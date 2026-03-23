@@ -1,83 +1,39 @@
-# React + TypeScript + Vite
+# Admin Portal
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 + Vite admin interface for the KrissKross operational back office. The
+portal talks to the Django backend under `/api/*` and handles catalog, CRM,
+sales, reports, EMS, promotions, and settings workflows.
 
-Currently, two official plugins are available:
+## Local setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1. Install dependencies with `npm install`.
+2. Set `VITE_API_BASE_URL` if the backend is not running at `http://127.0.0.1:8000`.
+3. Start the app with `npm run dev`.
+4. Build the production bundle with `npm run build`.
 
-## Portal context
+## Architecture guide
 
-The admin portal does not send a `portal_id` on login/password-reset. The backend infers portal context from the request `Origin` and uses the matching Portal Location (`type_id="PORTAL"`) by `website_url`.
+- `src/main.tsx` bootstraps React Query, auth state, routing, and the initial theme.
+- `src/routes/App.tsx` is the central route registry. It also hosts the auth and
+  permission guards used by every feature area.
+- `src/api/` contains backend-facing request modules. Shared query construction
+  lives in `src/api/query.ts`, and shared pagination types live in `src/api/types.ts`.
+- `src/auth/AuthContext.tsx` normalizes the backend auth payload and exposes the
+  `can()` helper used by guarded routes and feature components.
+- `src/screens/` contains page-level screens grouped by business domain.
+- `src/components/` contains reusable UI building blocks that are shared across screens.
+- `src/utils/theme.ts` scopes persisted theme preferences per user and portal.
 
-## React Compiler
+## Backend assumptions
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- The portal does not send `portal_id` during login or password reset. Backend
+  portal inference is based on the request `Origin` matching a portal location URL.
+- EMS pages depend on backend EMS migrations and seeded lookup values.
+- Roles must include the expected permission categories for a user to reach the
+  guarded routes in `src/routes/App.tsx`.
 
-## EMS (Employee Management System)
+## Cleanup notes
 
-- Apply backend `ems` migrations and seed lookup values before using the EMS UI.
-- Grant the `Employee` permission (view/create/edit/delete/approve) to the roles that should access EMS.
-- EMS pages live under `/ems/*` in the admin portal (Directory, Departments, Positions, Schedule Board, and employee detail tabs).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+This pass removed leftover Vite starter files and centralized repeated query
+serialization in the API layer. Remaining cleanup candidates are documented in
+`docs/code-cleanup-audit.md`.

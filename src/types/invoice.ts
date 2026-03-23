@@ -52,6 +52,8 @@ export interface InvoicePayment {
   method: string;                    // "CARD", "TRANSFER", etc.
   reference: string;
   paid_on: string;                   // ISO datetime string
+  received_by?: number | null;
+  received_by_name?: string | null;
 }
 
 export interface InvoiceResponse {

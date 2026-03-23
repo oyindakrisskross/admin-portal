@@ -18,9 +18,14 @@ const settingsLinks = [
     perm: "Organization",
   },
   {
-    to: "payments",
-    label: "Payment Gateway Settings",
+    to: "connections",
+    label: "Connections",
     perm: "Organization",
+  },
+  {
+    to: "crm-settings",
+    label: "CRM Settings",
+    perm: "Contacts",
   },
   {
     to: "taxes",

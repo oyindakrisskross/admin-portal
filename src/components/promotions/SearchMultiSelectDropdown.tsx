@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, ChevronRight, Search, X } from "lucide-react";
 
+import { getFixedDropdownStyle } from "../../hooks/useDropdownPlacement";
+
 export type SelectOption = { id: number; label: string; depth?: number; parentId?: number | null };
 
 type Props = {
@@ -121,15 +123,7 @@ export function SearchMultiSelectDropdown({
       if (!btn) return;
 
       const rect = btn.getBoundingClientRect();
-      const base: React.CSSProperties = {
-        position: "fixed",
-        left: rect.left,
-        top: rect.bottom + 6,
-        width: rect.width,
-        zIndex: 9999,
-      };
-
-      setMenuStyle(base);
+      setMenuStyle(getFixedDropdownStyle(rect));
     };
 
     updatePosition();

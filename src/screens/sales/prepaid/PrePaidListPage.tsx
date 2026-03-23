@@ -3,14 +3,14 @@ import { Download, Plus, ReceiptText, Search, Trash2, UserPlus } from "lucide-re
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "../../../auth/AuthContext";
-import type { InvoiceResponse } from "../../../types/invoice";
+import type { InvoicePayment, InvoiceResponse } from "../../../types/invoice";
 import { bulkInvoices, createPrepaidInvoice, fetchInvoice, fetchOrders, updatePrepaidInvoice } from "../../../api/invoice";
 import { fetchOutlets } from "../../../api/location";
 import { fetchItem, searchItems } from "../../../api/catalog";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
-import { formatMoneyNGN } from "../../../helpers";
+import { formatMoneyNGN, getPrepaidDisplayStatus, humanizeStatus, toDateStr } from "../../../helpers";
 import { ItemSearchSelect, type ItemOption } from "../../../components/catalog/ItemSearchSelect";
 import type { Outlet } from "../../../types/location";
 import { PrePaidInvoicePeek } from "./PrePaidInvoicePeek";
@@ -75,17 +75,23 @@ const buildEmptyRow = (key = String(Date.now())): CreateRow => ({
   customizations: [],
 });
 
-const toTitle = (value?: string) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (s) => s.toUpperCase());
+const toTitle = (value?: string) => humanizeStatus(value);
 
 const statusBadgeClass = (status?: string) => {
   const value = String(status || "").toUpperCase();
   if (value === "REDEEMED") return "bg-emerald-50 text-emerald-700";
-  if (value === "PARTIALLY_REDEEMED") return "bg-amber-50 text-amber-700";
-  return "bg-blue-50 text-blue-700";
+  if (value === "UNUSED") return "bg-blue-50 text-blue-700";
+  if (value === "PARTIALLY_PAID" || value === "PARTIALLY_REDEEMED") return "bg-amber-50 text-amber-700";
+  if (value === "UNPAID") return "bg-slate-100 text-slate-600";
+  return "bg-slate-100 text-slate-600";
+};
+
+const paymentMethodBadgeClass = (method?: string) => {
+  const value = String(method || "").toUpperCase();
+  if (value === "CASH") return "bg-emerald-50 text-emerald-700";
+  if (value === "CARD") return "bg-blue-50 text-blue-700";
+  if (value === "TRANSFER") return "bg-purple-50 text-purple-700";
+  return "bg-slate-100 text-slate-600";
 };
 
 export const PrePaidListPage: React.FC = () => {
@@ -129,6 +135,12 @@ export const PrePaidListPage: React.FC = () => {
   const [editLocation, setEditLocation] = useState<string>("");
   const [editNotes, setEditNotes] = useState("");
   const [editPortalCustomer, setEditPortalCustomer] = useState<CustomerRecord | null>(null);
+  const [editRecordPayment, setEditRecordPayment] = useState(false);
+  const [editPaymentAmount, setEditPaymentAmount] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState<(typeof PAYMENT_METHOD_OPTIONS)[number]>("OTHER");
+  const [editPaymentTouched, setEditPaymentTouched] = useState(false);
+  const [editRecordedPayments, setEditRecordedPayments] = useState<InvoicePayment[]>([]);
+  const [editRecordedPaidTotal, setEditRecordedPaidTotal] = useState(0);
   const [editItems, setEditItems] = useState<CreateRow[]>([buildEmptyRow()]);
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
@@ -324,9 +336,9 @@ export const PrePaidListPage: React.FC = () => {
       sortBy(rows, sort, {
         number: (i) => i.number ?? "",
         date: (i) => new Date(i.invoice_date),
-        status: (i) => i.prepaid_redeem_status ?? "",
+        status: (i) => getPrepaidDisplayStatus(i),
         location: (i) => i.location_name ?? "",
-        total: (i) => Number(i.grand_total ?? 0),
+        total: (i) => Number(i.amount_paid ?? 0),
       }),
     [rows, sort]
   );
@@ -595,6 +607,67 @@ export const PrePaidListPage: React.FC = () => {
     return (qty * unit * rate) / 100;
   };
 
+  const computeRowSubtotal = (row: CreateRow) => {
+    const qty = parseNumber(row.quantity, 0);
+    const unit = computeEffectiveUnitPrice(row);
+    if (!Number.isFinite(qty) || !Number.isFinite(unit) || qty <= 0 || unit <= 0) return 0;
+    return qty * unit;
+  };
+
+  const computeInvoiceSubtotal = useCallback(
+    (items: CreateRow[]) => items.reduce((sum, row) => sum + computeRowSubtotal(row), 0),
+    []
+  );
+
+  const computeInvoiceTax = useCallback(
+    (items: CreateRow[]) => items.reduce((sum, row) => sum + computeRowTax(row), 0),
+    []
+  );
+
+  const editPreviewSubtotal = useMemo(
+    () => computeInvoiceSubtotal(editItems),
+    [computeInvoiceSubtotal, editItems, itemMetaVersion]
+  );
+  const editPreviewTax = useMemo(
+    () => computeInvoiceTax(editItems),
+    [computeInvoiceTax, editItems, itemMetaVersion]
+  );
+  const editPreviewGrandTotal = useMemo(
+    () => editPreviewSubtotal + editPreviewTax,
+    [editPreviewSubtotal, editPreviewTax]
+  );
+  const editRemainingBeforePayment = useMemo(
+    () => Math.max(editPreviewGrandTotal - editRecordedPaidTotal, 0),
+    [editPreviewGrandTotal, editRecordedPaidTotal]
+  );
+  const editPendingPaymentAmount = useMemo(() => {
+    if (!editRecordPayment) return 0;
+    const trimmed = editPaymentAmount.trim();
+    if (!trimmed) return editRemainingBeforePayment;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }, [editPaymentAmount, editRecordPayment, editRemainingBeforePayment]);
+  const editProjectedAmountPaid = useMemo(
+    () => editRecordedPaidTotal + editPendingPaymentAmount,
+    [editPendingPaymentAmount, editRecordedPaidTotal]
+  );
+  const editProjectedBalanceDue = useMemo(
+    () => Math.max(editPreviewGrandTotal - editProjectedAmountPaid, 0),
+    [editPreviewGrandTotal, editProjectedAmountPaid]
+  );
+  const editProjectedStatus = useMemo(
+    () =>
+      getPrepaidDisplayStatus({
+        type_id: "PREPAID",
+        status: editProjectedBalanceDue <= 0.009 ? "PAID" : "DRAFT",
+        prepaid_redeem_status: "UNUSED",
+        grand_total: editPreviewGrandTotal.toFixed(2),
+        amount_paid: editProjectedAmountPaid.toFixed(2),
+        balance_due: editProjectedBalanceDue.toFixed(2),
+      } as InvoiceResponse),
+    [editPreviewGrandTotal, editProjectedAmountPaid, editProjectedBalanceDue]
+  );
+
   const openCreate = () => {
     setCreateError(null);
     setCreateLocation("");
@@ -688,6 +761,21 @@ export const PrePaidListPage: React.FC = () => {
     setEditingInvoiceId(invoice.id);
     setEditLocation(String(invoice.location || ""));
     setEditNotes(invoice.notes || "");
+    const sortedPayments = [...(invoice.payments || [])].sort(
+      (a, b) => new Date(a.paid_on).getTime() - new Date(b.paid_on).getTime()
+    );
+    const recordedPaid =
+      sortedPayments.reduce((sum, payment) => sum + parseNumber(payment.amount, 0), 0) ||
+      parseNumber(invoice.amount_paid, 0);
+    const defaultMethod = sortedPayments.length
+      ? sortedPayments[sortedPayments.length - 1]?.method ?? "OTHER"
+      : "OTHER";
+    setEditRecordedPayments(sortedPayments);
+    setEditRecordedPaidTotal(recordedPaid);
+    setEditRecordPayment(false);
+    setEditPaymentTouched(false);
+    setEditPaymentAmount(Math.max(parseNumber(invoice.balance_due, 0), 0).toFixed(2));
+    setEditPaymentMethod(isPaymentMethod(defaultMethod) ? defaultMethod : "OTHER");
     const mapped = mapInvoiceItemsToRows(invoice);
     setEditItems(mapped);
     setEditPortalCustomer(null);
@@ -721,7 +809,18 @@ export const PrePaidListPage: React.FC = () => {
     if (editSaving) return;
     setEditOpen(false);
     setEditingInvoiceId(null);
+    setEditRecordedPayments([]);
+    setEditRecordedPaidTotal(0);
+    setEditRecordPayment(false);
+    setEditPaymentTouched(false);
+    setEditPaymentAmount("");
+    setEditPaymentMethod("OTHER");
   };
+
+  useEffect(() => {
+    if (!editOpen || editPaymentTouched) return;
+    setEditPaymentAmount(editRemainingBeforePayment > 0 ? editRemainingBeforePayment.toFixed(2) : "");
+  }, [editOpen, editPaymentTouched, editRemainingBeforePayment]);
 
   const addEditRow = () => {
     setEditItems((prev) => [...prev, buildEmptyRow(`${Date.now()}-${prev.length}`)]);
@@ -776,12 +875,35 @@ export const PrePaidListPage: React.FC = () => {
       return;
     }
 
+    if (editRecordedPaidTotal - editPreviewGrandTotal > 0.009) {
+      setEditError("Current recorded payments exceed the updated invoice total. Refund a payment or increase the invoice total before saving.");
+      return;
+    }
+
+    if (editRecordPayment) {
+      const trimmedAmount = editPaymentAmount.trim();
+      if (trimmedAmount) {
+        const parsedAmount = Number(trimmedAmount);
+        if (!Number.isFinite(parsedAmount) || parsedAmount < 0) {
+          setEditError("Payment amount must be a valid non-negative number.");
+          return;
+        }
+        if (parsedAmount - editRemainingBeforePayment > 0.009) {
+          setEditError("Payment amount cannot exceed the remaining invoice balance.");
+          return;
+        }
+      }
+    }
+
     setEditSaving(true);
     try {
       const updated = await updatePrepaidInvoice(editingInvoiceId, {
         location: locationId,
         portal_customer: editPortalCustomer?.id ?? null,
         notes: editNotes,
+        payment_made: editRecordPayment,
+        amount_paid: editRecordPayment ? editPaymentAmount.trim() || undefined : undefined,
+        payment_method: editRecordPayment ? editPaymentMethod : undefined,
         items: payloadItems,
       });
       setEditOpen(false);
@@ -996,7 +1118,7 @@ export const PrePaidListPage: React.FC = () => {
                       className="cursor-pointer select-none"
                       onClick={() => setSort((s) => nextSort(s, "status"))}
                     >
-                      Redeemed Flag{sortIndicator(sort, "status")}
+                      Status{sortIndicator(sort, "status")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
@@ -1033,10 +1155,10 @@ export const PrePaidListPage: React.FC = () => {
                         <span
                           className={[
                             "inline-flex rounded-md px-2 py-1 text-[11px] font-medium",
-                            statusBadgeClass(invoice.prepaid_redeem_status),
+                            statusBadgeClass(getPrepaidDisplayStatus(invoice)),
                           ].join(" ")}
                         >
-                          {toTitle(invoice.prepaid_redeem_status || "UNUSED")}
+                          {toTitle(getPrepaidDisplayStatus(invoice))}
                         </span>
                       </div>
                     )}
@@ -1049,14 +1171,14 @@ export const PrePaidListPage: React.FC = () => {
                         <span
                           className={[
                             "inline-flex rounded-md px-2 py-1 text-[11px] font-medium",
-                            statusBadgeClass(invoice.prepaid_redeem_status),
+                            statusBadgeClass(getPrepaidDisplayStatus(invoice)),
                           ].join(" ")}
                         >
-                          {toTitle(invoice.prepaid_redeem_status || "UNUSED")}
+                          {toTitle(getPrepaidDisplayStatus(invoice))}
                         </span>
                       </td>
                       <td>{invoice.location_name}</td>
-                      <td>{formatMoneyNGN(+invoice.grand_total)}</td>
+                      <td>{formatMoneyNGN(+invoice.amount_paid)}</td>
                     </>
                   ) : null}
                 </tr>
@@ -1227,8 +1349,8 @@ export const PrePaidListPage: React.FC = () => {
       ) : null}
 
       {createOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-kk-dark-bg/70 p-4">
-          <div className="w-full max-w-3xl rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
+        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-kk-dark-bg/70 p-4 sm:items-center">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
             <div className="border-b border-kk-dark-border px-5 py-4">
               <h2 className="text-lg font-semibold">Create Pre-Paid Invoice</h2>
               <p className="text-xs text-kk-dark-text-muted">
@@ -1236,7 +1358,7 @@ export const PrePaidListPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="space-y-4 px-5 py-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-kk-dark-text-muted">Location</label>
@@ -1495,16 +1617,16 @@ export const PrePaidListPage: React.FC = () => {
       ) : null}
 
       {editOpen ? (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-kk-dark-bg/70 p-4">
-          <div className="w-full max-w-3xl rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
+        <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-kk-dark-bg/70 p-4 sm:items-center">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
             <div className="border-b border-kk-dark-border px-5 py-4">
               <h2 className="text-lg font-semibold">Edit Pre-Paid Invoice</h2>
               <p className="text-xs text-kk-dark-text-muted">
-                You can edit only while this invoice remains unused.
+                You can edit this invoice while it remains unused and record additional payments.
               </p>
             </div>
 
-            <div className="space-y-4 px-5 py-4">
+            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-kk-dark-text-muted">Location</label>
@@ -1555,6 +1677,148 @@ export const PrePaidListPage: React.FC = () => {
                   onError={(message) => setEditError(message)}
                   placeholder="Search and select customer"
                 />
+              </div>
+
+              <div className="space-y-3 rounded-xl border border-kk-dark-border bg-kk-dark-bg px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Payments</h3>
+                    <p className="text-xs text-kk-dark-text-muted">
+                      Record installments until the invoice is fully paid, then it returns to the unused redeem flow.
+                    </p>
+                  </div>
+                  <span
+                    className={[
+                      "inline-flex rounded-md px-2 py-1 text-[11px] font-medium",
+                      statusBadgeClass(editProjectedStatus),
+                    ].join(" ")}
+                  >
+                    {toTitle(editProjectedStatus)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <label className="text-xs text-kk-dark-text-muted">Record payment now</label>
+                    <select
+                      value={editRecordPayment ? "yes" : "no"}
+                      onChange={(e) => setEditRecordPayment(e.target.value === "yes")}
+                      className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                    >
+                      <option value="no">No</option>
+                      <option value="yes">Yes</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-kk-dark-text-muted">Amount paid</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editPaymentAmount}
+                      onChange={(e) => {
+                        setEditPaymentTouched(true);
+                        setEditPaymentAmount(e.target.value);
+                      }}
+                      className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm disabled:opacity-60"
+                      placeholder="Defaults to remaining balance"
+                      disabled={!editRecordPayment}
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-kk-dark-text-muted">Payment method</label>
+                    <select
+                      value={editPaymentMethod}
+                      onChange={(e) => setEditPaymentMethod(isPaymentMethod(e.target.value) ? e.target.value : "OTHER")}
+                      className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm disabled:opacity-60"
+                      disabled={!editRecordPayment}
+                    >
+                      {PAYMENT_METHOD_OPTIONS.map((method) => (
+                        <option key={method} value={method}>
+                          {toTitle(method)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                  <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Invoice Total</p>
+                    <p className="mt-1 text-sm font-semibold">{formatMoneyNGN(editPreviewGrandTotal)}</p>
+                  </div>
+                  <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Recorded Payments</p>
+                    <p className="mt-1 text-sm font-semibold">{formatMoneyNGN(editRecordedPaidTotal)}</p>
+                  </div>
+                  <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Remaining Before Payment</p>
+                    <p className="mt-1 text-sm font-semibold">{formatMoneyNGN(editRemainingBeforePayment)}</p>
+                  </div>
+                  <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Pending Payment</p>
+                    <p className="mt-1 text-sm font-semibold">
+                      {formatMoneyNGN(editRecordPayment ? editPendingPaymentAmount : 0)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Projected Balance</p>
+                    <p className="mt-1 text-sm font-semibold">{formatMoneyNGN(editProjectedBalanceDue)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-kk-dark-text-muted">
+                      Payment History
+                    </h4>
+                    <span className="text-xs text-kk-dark-text-muted">
+                      {editRecordedPayments.length} recorded
+                    </span>
+                  </div>
+
+                  {editRecordedPayments.length ? (
+                    <div className="overflow-x-auto rounded-lg border border-kk-dark-input-border">
+                      <table className="min-w-full table-auto text-left text-sm">
+                        <thead className="bg-kk-dark-bg-elevated text-[11px] uppercase tracking-wide text-kk-dark-text-muted">
+                          <tr>
+                            <th className="px-3 py-2 font-medium">Recorded On</th>
+                            <th className="px-3 py-2 font-medium">Recorded By</th>
+                            <th className="px-3 py-2 font-medium">Method</th>
+                            <th className="px-3 py-2 font-medium text-right">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...editRecordedPayments].reverse().map((payment) => (
+                            <tr key={payment.id} className="border-t border-kk-dark-input-border">
+                              <td className="px-3 py-2">{payment.paid_on ? toDateStr(payment.paid_on) : "-"}</td>
+                              <td className="px-3 py-2">{payment.received_by_name || "-"}</td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={[
+                                    "inline-flex rounded-md px-2 py-1 text-[11px] font-medium",
+                                    paymentMethodBadgeClass(payment.method),
+                                  ].join(" ")}
+                                >
+                                  {toTitle(payment.method)}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-medium">
+                                {formatMoneyNGN(parseNumber(payment.amount, 0))}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-kk-dark-input-border px-3 py-4 text-sm text-kk-dark-text-muted">
+                      No payments have been recorded on this invoice yet.
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">

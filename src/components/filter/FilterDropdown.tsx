@@ -8,6 +8,7 @@ interface Props {
   columns: ColumnMeta[];
   initial?: FilterClause | null;
   anchorLeft?: number;
+  openAbove?: boolean;
   onSubmit: (clause: FilterClause) => void;
   onClose: () => void;
 }
@@ -76,6 +77,7 @@ export const FilterDropdown: React.FC<Props> = ({
   columns,
   initial,
   anchorLeft = 0,
+  openAbove = false,
   onSubmit,
   onClose,
 }) => {
@@ -260,7 +262,9 @@ export const FilterDropdown: React.FC<Props> = ({
 
   return (
     <div
-      className={`absolute left-0 top-full z-40 mt-2 rounded-xl border border-kk-dark-input-border bg-kk-dark-bg-elevated shadow-xl max-w-[calc(100vw-1rem)] ${
+      className={`absolute left-0 z-40 rounded-xl border border-kk-dark-input-border bg-kk-dark-bg-elevated shadow-xl max-w-[calc(100vw-1rem)] ${
+        openAbove ? "bottom-full mb-2" : "top-full mt-2"
+      } ${
         column ? (column.type === "date" ? "w-[18.5rem]" : "w-[12rem]") : "w-[12rem]"
       }`}
       style={{ left: `${anchorLeft}px` }}

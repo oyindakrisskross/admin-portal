@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { toYMD } from "../../helpers";
+import { useDropdownOpenAbove } from "../../hooks/useDropdownPlacement";
 import { parseYmd } from "./DatePicker";
 
 type DateGate = "is" | "between" | "relative";
@@ -34,15 +35,6 @@ const dateFromYmd = (value?: string | null) => {
 const addDays = (value: Date, days: number) => {
   const next = new Date(value);
   next.setDate(next.getDate() + days);
-  return asDateOnly(next);
-};
-
-const addMonthsKeepingDay = (value: Date, months: number) => {
-  const day = value.getDate();
-  const next = new Date(value.getFullYear(), value.getMonth(), 1);
-  next.setMonth(next.getMonth() + months);
-  const maxDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-  next.setDate(Math.min(day, maxDay));
   return asDateOnly(next);
 };
 
@@ -103,17 +95,30 @@ const computeRelativeRange = (
     return { start: toYMD(startOfYear(today)), end: toYMD(endOfYear(today)) };
   }
 
+  // "Past" uses completed calendar periods, excluding the current partial one.
   const n = Math.max(1, Math.floor(Number(amount) || 1));
   if (unit === "day") {
-    return { start: toYMD(addDays(today, -n)), end: toYMD(today) };
+    return { start: toYMD(addDays(today, -n)), end: toYMD(addDays(today, -1)) };
   }
   if (unit === "week") {
-    return { start: toYMD(addDays(today, -(7 * n))), end: toYMD(today) };
+    const currentWeekStart = startOfWeekSunday(today);
+    return {
+      start: toYMD(addDays(currentWeekStart, -(7 * n))),
+      end: toYMD(addDays(currentWeekStart, -1)),
+    };
   }
   if (unit === "month") {
-    return { start: toYMD(addMonthsKeepingDay(today, -n)), end: toYMD(today) };
+    const currentMonthStart = startOfMonth(today);
+    return {
+      start: toYMD(new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - n, 1)),
+      end: toYMD(addDays(currentMonthStart, -1)),
+    };
   }
-  return { start: toYMD(addYearsKeepingDay(today, -n)), end: toYMD(today) };
+  const currentYearStart = startOfYear(today);
+  return {
+    start: toYMD(new Date(currentYearStart.getFullYear() - n, 0, 1)),
+    end: toYMD(addDays(currentYearStart, -1)),
+  };
 };
 
 const clampToTodayYmd = (value: string, today: Date) => {
@@ -211,6 +216,12 @@ export const ReportDateRangePicker: React.FC<Props> = ({
   const [showMonthMenu, setShowMonthMenu] = useState(false);
   const [showYearMenu, setShowYearMenu] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const monthButtonRef = useRef<HTMLButtonElement | null>(null);
+  const yearButtonRef = useRef<HTMLButtonElement | null>(null);
+  const openAbove = useDropdownOpenAbove(open, triggerRef);
+  const monthMenuAbove = useDropdownOpenAbove(showMonthMenu, monthButtonRef);
+  const yearMenuAbove = useDropdownOpenAbove(showYearMenu, yearButtonRef);
   const currentYear = today.getFullYear();
   const currentMonthIndex = today.getMonth();
   const compareSummaryText = useMemo(() => {
@@ -404,6 +415,7 @@ export const ReportDateRangePicker: React.FC<Props> = ({
       <label className="text-xs text-kk-dark-text-muted">{label}</label>
       <button
         type="button"
+        ref={triggerRef}
         onClick={() => (open ? closeWithoutApply() : openPicker())}
         className="mt-1 flex w-full items-center justify-between rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-left text-sm"
       >
@@ -417,7 +429,11 @@ export const ReportDateRangePicker: React.FC<Props> = ({
       </button>
 
       {open ? (
-        <div className="absolute left-0 z-50 mt-2 w-[18.5rem] max-w-[calc(100vw-1rem)] rounded-xl border border-kk-dark-input-border bg-kk-dark-bg-elevated p-2 shadow-2xl">
+        <div
+          className={`absolute left-0 z-50 w-[18.5rem] max-w-[calc(100vw-1rem)] rounded-xl border border-kk-dark-input-border bg-kk-dark-bg-elevated p-2 shadow-2xl ${
+            openAbove ? "bottom-full mb-2" : "top-full mt-2"
+          }`}
+        >
           <div className="mb-2 flex items-center gap-1.5">
             <div className="text-xs font-medium text-kk-dark-text">Date</div>
             <select
@@ -519,6 +535,7 @@ export const ReportDateRangePicker: React.FC<Props> = ({
               <div className="relative">
                 <button
                   type="button"
+                  ref={monthButtonRef}
                   onClick={() => {
                     setShowMonthMenu((prev) => !prev);
                     setShowYearMenu(false);
@@ -529,7 +546,11 @@ export const ReportDateRangePicker: React.FC<Props> = ({
                   <ChevronDown className="h-3 w-3 text-kk-dark-text-muted" />
                 </button>
                 {showMonthMenu ? (
-                  <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-32 overflow-y-auto rounded-md border border-kk-dark-input-border bg-kk-dark-bg shadow-xl">
+                  <div
+                    className={`absolute left-0 z-20 max-h-52 w-32 overflow-y-auto rounded-md border border-kk-dark-input-border bg-kk-dark-bg shadow-xl ${
+                      monthMenuAbove ? "bottom-full mb-1" : "top-full mt-1"
+                    }`}
+                  >
                     {MONTH_NAMES.map((labelText, monthIndex) => {
                       const disabled = !allowedMonthIndexes.includes(monthIndex);
                       const selected = monthIndex === month.getMonth();
@@ -558,6 +579,7 @@ export const ReportDateRangePicker: React.FC<Props> = ({
               <div className="relative">
                 <button
                   type="button"
+                  ref={yearButtonRef}
                   onClick={() => {
                     setShowYearMenu((prev) => !prev);
                     setShowMonthMenu(false);
@@ -568,7 +590,11 @@ export const ReportDateRangePicker: React.FC<Props> = ({
                   <ChevronDown className="h-3 w-3 text-kk-dark-text-muted" />
                 </button>
                 {showYearMenu ? (
-                  <div className="absolute left-0 top-full z-20 mt-1 max-h-52 w-20 overflow-y-auto rounded-md border border-kk-dark-input-border bg-kk-dark-bg shadow-xl">
+                  <div
+                    className={`absolute left-0 z-20 max-h-52 w-20 overflow-y-auto rounded-md border border-kk-dark-input-border bg-kk-dark-bg shadow-xl ${
+                      yearMenuAbove ? "bottom-full mb-1" : "top-full mt-1"
+                    }`}
+                  >
                     {yearOptions.map((year) => {
                       const selected = year === month.getFullYear();
                       return (

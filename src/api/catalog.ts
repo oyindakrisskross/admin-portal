@@ -1,37 +1,17 @@
 // src/api/catalog.ts
 
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import * as Catalog from "../types/catalog";
 import type { FilterSet } from "../types/filters";
 
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
-
 // Cateogries
 export async function fetchCategories(params?: { filters?:FilterSet }) {
-  const search = new URLSearchParams();
-
-  if (params?.filters) {
-    params.filters.clauses.forEach((clause) => {
-      // simple encoding: field|op|value
-      let encodedValue: string;
-      if (Array.isArray(clause.value)) {
-        encodedValue = clause.value.join(",");
-      } else if (typeof clause.value === "object") {
-        encodedValue = JSON.stringify(clause.value);
-      } else {
-        encodedValue = clause.value ?? "";
-      }
-      search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-    });
-  }
-
   const res = await api.get(
-    `/api/catalog/categories/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/catalog/categories/", {
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -137,37 +117,15 @@ export async function fetchItemGroups(params?: {
   page?: number;
   page_size?: number;
 }) {
-  const search = new URLSearchParams();
-
-  if (params?.filters) {
-    params.filters.clauses.forEach((clause) => {
-      // simple encoding: field|op|value
-      let encodedValue: string;
-      if (Array.isArray(clause.value)) {
-        encodedValue = clause.value.join(",");
-      } else if (typeof clause.value === "object") {
-        encodedValue = JSON.stringify(clause.value);
-      } else {
-        encodedValue = clause.value ?? "";
-      }
-      search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-    });
-  }
-
-  if (params?.search) {
-    search.set("search", params.search);
-  }
-
-  if (params?.page != null) {
-    search.set("page", String(params.page));
-  }
-
-  if (params?.page_size != null) {
-    search.set("page_size", String(params.page_size));
-  }
-
   const res = await api.get(
-    `/api/catalog/item-groups/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/catalog/item-groups/", {
+      params: {
+        search: params?.search,
+        page: params?.page,
+        page_size: params?.page_size,
+      },
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -208,37 +166,15 @@ export async function fetchItems(params?: {
   page?: number;
   page_size?: number;
 }) {
-  const search = new URLSearchParams();
-
-  if (params?.filters) {
-    params.filters.clauses.forEach((clause) => {
-      // simple encoding: field|op|value
-      let encodedValue: string;
-      if (Array.isArray(clause.value)) {
-        encodedValue = clause.value.join(",");
-      } else if (typeof clause.value === "object") {
-        encodedValue = JSON.stringify(clause.value);
-      } else {
-        encodedValue = clause.value ?? "";
-      }
-      search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-    });
-  }
-
-  if (params?.search) {
-    search.set("search", params.search);
-  }
-
-  if (params?.page != null) {
-    search.set("page", String(params.page));
-  }
-
-  if (params?.page_size != null) {
-    search.set("page_size", String(params.page_size));
-  }
-
   const res = await api.get(
-    `/api/catalog/item-lte/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/catalog/item-lte/", {
+      params: {
+        search: params?.search,
+        page: params?.page,
+        page_size: params?.page_size,
+      },
+      filters: params?.filters,
+    })
   );
   return res.data;
 }

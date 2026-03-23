@@ -1,6 +1,9 @@
 import api from "./client";
+import { buildQueryPath } from "./query";
+import type { PaginatedResult } from "./types";
 import type {
   CustomerSubscriptionRecord,
+  SubscriptionCheckoutResult,
   SubscriptionAddon,
   SubscriptionCoupon,
   SubscriptionCouponSchedule,
@@ -9,13 +12,6 @@ import type {
   SubscriptionProduct,
 } from "../types/subscriptions";
 import type { FilterSet } from "../types/filters";
-
-export interface PaginatedResult<T> {
-  results: T[];
-  count: number;
-  next: string | null;
-  previous: string | null;
-}
 
 export async function fetchSubscriptionProducts(params?: Record<string, unknown>) {
   const res = await api.get<PaginatedResult<SubscriptionProduct>>("/api/subscriptions/products/", {
@@ -159,32 +155,15 @@ export async function fetchSubscriptionPlanTransactions(params?: Record<string, 
 export async function fetchCustomerSubscriptions(
   params?: (Record<string, unknown> & { filters?: FilterSet })
 ) {
-  const search = new URLSearchParams();
-
-  if (params) {
-    const { filters, ...rest } = params;
-    for (const [k, v] of Object.entries(rest)) {
-      if (v === undefined || v === null || v === "") continue;
-      search.set(k, String(v));
-    }
-
-    if (filters) {
-      filters.clauses.forEach((clause) => {
-        let encodedValue: string;
-        if (Array.isArray(clause.value)) {
-          encodedValue = clause.value.join(",");
-        } else if (typeof clause.value === "object") {
-          encodedValue = JSON.stringify(clause.value);
-        } else {
-          encodedValue = clause.value ?? "";
-        }
-        search.append("filter", `${clause.field}|${clause.operator}|${encodedValue}`);
-      });
-    }
-  }
-
   const res = await api.get<PaginatedResult<CustomerSubscriptionRecord>>(
-    `/api/subscriptions/subscriptions/${search.toString() ? `?${search}` : ""}`
+    buildQueryPath("/api/subscriptions/subscriptions/", {
+      params: params
+        ? Object.fromEntries(
+            Object.entries(params).filter(([key]) => key !== "filters")
+          )
+        : undefined,
+      filters: params?.filters,
+    })
   );
   return res.data;
 }
@@ -212,6 +191,15 @@ export async function generateSubscriptionPassQR(subscriptionId: number) {
   return res.data;
 }
 
+export async function resendSubscriptionPassEmail(subscriptionId: number) {
+  const res = await api.post<{
+    detail: string;
+    recipient: string;
+    subscription_id: number;
+  }>(`/api/subscriptions/subscriptions/${subscriptionId}/resend-email/`);
+  return res.data;
+}
+
 export async function createCustomerSubscription(payload: {
   customer: number;
   plan: number;
@@ -222,5 +210,21 @@ export async function createCustomerSubscription(payload: {
   payment_reference?: string;
 }) {
   const res = await api.post<CustomerSubscriptionRecord>("/api/subscriptions/subscriptions/", payload);
+  return res.data;
+}
+
+export async function checkoutCustomerSubscriptions(payload: {
+  customer: number;
+  plan_ids: number[];
+  started_at?: string;
+  payment_made?: boolean;
+  amount_paid?: string;
+  payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+  payment_reference?: string;
+}) {
+  const res = await api.post<SubscriptionCheckoutResult>(
+    "/api/subscriptions/subscriptions/checkout/",
+    payload
+  );
   return res.data;
 }

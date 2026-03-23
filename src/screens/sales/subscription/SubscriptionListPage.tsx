@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Download, Plus, Search, Ticket } from "lucide-react";
+import { Download, Plus, Search, Ticket, Trash2 } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
+import { useNavigate, useParams } from "react-router-dom";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import {
-  createCustomerSubscription,
+  checkoutCustomerSubscriptions,
+  fetchCustomerSubscription,
   fetchCustomerSubscriptions,
   fetchSubscriptionPlans,
   fetchSubscriptionProducts,
@@ -23,6 +25,11 @@ import type { ColumnMeta, FilterSet } from "../../../types/filters";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 const SUBSCRIPTION_QR_CANVAS_ID = "subscription-pass-qr-canvas";
+const formatCurrency = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  maximumFractionDigits: 2,
+});
 
 const statusBadge = (label: string) => {
   const tone =
@@ -36,8 +43,18 @@ const statusBadge = (label: string) => {
   return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
 };
 
+const estimatePlanGrandTotal = (plan: SubscriptionPlan | null | undefined) => {
+  if (!plan) return 0;
+  const subtotal = (Number(plan.price || 0) || 0) + (Number(plan.setup_fee || 0) || 0);
+  const taxRate = Number(plan.sales_tax_rate || 0) || 0;
+  return subtotal + (subtotal * taxRate) / 100;
+};
+
 export const SubscriptionListPage: React.FC = () => {
   const { can } = useAuth();
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const hasId = Boolean(id);
 
   const [rows, setRows] = useState<CustomerSubscriptionRecord[]>([]);
   const [selectedSubscription, setSelectedSubscription] = useState<CustomerSubscriptionRecord | null>(null);
@@ -58,7 +75,7 @@ export const SubscriptionListPage: React.FC = () => {
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
-  const [selectedPlanId, setSelectedPlanId] = useState<number | "">("");
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Array<number | "">>([""]);
   const [startedDate, setStartedDate] = useState("");
   const [paymentMade, setPaymentMade] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -115,6 +132,17 @@ export const SubscriptionListPage: React.FC = () => {
   );
 
   const hasPeek = Boolean(selectedSubscription);
+  const selectedCheckoutPlans = useMemo(
+    () =>
+      selectedPlanIds
+        .map((planId) => planOptions.find((plan) => plan.id === planId) ?? null)
+        .filter((plan): plan is SubscriptionPlan => plan != null),
+    [planOptions, selectedPlanIds]
+  );
+  const estimatedCheckoutTotal = useMemo(
+    () => selectedCheckoutPlans.reduce((sum, plan) => sum + estimatePlanGrandTotal(plan), 0),
+    [selectedCheckoutPlans]
+  );
 
   useEffect(() => {
     setQrOpen(false);
@@ -139,6 +167,44 @@ export const SubscriptionListPage: React.FC = () => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    if (!hasId || !rows.length) return;
+
+    const subscriptionId = Number(id);
+    const match = rows.find((row) => row.id === subscriptionId);
+    if (match) {
+      setSelectedSubscription(match);
+    }
+  }, [hasId, id, rows]);
+
+  useEffect(() => {
+    if (!hasId) return;
+
+    const subscriptionId = Number(id);
+    if (!Number.isFinite(subscriptionId) || subscriptionId <= 0) return;
+    if (selectedSubscription?.id === subscriptionId) return;
+
+    const match = rows.find((row) => row.id === subscriptionId);
+    if (match) {
+      setSelectedSubscription(match);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchCustomerSubscription(subscriptionId);
+        if (!cancelled) setSelectedSubscription(data);
+      } catch {
+        if (!cancelled) setSelectedSubscription(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [hasId, id, rows, selectedSubscription?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -291,12 +357,33 @@ export const SubscriptionListPage: React.FC = () => {
     </div>
   ) : null;
 
+  const updateSelectedPlan = (index: number, value: number | "") => {
+    setSelectedPlanIds((current) => {
+      const next = [...current];
+      next[index] = value;
+      return next;
+    });
+  };
+
+  const addSelectedPlan = () => {
+    setSelectedPlanIds((current) => [...current, ""]);
+  };
+
+  const removeSelectedPlan = (index: number) => {
+    setSelectedPlanIds((current) => {
+      if (current.length <= 1) {
+        return [""];
+      }
+      return current.filter((_, currentIndex) => currentIndex !== index);
+    });
+  };
+
   const closeStartModal = () => {
     setShowStartModal(false);
     setShowCreateCustomerModal(false);
     setStartError(null);
     setSelectedCustomer(null);
-    setSelectedPlanId("");
+    setSelectedPlanIds([""]);
     setStartedDate("");
     setPaymentMade(true);
     setPaymentAmount("");
@@ -362,17 +449,18 @@ export const SubscriptionListPage: React.FC = () => {
       setStartError("Please select a customer.");
       return;
     }
-    if (!selectedPlanId) {
-      setStartError("Please select a plan.");
+    const chosenPlanIds = selectedPlanIds.filter((planId): planId is number => typeof planId === "number");
+    if (!chosenPlanIds.length) {
+      setStartError("Please select at least one subscription plan.");
       return;
     }
 
     setStarting(true);
     setStartError(null);
     try {
-      await createCustomerSubscription({
+      await checkoutCustomerSubscriptions({
         customer: Number(selectedCustomer.id),
-        plan: Number(selectedPlanId),
+        plan_ids: chosenPlanIds,
         started_at: startedDate ? new Date(`${startedDate}T00:00:00`).toISOString() : undefined,
         payment_made: paymentMade,
         amount_paid: paymentMade && paymentAmount.trim() ? paymentAmount.trim() : undefined,
@@ -574,12 +662,16 @@ export const SubscriptionListPage: React.FC = () => {
         <SidePeek
           isOpen={hasPeek}
           onClose={() => {
-            setSelectedSubscription(null);
             setQrOpen(false);
             setQrLoading(false);
             setQrValue("");
             setQrPassCode("");
             setQrError(null);
+            if (hasId) {
+              navigate("/sales/subscriptions", { replace: true });
+            } else {
+              setSelectedSubscription(null);
+            }
           }}
           widthClass="w-3/4"
           actions={
@@ -654,17 +746,18 @@ export const SubscriptionListPage: React.FC = () => {
       ) : null}
 
       {showStartModal ? (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={closeStartModal}>
+        <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closeStartModal}>
           <div
-            className="w-full max-w-xl rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-5"
+            className="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold">Start Customer Subscription</h3>
             <p className="mt-1 text-xs text-kk-dark-text-muted">
-              Manually create an active subscription for a customer.
+              Start one or more subscriptions for a customer on the same invoice. Each subscription still sends its own
+              QR email.
             </p>
 
-            <div className="mt-4 grid gap-3">
+            <div className="mt-4 grid flex-1 gap-3 overflow-y-auto pr-1">
               <label className="flex flex-col gap-1">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-kk-dark-text-muted">Customer *</span>
@@ -690,22 +783,72 @@ export const SubscriptionListPage: React.FC = () => {
                 />
               </label>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-xs text-kk-dark-text-muted">Plan *</span>
-                <select
-                  value={selectedPlanId}
-                  onChange={(e) => setSelectedPlanId(e.target.value ? Number(e.target.value) : "")}
-                  className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                  disabled={starting || lookupLoading}
-                >
-                  <option value="">Select plan</option>
-                  {planOptions.map((plan) => (
-                    <option key={plan.id!} value={plan.id!}>
-                      {plan.name} ({plan.code}){plan.plan_type === "USAGE" ? " - Usage" : " - Cycle"}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-kk-dark-text-muted">Plans *</span>
+                  <button
+                    type="button"
+                    onClick={addSelectedPlan}
+                    className="inline-flex items-center gap-1 rounded-md border border-kk-dark-input-border px-2 py-1 text-[11px] hover:bg-kk-dark-hover"
+                    disabled={starting || lookupLoading}
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Plan
+                  </button>
+                </div>
+
+                {selectedPlanIds.map((planId, index) => (
+                  <div key={index} className="flex items-end gap-2">
+                    <label className="flex-1">
+                      <span className="mb-1 block text-xs text-kk-dark-text-muted">
+                        Subscription {index + 1}{index === 0 ? " *" : ""}
+                      </span>
+                      <select
+                        value={planId}
+                        onChange={(e) => updateSelectedPlan(index, e.target.value ? Number(e.target.value) : "")}
+                        className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                        disabled={starting || lookupLoading}
+                      >
+                        <option value="">Select plan</option>
+                        {planOptions.map((plan) => (
+                          <option key={plan.id!} value={plan.id!}>
+                            {plan.name} ({plan.code}){plan.plan_type === "USAGE" ? " - Usage" : " - Cycle"}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeSelectedPlan(index)}
+                      className="inline-flex h-10 items-center justify-center rounded-md border border-kk-dark-input-border px-3 hover:bg-kk-dark-hover disabled:opacity-50"
+                      disabled={starting || selectedPlanIds.length === 1}
+                      title={`Remove subscription ${index + 1}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {selectedCheckoutPlans.length ? (
+                <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-kk-dark-text-muted">
+                      {selectedCheckoutPlans.length} subscription{selectedCheckoutPlans.length === 1 ? "" : "s"} selected
+                    </span>
+                    <span className="text-sm font-medium text-kk-dark-text">
+                      {formatCurrency.format(estimatedCheckoutTotal)}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1 text-[11px] text-kk-dark-text-muted">
+                    {selectedCheckoutPlans.map((plan, index) => (
+                      <p key={`${plan.id ?? plan.code}-${index}`}>
+                        {plan.name} ({plan.code}){plan.plan_type === "USAGE" ? " - Usage" : " - Cycle"}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <label className="flex flex-col gap-1">
                 <span className="text-xs text-kk-dark-text-muted">Start Date (optional)</span>
@@ -742,7 +885,7 @@ export const SubscriptionListPage: React.FC = () => {
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                      placeholder="Leave blank to use plan total"
+                      placeholder="Leave blank to use checkout total"
                       disabled={starting || !paymentMade}
                     />
                   </label>

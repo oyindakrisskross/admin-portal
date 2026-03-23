@@ -1,5 +1,7 @@
 // src/screens/reports/helpers.ts
 
+import type { InvoiceResponse } from "./types/invoice";
+
 export function formatMoneyNGN(v: number) {
   return new Intl.NumberFormat("en-NG", { 
     style: "currency", 
@@ -107,4 +109,32 @@ export function toDateStrShort (str: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+export function humanizeStatus(value?: string, fallback = "") {
+  const normalized = String(value || fallback || "").trim();
+  if (!normalized) return "";
+  return normalized
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (s) => s.toUpperCase());
+}
+
+export function getPrepaidDisplayStatus(
+  invoice: Pick<InvoiceResponse, "type_id" | "status" | "prepaid_redeem_status" | "grand_total" | "amount_paid" | "balance_due">
+) {
+  if (String(invoice.type_id || "").toUpperCase() !== "PREPAID") {
+    return String(invoice.status || "").toUpperCase();
+  }
+
+  const grandTotal = Number(invoice.grand_total ?? 0);
+  const amountPaid = Number(invoice.amount_paid ?? 0);
+  const balanceDueRaw = Number(invoice.balance_due ?? Math.max(grandTotal - amountPaid, 0));
+  const balanceDue = Number.isFinite(balanceDueRaw) ? Math.max(balanceDueRaw, 0) : 0;
+
+  if (balanceDue > 0.009) {
+    return amountPaid > 0.009 ? "PARTIALLY_PAID" : "UNPAID";
+  }
+
+  return String(invoice.prepaid_redeem_status || "UNUSED").toUpperCase();
 }
