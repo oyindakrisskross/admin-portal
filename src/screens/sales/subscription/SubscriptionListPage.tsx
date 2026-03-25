@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Plus, Search, Ticket, Trash2 } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -35,6 +35,8 @@ const statusBadge = (label: string) => {
   const tone =
     label === "ACTIVE"
       ? "bg-emerald-700 text-emerald-100"
+      : label === "UNPAID"
+        ? "bg-orange-700 text-orange-100"
       : label === "DEPLETED"
         ? "bg-amber-700 text-amber-100"
         : label === "EXPIRED"
@@ -43,11 +45,31 @@ const statusBadge = (label: string) => {
   return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
 };
 
+const normalizeSubscriptionError = (message: string) => {
+  const text = String(message || "").trim();
+  const lowered = text.toLowerCase();
+  if (
+    lowered.includes("physical card serial") ||
+    lowered.includes("card serial number is already in use") ||
+    lowered.includes("uniq_subscription_plan_card_serial") ||
+    lowered.includes("duplicate key value violates unique constraint") ||
+    lowered.includes("unique constraint failed")
+  ) {
+    return "This card serial number is already in use.";
+  }
+  return text;
+};
+
 const estimatePlanGrandTotal = (plan: SubscriptionPlan | null | undefined) => {
   if (!plan) return 0;
   const subtotal = (Number(plan.price || 0) || 0) + (Number(plan.setup_fee || 0) || 0);
   const taxRate = Number(plan.sales_tax_rate || 0) || 0;
   return subtotal + (subtotal * taxRate) / 100;
+};
+
+type SelectedPlanEntry = {
+  planId: number | "";
+  physical_card_serial: string;
 };
 
 export const SubscriptionListPage: React.FC = () => {
@@ -75,7 +97,9 @@ export const SubscriptionListPage: React.FC = () => {
   const [startError, setStartError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerRecord | null>(null);
-  const [selectedPlanIds, setSelectedPlanIds] = useState<Array<number | "">>([""]);
+  const [selectedPlanEntries, setSelectedPlanEntries] = useState<SelectedPlanEntry[]>([
+    { planId: "", physical_card_serial: "" },
+  ]);
   const [startedDate, setStartedDate] = useState("");
   const [paymentMade, setPaymentMade] = useState(true);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -89,6 +113,11 @@ export const SubscriptionListPage: React.FC = () => {
   const [qrError, setQrError] = useState<string | null>(null);
   const [qrValue, setQrValue] = useState("");
   const [qrPassCode, setQrPassCode] = useState("");
+
+  const handleSubscriptionUpdated = useCallback((updated: CustomerSubscriptionRecord) => {
+    setSelectedSubscription((current) => (current?.id === updated.id ? updated : current));
+    setRows((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+  }, []);
 
   const filterColumns: ColumnMeta[] = useMemo(
     () => [
@@ -110,6 +139,7 @@ export const SubscriptionListPage: React.FC = () => {
         type: "choice",
         choices: [
           { value: "ACTIVE", label: "Active" },
+          { value: "UNPAID", label: "Unpaid" },
           { value: "EXPIRED", label: "Expired" },
           { value: "DEPLETED", label: "Depleted" },
           { value: "CANCELLED", label: "Cancelled" },
@@ -134,10 +164,10 @@ export const SubscriptionListPage: React.FC = () => {
   const hasPeek = Boolean(selectedSubscription);
   const selectedCheckoutPlans = useMemo(
     () =>
-      selectedPlanIds
-        .map((planId) => planOptions.find((plan) => plan.id === planId) ?? null)
+      selectedPlanEntries
+        .map((entry) => planOptions.find((plan) => plan.id === entry.planId) ?? null)
         .filter((plan): plan is SubscriptionPlan => plan != null),
-    [planOptions, selectedPlanIds]
+    [planOptions, selectedPlanEntries]
   );
   const estimatedCheckoutTotal = useMemo(
     () => selectedCheckoutPlans.reduce((sum, plan) => sum + estimatePlanGrandTotal(plan), 0),
@@ -358,21 +388,29 @@ export const SubscriptionListPage: React.FC = () => {
   ) : null;
 
   const updateSelectedPlan = (index: number, value: number | "") => {
-    setSelectedPlanIds((current) => {
+    setSelectedPlanEntries((current) => {
       const next = [...current];
-      next[index] = value;
+      next[index] = { ...next[index], planId: value, physical_card_serial: "" };
+      return next;
+    });
+  };
+
+  const updateSelectedPlanSerial = (index: number, value: string) => {
+    setSelectedPlanEntries((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], physical_card_serial: value };
       return next;
     });
   };
 
   const addSelectedPlan = () => {
-    setSelectedPlanIds((current) => [...current, ""]);
+    setSelectedPlanEntries((current) => [...current, { planId: "", physical_card_serial: "" }]);
   };
 
   const removeSelectedPlan = (index: number) => {
-    setSelectedPlanIds((current) => {
+    setSelectedPlanEntries((current) => {
       if (current.length <= 1) {
-        return [""];
+        return [{ planId: "", physical_card_serial: "" }];
       }
       return current.filter((_, currentIndex) => currentIndex !== index);
     });
@@ -383,7 +421,7 @@ export const SubscriptionListPage: React.FC = () => {
     setShowCreateCustomerModal(false);
     setStartError(null);
     setSelectedCustomer(null);
-    setSelectedPlanIds([""]);
+    setSelectedPlanEntries([{ planId: "", physical_card_serial: "" }]);
     setStartedDate("");
     setPaymentMade(true);
     setPaymentAmount("");
@@ -449,9 +487,22 @@ export const SubscriptionListPage: React.FC = () => {
       setStartError("Please select a customer.");
       return;
     }
-    const chosenPlanIds = selectedPlanIds.filter((planId): planId is number => typeof planId === "number");
-    if (!chosenPlanIds.length) {
+    const chosenPlanEntries = selectedPlanEntries
+      .filter((entry): entry is SelectedPlanEntry & { planId: number } => typeof entry.planId === "number")
+      .map((entry) => {
+        const plan = planOptions.find((row) => row.id === entry.planId) ?? null;
+        return { entry, plan };
+      })
+      .filter((row) => row.plan != null);
+    if (!chosenPlanEntries.length) {
       setStartError("Please select at least one subscription plan.");
+      return;
+    }
+    const missingSerialPlan = chosenPlanEntries.find(
+      ({ entry, plan }) => Boolean(plan?.requires_card_serial) && !entry.physical_card_serial.trim()
+    );
+    if (missingSerialPlan) {
+      setStartError(`Physical card serial is required for ${missingSerialPlan.plan?.name || "the selected plan"}.`);
       return;
     }
 
@@ -460,7 +511,10 @@ export const SubscriptionListPage: React.FC = () => {
     try {
       await checkoutCustomerSubscriptions({
         customer: Number(selectedCustomer.id),
-        plan_ids: chosenPlanIds,
+        plan_entries: chosenPlanEntries.map(({ entry }) => ({
+          plan: Number(entry.planId),
+          physical_card_serial: entry.physical_card_serial.trim() || undefined,
+        })),
         started_at: startedDate ? new Date(`${startedDate}T00:00:00`).toISOString() : undefined,
         payment_made: paymentMade,
         amount_paid: paymentMade && paymentAmount.trim() ? paymentAmount.trim() : undefined,
@@ -472,16 +526,18 @@ export const SubscriptionListPage: React.FC = () => {
     } catch (err: any) {
       const detail = err?.response?.data;
       if (typeof detail?.detail === "string") {
-        setStartError(detail.detail);
+        setStartError(normalizeSubscriptionError(detail.detail));
       } else if (detail && typeof detail === "object") {
         const first = Object.values(detail)[0];
         if (Array.isArray(first) && typeof first[0] === "string") {
-          setStartError(first[0]);
+          setStartError(normalizeSubscriptionError(first[0]));
+        } else if (typeof first === "string") {
+          setStartError(normalizeSubscriptionError(first));
         } else {
           setStartError("Unable to start subscription.");
         }
       } else {
-        setStartError("Unable to start subscription.");
+        setStartError(normalizeSubscriptionError(err?.message || "Unable to start subscription."));
       }
     } finally {
       setStarting(false);
@@ -689,7 +745,10 @@ export const SubscriptionListPage: React.FC = () => {
             </div>
           }
         >
-          <SubscriptionPeek subscriptionId={selectedSubscription.id} />
+          <SubscriptionPeek
+            subscriptionId={selectedSubscription.id}
+            onUpdated={handleSubscriptionUpdated}
+          />
         </SidePeek>
       ) : null}
 
@@ -797,37 +856,56 @@ export const SubscriptionListPage: React.FC = () => {
                   </button>
                 </div>
 
-                {selectedPlanIds.map((planId, index) => (
-                  <div key={index} className="flex items-end gap-2">
-                    <label className="flex-1">
-                      <span className="mb-1 block text-xs text-kk-dark-text-muted">
-                        Subscription {index + 1}{index === 0 ? " *" : ""}
-                      </span>
-                      <select
-                        value={planId}
-                        onChange={(e) => updateSelectedPlan(index, e.target.value ? Number(e.target.value) : "")}
-                        className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                        disabled={starting || lookupLoading}
-                      >
-                        <option value="">Select plan</option>
-                        {planOptions.map((plan) => (
-                          <option key={plan.id!} value={plan.id!}>
-                            {plan.name} ({plan.code}){plan.plan_type === "USAGE" ? " - Usage" : " - Cycle"}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => removeSelectedPlan(index)}
-                      className="inline-flex h-10 items-center justify-center rounded-md border border-kk-dark-input-border px-3 hover:bg-kk-dark-hover disabled:opacity-50"
-                      disabled={starting || selectedPlanIds.length === 1}
-                      title={`Remove subscription ${index + 1}`}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
+                {selectedPlanEntries.map((entry, index) => {
+                  const selectedPlan = planOptions.find((plan) => plan.id === entry.planId) ?? null;
+                  return (
+                    <div key={index} className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg p-3">
+                      <div className="flex items-end gap-2">
+                        <label className="flex-1">
+                          <span className="mb-1 block text-xs text-kk-dark-text-muted">
+                            Subscription {index + 1}{index === 0 ? " *" : ""}
+                          </span>
+                          <select
+                            value={entry.planId}
+                            onChange={(e) => updateSelectedPlan(index, e.target.value ? Number(e.target.value) : "")}
+                            className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                            disabled={starting || lookupLoading}
+                          >
+                            <option value="">Select plan</option>
+                            {planOptions.map((plan) => (
+                              <option key={plan.id!} value={plan.id!}>
+                                {plan.name} ({plan.code}){plan.plan_type === "USAGE" ? " - Usage" : " - Cycle"}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => removeSelectedPlan(index)}
+                          className="inline-flex h-10 items-center justify-center rounded-md border border-kk-dark-input-border px-3 hover:bg-kk-dark-hover disabled:opacity-50"
+                          disabled={starting || selectedPlanEntries.length === 1}
+                          title={`Remove subscription ${index + 1}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {selectedPlan?.requires_card_serial ? (
+                        <label className="mt-3 flex flex-col gap-1">
+                          <span className="text-xs text-kk-dark-text-muted">Physical Card Serial *</span>
+                          <input
+                            type="text"
+                            value={entry.physical_card_serial}
+                            onChange={(e) => updateSelectedPlanSerial(index, e.target.value)}
+                            className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                            disabled={starting}
+                            placeholder="Enter the assigned physical card serial"
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
 
               {selectedCheckoutPlans.length ? (

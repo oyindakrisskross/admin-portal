@@ -127,6 +127,8 @@ export interface SubscriptionPlan {
   sales_tax_rule_name?: string;
   sales_tax_rate?: string | null;
   allow_plan_switch: boolean;
+  uses_physical_card: boolean;
+  requires_card_serial: boolean;
   plan_type: PlanType;
   included_uses?: number | null;
   redeemable_items?: SubscriptionPlanRedeemableItem[];
@@ -249,7 +251,7 @@ export interface SubscriptionPlanTransaction {
   created_on?: string;
 }
 
-export type CustomerSubscriptionStatus = "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
+export type CustomerSubscriptionStatus = "ACTIVE" | "UNPAID" | "EXPIRED" | "DEPLETED" | "CANCELLED";
 
 export interface SubscriptionUsageHistoryEntry {
   id: number;
@@ -258,6 +260,16 @@ export interface SubscriptionUsageHistoryEntry {
   location_id: number | null;
   location_name: string | null;
   pos_reference: string;
+}
+
+export interface SubscriptionPaymentHistoryEntry {
+  id: number;
+  amount: string | number;
+  method: string;
+  reference: string;
+  paid_on: string;
+  received_by?: number | null;
+  received_by_name?: string | null;
 }
 
 export interface SubscriptionCouponUsageHistoryEntry {
@@ -281,18 +293,26 @@ export interface CustomerSubscriptionRecord {
   plan_name: string;
   plan_code: string;
   plan_type: PlanType;
+  plan_uses_physical_card?: boolean;
+  plan_requires_card_serial?: boolean;
   status: CustomerSubscriptionStatus;
   started_at: string;
   expires_at: string | null;
   total_uses: number | null;
   used_uses: number;
   remaining_uses: number | null;
+  physical_card_serial?: string | null;
   source_invoice: number | null;
   source_invoice_number: string | null;
+  source_invoice_status?: string | null;
+  source_invoice_amount_paid?: string | null;
+  source_invoice_balance_due?: string | null;
+  source_invoice_grand_total?: string | null;
   source_invoice_date?: string | null;
   source_invoice_paid_at?: string | null;
   usage_history?: SubscriptionUsageHistoryEntry[];
   coupon_usage_history?: SubscriptionCouponUsageHistoryEntry[];
+  payment_history?: SubscriptionPaymentHistoryEntry[];
   created_on: string;
   updated_on: string;
 }

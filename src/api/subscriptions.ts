@@ -71,6 +71,50 @@ export async function deleteSubscriptionPlan(id: number) {
   await api.delete(`/api/subscriptions/plans/${id}/`);
 }
 
+export type BulkSubscriptionPlanFailure = {
+  id: number;
+  reason: string;
+  detail?: string;
+};
+
+export type BulkSubscriptionPlanResult = {
+  ok_ids: number[];
+  failed: BulkSubscriptionPlanFailure[];
+};
+
+export async function bulkUpdateSubscriptionPlans(payload: {
+  ids: number[];
+  status?: "ACTIVE" | "INACTIVE";
+  plan_type?: "CYCLE" | "USAGE";
+  included_uses?: number | null;
+  billing_frequency_value?: number;
+  billing_frequency_unit?: "DAY" | "WEEK" | "MONTH" | "YEAR";
+  billing_cycles_mode?: "AUTO_RENEW" | "FIXED";
+  billing_cycles?: number | null;
+  setup_fee?: string;
+  redeemable_items_append?: Array<{
+    item: number;
+    max_redemptions: number;
+    interval_unit: "NONE" | "DAY" | "WEEK" | "MONTH";
+    interval_value: number;
+    schedules?: Array<{
+      weekday: "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
+      all_day: boolean;
+      start_time?: string | null;
+      end_time?: string | null;
+    }>;
+  }>;
+  coupon_ids?: number[];
+  sales_tax_rule?: number | null;
+  type_id?: "GOOD" | "SERVICE";
+  pricing_model?: "FLAT" | "PER_UNIT";
+  uses_physical_card?: boolean;
+  requires_card_serial?: boolean;
+}) {
+  const res = await api.post<BulkSubscriptionPlanResult>("/api/subscriptions/plans/bulk/", payload);
+  return res.data;
+}
+
 export async function fetchSubscriptionAddons(params?: Record<string, unknown>) {
   const res = await api.get<PaginatedResult<SubscriptionAddon>>("/api/subscriptions/addons/", {
     params,
@@ -173,6 +217,50 @@ export async function fetchCustomerSubscription(id: number) {
   return res.data;
 }
 
+export async function updateCustomerSubscription(
+  id: number,
+  payload: {
+    customer?: number;
+    status?: "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
+    started_at?: string;
+    expires_at?: string | null;
+    total_uses?: number | null;
+    used_uses?: number;
+    physical_card_serial?: string | null;
+    usage_history_input?: Array<{
+      id?: number;
+      location_id?: number | null;
+      visited_at: string;
+      pos_reference?: string;
+    }>;
+    payment_history_input?: Array<{
+      id?: number;
+      amount: string;
+      method: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+      reference?: string;
+      paid_on?: string;
+    }>;
+  }
+) {
+  const res = await api.patch<CustomerSubscriptionRecord>(`/api/subscriptions/subscriptions/${id}/`, payload);
+  return res.data;
+}
+
+export async function processSubscriptionPayment(
+  id: number,
+  payload: {
+    amount_paid?: string;
+    payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+    payment_reference?: string;
+  }
+) {
+  const res = await api.post<CustomerSubscriptionRecord>(
+    `/api/subscriptions/subscriptions/${id}/process-payment/`,
+    payload
+  );
+  return res.data;
+}
+
 export interface SubscriptionPassQRResponse {
   subscription_id: number;
   subscription_status: string;
@@ -208,6 +296,7 @@ export async function createCustomerSubscription(payload: {
   amount_paid?: string;
   payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
   payment_reference?: string;
+  physical_card_serial?: string | null;
 }) {
   const res = await api.post<CustomerSubscriptionRecord>("/api/subscriptions/subscriptions/", payload);
   return res.data;
@@ -215,7 +304,11 @@ export async function createCustomerSubscription(payload: {
 
 export async function checkoutCustomerSubscriptions(payload: {
   customer: number;
-  plan_ids: number[];
+  plan_ids?: number[];
+  plan_entries?: Array<{
+    plan: number;
+    physical_card_serial?: string | null;
+  }>;
   started_at?: string;
   payment_made?: boolean;
   amount_paid?: string;

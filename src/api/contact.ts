@@ -134,15 +134,38 @@ export type CRMCSVParseResult = {
   db_columns: CRMCSVDBColumn[];
 };
 
-export type CRMCSVCommitResult = {
+export type CRMImportSyncMode = "ONE_TIME" | "RECURRING";
+export type CRMImportJobKind = "CSV" | "CONNECTION";
+export type CRMImportJobStatus = "PENDING" | "RUNNING" | "SUCCESS" | "PARTIAL_SUCCESS" | "ERROR";
+
+export type CRMImportJob = {
+  id: number;
+  job_kind: CRMImportJobKind;
+  status: CRMImportJobStatus;
+  service_key: string;
+  service_name: string;
+  source_label: string;
+  file_name: string;
+  crm_category: CRMCategory | null;
+  mapping_ids: number[];
+  message: string;
+  total_rows: number;
   created_count: number;
   updated_count: number;
   skipped_count: number;
-  total_rows: number;
-  error_samples: Array<{ row: number; reason: string }>;
+  failed_count: number;
+  record_count: number;
+  result_payload: Record<string, unknown>;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: {
+    id: number;
+    email: string;
+    username: string;
+  } | null;
 };
-
-export type CRMImportSyncMode = "ONE_TIME" | "RECURRING";
 
 export type CRMConnectionImportModule = {
   id: string;
@@ -168,6 +191,8 @@ export type CRMConnectionImportMapping = {
   field_map: Record<string, string>;
   notification_channel_id: number | null;
   notification_expires_at: string | null;
+  watch_status: "HEALTHY" | "EXPIRING_SOON" | "BROKEN" | "INACTIVE";
+  watch_status_detail: string;
   last_import_at: string | null;
   last_import_status: "IDLE" | "SUCCESS" | "ERROR";
   last_import_message: string;
@@ -224,23 +249,6 @@ export type CRMConnectionImportManagementRecord = {
   mappings: CRMConnectionImportMapping[];
 };
 
-export type CRMConnectionImportRunRecord = {
-  mapping_id: number;
-  module_api_name: string;
-  module_label: string;
-  crm_category: CRMCategory;
-  created_count: number;
-  updated_count: number;
-  skipped_count: number;
-  record_count: number;
-};
-
-export type CRMConnectionImportRunResult = {
-  results: CRMConnectionImportRunRecord[];
-  errors: Array<{ mapping_id: number; module_api_name: string; detail: string }>;
-  token_notice: string;
-};
-
 function extractFilenameFromContentDisposition(contentDisposition?: string): string {
   if (!contentDisposition) return "contacts.csv";
   const match = contentDisposition.match(/filename=\"([^\"]+)\"/i);
@@ -288,7 +296,7 @@ export async function commitCRMImportCSV(params: {
   mapping: Record<string, string>;
   default_contact_type?: Contact.ContactType;
   category?: CRMCategory;
-}): Promise<CRMCSVCommitResult> {
+}): Promise<CRMImportJob> {
   const formData = new FormData();
   formData.append("file", params.file);
   formData.append("mapping", JSON.stringify(params.mapping || {}));
@@ -299,10 +307,21 @@ export async function commitCRMImportCSV(params: {
     formData.append("category", params.category);
   }
 
-  const res = await api.post<CRMCSVCommitResult>("/api/contacts/crm-settings/import/csv/commit/", formData, {
+  const res = await api.post<CRMImportJob>("/api/contacts/crm-settings/import/csv/commit/", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return res.data;
+}
+
+export async function fetchCRMImportJobs(params?: {
+  job_kind?: CRMImportJobKind;
+  service_key?: string;
+  limit?: number;
+}): Promise<CRMImportJob[]> {
+  const res = await api.get<{ results: CRMImportJob[] }>("/api/contacts/crm-settings/import/jobs/", {
+    params,
+  });
+  return res.data.results || [];
 }
 
 export async function fetchCRMConnectionImportOptions(): Promise<CRMConnectionImportOption[]> {
@@ -355,8 +374,8 @@ export async function fetchCRMConnectionImportModuleFields(
 export async function runCRMConnectionImports(
   serviceKey: string,
   payload?: { mapping_ids?: number[] }
-): Promise<CRMConnectionImportRunResult> {
-  const res = await api.post<CRMConnectionImportRunResult>(
+): Promise<CRMImportJob> {
+  const res = await api.post<CRMImportJob>(
     `/api/contacts/crm-settings/import/connections/${serviceKey}/run/`,
     payload || {}
   );

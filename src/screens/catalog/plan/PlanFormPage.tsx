@@ -72,6 +72,8 @@ type FormState = {
   type_id: SubscriptionType;
   sales_tax_rule: number | "";
   allow_plan_switch: boolean;
+  uses_physical_card: boolean;
+  requires_card_serial: boolean;
   status: SubscriptionStatus;
   redeemable_items: RedeemableRow[];
   coupon_ids: number[];
@@ -108,6 +110,8 @@ const EMPTY: FormState = {
   type_id: "SERVICE",
   sales_tax_rule: "",
   allow_plan_switch: false,
+  uses_physical_card: false,
+  requires_card_serial: false,
   status: "ACTIVE",
   redeemable_items: [],
   coupon_ids: [],
@@ -184,6 +188,8 @@ export default function PlanFormPage() {
           type_id: data.type_id ?? "SERVICE",
           sales_tax_rule: data.sales_tax_rule ?? "",
           allow_plan_switch: Boolean(data.allow_plan_switch),
+          uses_physical_card: Boolean(data.uses_physical_card),
+          requires_card_serial: Boolean(data.requires_card_serial),
           status: data.status ?? "ACTIVE",
           coupon_ids: (data.coupons ?? []).map((c) => Number(c.id)).filter((x) => Number.isFinite(x)),
           redeemable_items: (data.redeemable_items ?? []).map((r) => {
@@ -267,6 +273,7 @@ export default function PlanFormPage() {
     if (form.billing_cycles_mode === "FIXED" && (!form.billing_cycles || Number(form.billing_cycles) < 1)) return "Billing cycles must be at least 1.";
     const price = Number(form.price); if (!Number.isFinite(price) || price < 0) return "Price is required.";
     const setup = form.setup_fee.trim() ? Number(form.setup_fee) : 0; if (!Number.isFinite(setup) || setup < 0) return "Setup fee must be valid.";
+    if (form.requires_card_serial && !form.uses_physical_card) return "Card serial capture requires physical cards to be enabled.";
     const seen = new Set<number>();
     for (let i = 0; i < form.redeemable_items.length; i += 1) {
       const r = form.redeemable_items[i];
@@ -313,6 +320,7 @@ export default function PlanFormPage() {
       billing_cycles: form.billing_cycles_mode === "FIXED" ? Number(form.billing_cycles) : null, description: form.description.trim(),
       pricing_model: form.pricing_model, price: Number(form.price).toFixed(2), setup_fee: (form.setup_fee.trim() ? Number(form.setup_fee) : 0).toFixed(2),
       type_id: form.type_id, sales_tax_rule: form.sales_tax_rule ? Number(form.sales_tax_rule) : null, allow_plan_switch: form.allow_plan_switch,
+      uses_physical_card: form.uses_physical_card, requires_card_serial: form.uses_physical_card ? form.requires_card_serial : false,
       status: form.status, redeemable_items_input: buildRedeemableItemsInput(), coupon_ids: form.coupon_ids ?? [],
     };
     setSaving(true); setError(null);
@@ -561,6 +569,37 @@ export default function PlanFormPage() {
                 />
                 Allow customers to switch to this plan from the portal.
               </label>
+              <div className="md:col-span-2 rounded-lg border border-kk-dark-input-border bg-kk-dark-bg p-3">
+                <div className="space-y-2">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.uses_physical_card}
+                      onChange={(e) =>
+                        setForm((p) => ({
+                          ...p,
+                          uses_physical_card: e.target.checked,
+                          requires_card_serial: e.target.checked ? p.requires_card_serial : false,
+                        }))
+                      }
+                      disabled={saving}
+                    />
+                    This subscription plan uses a physical card.
+                  </label>
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={form.requires_card_serial}
+                      onChange={(e) => setForm((p) => ({ ...p, requires_card_serial: e.target.checked }))}
+                      disabled={saving || !form.uses_physical_card}
+                    />
+                    Require a physical card serial number at checkout.
+                  </label>
+                  <p className="text-xs text-kk-dark-text-muted">
+                    Plans with required serial capture will force cashiers to enter or scan the assigned card serial before the subscription can be sold or redeemed by card lookup.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <section className="space-y-3 rounded-lg border border-kk-dark-input-border p-3">

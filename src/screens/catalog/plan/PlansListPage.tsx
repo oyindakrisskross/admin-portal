@@ -5,8 +5,11 @@ import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import ToastModal from "../../../components/ui/ToastModal";
+import { BulkActionBar } from "../../../components/catalog/bulk/BulkActionBar";
+import { RowSelectCheckbox } from "../../../components/catalog/bulk/RowSelectCheckbox";
 import { useAuth } from "../../../auth/AuthContext";
 import {
+  bulkUpdateSubscriptionPlans,
   deleteSubscriptionPlan,
   deleteSubscriptionProduct,
   fetchSubscriptionPlans,
@@ -22,6 +25,7 @@ import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/
 import { PlanPeek } from "./PlanPeek";
 import { ProductPeek } from "./ProductPeek";
 import { SubscriptionProductModal } from "./SubscriptionModals";
+import { SubscriptionPlanBulkEditModal } from "./SubscriptionPlanBulkEditModal";
 
 type ListTab = "plans" | "products";
 
@@ -73,6 +77,10 @@ export function PlansListPage() {
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("success");
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
 
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [productModalInitial, setProductModalInitial] = useState<SubscriptionProduct | null>(null);
@@ -93,6 +101,7 @@ export function PlansListPage() {
   useEffect(() => {
     setSelectedPlan(null);
     setSelectedProduct(null);
+    setSelectedIds([]);
     setPage(1);
   }, [tab]);
 
@@ -110,6 +119,8 @@ export function PlansListPage() {
           if (cancelled) return;
           setPlans(data.results ?? []);
           setTotalCount(Number(data.count ?? 0));
+          const visible = new Set((data.results ?? []).map((row) => Number(row.id)).filter(Number.isFinite));
+          setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
         } else {
           const data = await fetchSubscriptionProducts({
             search: debouncedSearch || undefined,
@@ -119,12 +130,14 @@ export function PlansListPage() {
           if (cancelled) return;
           setProducts(data.results ?? []);
           setTotalCount(Number(data.count ?? 0));
+          setSelectedIds([]);
         }
       } catch {
         if (cancelled) return;
         setPlans([]);
         setProducts([]);
         setTotalCount(0);
+        setSelectedIds([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -189,6 +202,23 @@ export function PlansListPage() {
       showToast(typeof detail === "string" ? detail : "Unable to delete plan.", "error");
     }
   };
+
+  const toggleSelected = (id: number, checked?: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const nextChecked = checked ?? !next.has(id);
+      if (nextChecked) next.add(id);
+      else next.delete(id);
+      return Array.from(next);
+    });
+  };
+
+  const clearSelection = () => setSelectedIds([]);
+
+  const selectedPlansForBulk = useMemo(
+    () => plans.filter((plan) => selectedIdSet.has(Number(plan.id))),
+    [plans, selectedIdSet]
+  );
 
   const deleteSelectedProduct = async () => {
     if (!selectedProduct?.id) return;
@@ -320,11 +350,28 @@ export function PlansListPage() {
           </div>
         ) : null}
 
+        {!hasPeek && tab === "plans" && selectedIds.length > 0 ? (
+          <BulkActionBar
+            count={selectedIds.length}
+            onClear={clearSelection}
+            actions={[
+              {
+                key: "bulk_edit",
+                label: "Bulk Update",
+                icon: <PencilSquareIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Subscriptions", "edit"),
+                onClick: () => setBulkModalOpen(true),
+              },
+            ]}
+          />
+        ) : null}
+
         <div className={hasPeek ? "flex-1 overflow-y-auto" : "overflow-hidden px-4"}>
           <table className="min-w-full">
             <thead>
               {tab === "plans" ? (
                 <tr>
+                  {!hasPeek ? <th className="w-10" /> : null}
                   <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "product"))}>
                     {!hasPeek ? "Product Name" : "Plan"}
                     {sortIndicator(planSort, "product")}
@@ -409,12 +456,29 @@ export function PlansListPage() {
                 ? (rows as SubscriptionPlan[]).map((row) => (
                     <tr
                       key={row.id}
-                      className="cursor-pointer"
+                      className={[
+                        "cursor-pointer group",
+                        !hasPeek && selectedIdSet.has(Number(row.id)) ? "bg-blue-600/10" : "",
+                      ].join(" ")}
                       onClick={() => {
+                        if (!hasPeek && selectedIds.length) {
+                          toggleSelected(Number(row.id), !selectedIdSet.has(Number(row.id)));
+                          return;
+                        }
                         setSelectedProduct(null);
                         setSelectedPlan(row);
                       }}
                     >
+                      {!hasPeek ? (
+                        <td className="w-10 px-2">
+                          <div className={selectedIdSet.has(Number(row.id)) ? "" : "opacity-0 group-hover:opacity-100"}>
+                            <RowSelectCheckbox
+                              checked={selectedIdSet.has(Number(row.id))}
+                              onChange={(checked) => toggleSelected(Number(row.id), checked)}
+                            />
+                          </div>
+                        </td>
+                      ) : null}
                       <td>
                         {!hasPeek ? (
                           row.product_name || "-"
@@ -481,7 +545,7 @@ export function PlansListPage() {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 1 : tab === "plans" ? 8 : 6}
+                    colSpan={hasPeek ? 1 : tab === "plans" ? 9 : 6}
                     className="px-3 py-8 text-center text-xs text-kk-dark-text-muted"
                   >
                     Loading {tab}...
@@ -492,7 +556,7 @@ export function PlansListPage() {
               {!loading && !rows.length ? (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 1 : tab === "plans" ? 8 : 6}
+                    colSpan={hasPeek ? 1 : tab === "plans" ? 9 : 6}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
                     {tab === "plans"
@@ -596,6 +660,41 @@ export function PlansListPage() {
           if (selectedProduct?.id === saved.id) setSelectedProduct(saved);
           showToast(productModalInitial ? "Product updated." : "Product created.");
           setRefreshKey((x) => x + 1);
+        }}
+      />
+
+      <SubscriptionPlanBulkEditModal
+        open={bulkModalOpen}
+        selectedPlans={selectedPlansForBulk}
+        onClose={() => setBulkModalOpen(false)}
+        onApply={async (payload) => {
+          setBulkBusy(true);
+          try {
+            const result = await bulkUpdateSubscriptionPlans(payload);
+            const okCount = result.ok_ids?.length ?? 0;
+            const failed = result.failed ?? [];
+            const failedIds = failed.map((row) => Number(row.id)).filter(Number.isFinite);
+
+            setRefreshKey((x) => x + 1);
+
+            if (okCount && !failed.length) {
+              showToast(`Updated ${okCount} plan${okCount === 1 ? "" : "s"}.`);
+              clearSelection();
+              return;
+            }
+
+            if (okCount && failed.length) {
+              const firstFailure = failed[0]?.detail || "Some plans could not be updated.";
+              showToast(`Updated ${okCount} plan(s). ${failed.length} failed. ${firstFailure}`, "info");
+              setSelectedIds(failedIds);
+              return;
+            }
+
+            showToast(failed[0]?.detail || "Bulk update failed.", "error");
+            setSelectedIds(failedIds);
+          } finally {
+            setBulkBusy(false);
+          }
         }}
       />
 

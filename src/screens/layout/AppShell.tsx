@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
+import { ImportJobsProvider } from "../../contexts/ImportJobsContext";
 import { getStoredTheme, setStoredTheme, themeScopeForUser, type Theme } from "../../utils/theme";
 
 import { 
@@ -9,12 +10,14 @@ import {
   Cog8ToothIcon,
   ChevronRightIcon, 
   UserCircleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { clearReportDateRange } from "../../hooks/useReportDateRange";
 import {
   ChartNoAxesCombined,
   Contact,
+  Search,
   Users,
   ShoppingBag,
   ShoppingCart,
@@ -107,13 +110,48 @@ const portalLinks = [
   },
 ];
 
+type PortalLinkSection = (typeof portalLinks)[number];
+type PortalLinkChild = PortalLinkSection["children"][number];
+type VisiblePortalLinkSection = PortalLinkSection & { visibleChildren: PortalLinkChild[] };
+
+function matchesNavigationQuery(value: string, query: string) {
+  return value.toLowerCase().includes(query);
+}
+
 
 function ShellInner() {
   const { me, logout, can } = useAuth();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const [navSearch, setNavSearch] = useState("");
   const location = useLocation();
   const themeScope = me ? themeScopeForUser({ id: me.id, portal: me.portal }) : undefined;
   const [theme, setTheme] = useState<Theme>(() => getStoredTheme(themeScope));
+  const normalizedNavSearch = navSearch.trim().toLowerCase();
+  const isFilteringNavigation = normalizedNavSearch.length > 0;
+
+  const filteredPortalLinks: VisiblePortalLinkSection[] = portalLinks.reduce<VisiblePortalLinkSection[]>((acc, item) => {
+    const allowedChildren = item.children.filter((child) => !child.perm || can(child.perm, "view"));
+    if (!allowedChildren.length) return acc;
+
+    if (!isFilteringNavigation) {
+      acc.push({ ...item, visibleChildren: allowedChildren });
+      return acc;
+    }
+
+    const sectionMatches = matchesNavigationQuery(item.label, normalizedNavSearch);
+    const filteredChildren = allowedChildren.filter((child) => {
+      if (sectionMatches) return true;
+      return (
+        matchesNavigationQuery(child.label, normalizedNavSearch) ||
+        matchesNavigationQuery(child.to.replaceAll("/", " "), normalizedNavSearch)
+      );
+    });
+
+    if (filteredChildren.length) {
+      acc.push({ ...item, visibleChildren: filteredChildren });
+    }
+    return acc;
+  }, []);
 
   // In case the signed-in user changes (shared device), snap to that user's stored theme.
   // (This also avoids leaking another user's preference across logins.)
@@ -176,45 +214,45 @@ function ShellInner() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-3">
+          <div className="mb-3">
+            <label htmlFor="portal-nav-search" className="sr-only">
+              Search admin pages
+            </label>
+            <div className="flex items-center gap-2 rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 focus-within:border-kk-dark-border">
+              <Search className="h-4 w-4 shrink-0 text-kk-dark-text-muted" />
+              <input
+                id="portal-nav-search"
+                type="text"
+                value={navSearch}
+                onChange={(e) => setNavSearch(e.target.value)}
+                placeholder="Search pages..."
+                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-kk-dark-text-muted"
+              />
+              {navSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setNavSearch("")}
+                  aria-label="Clear page search"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-kk-dark-text-muted hover:bg-kk-dark-hover hover:text-kk-dark-text"
+                >
+                  <XMarkIcon className="h-5 w-5" />
+                </button>
+              ) : null}
+            </div>
+          </div>
+
           <nav className="space-y-1">
-            {portalLinks.map((item) => {
-
-              // simple link (no children)
-              // if (item.to) {
-              //   return (
-              //     <NavLink
-              //       key={item.to}
-              //       to={item.to}
-              //       end
-              //       className={({ isActive }) =>
-              //         [
-              //           "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-              //           isActive
-              //             ? "bg-kk-dark-hover text-kk-dark-text"
-              //             : "text-kk-dark-text-muted hover:bg-kk-dark-hover hover:text-kk-dark-text",
-              //         ].join(" ")
-              //       }
-              //     >
-              //       <span className="text-base">{item?.icon}</span>
-              //       <span>{item.label}</span>
-              //     </NavLink>
-              //   );
-              // }
-
-              // dropdown section
-              const isOpen = openSection === item.label;
-
-              // filter children by perm
-              const visibleChildren = (item.children || []).filter(
-                (child) => !child.perm || can(child.perm, "view")
-              );
-              if (!visibleChildren.length) return null; // hide section if nothing visible
+            {filteredPortalLinks.map((item) => {
+              const isOpen = isFilteringNavigation || openSection === item.label;
 
               return (
                 <div key={item.label}>
                   <button
                     type="button"
-                    onClick={() => setOpenSection(isOpen ? null : item.label)}
+                    onClick={() => {
+                      if (isFilteringNavigation) return;
+                      setOpenSection(isOpen ? null : item.label);
+                    }}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-kk-dark-text-muted hover:bg-kk-dark-hover hover:text-kk-dark-text"
                   >
                     <span className={`text-xs transition-transform ${isOpen ? "rotate-90" : ""}`}>
@@ -224,9 +262,9 @@ function ShellInner() {
                     <span>{item.label}</span>
                   </button>
 
-                  {isOpen && item.children && (
+                  {isOpen && (
                     <div className="mt-1 space-y-1 pl-4">
-                      {visibleChildren.map((child) => (
+                      {item.visibleChildren.map((child) => (
                         <NavLink
                           key={child.to}
                           to={child.to}
@@ -248,6 +286,12 @@ function ShellInner() {
                 </div>
               );
             })}
+
+            {isFilteringNavigation && filteredPortalLinks.length === 0 ? (
+              <div className="rounded-md border border-dashed border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-3 text-xs text-kk-dark-text-muted">
+                No pages match "{navSearch.trim()}".
+              </div>
+            ) : null}
           </nav>
 
           <br />
@@ -294,5 +338,9 @@ function ShellInner() {
 }
 
 export default function AppShell() {
-  return <ShellInner />;
+  return (
+    <ImportJobsProvider>
+      <ShellInner />
+    </ImportJobsProvider>
+  );
 }

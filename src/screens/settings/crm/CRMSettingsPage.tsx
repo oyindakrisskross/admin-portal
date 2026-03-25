@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import ToastModal from "../../../components/ui/ToastModal";
+import { useImportJobs } from "../../../contexts/ImportJobsContext";
 import {
   commitCRMImportCSV,
   exportContactsCsv,
@@ -12,7 +13,7 @@ import {
   fetchCRMSettings,
   parseCRMImportCSV,
   updateCRMSettings,
-  type CRMCSVCommitResult,
+  type CRMImportJob,
   type CRMCSVParseResult,
   type CRMCategory,
   type CRMConnectionImportOption,
@@ -49,8 +50,92 @@ function createDefaultMapping(parsed: CRMCSVParseResult): Record<string, string>
   return mapping;
 }
 
+function formatImportJobDate(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function importJobStatusBadge(status: CRMImportJob["status"]) {
+  const tone =
+    status === "SUCCESS"
+      ? "bg-emerald-700 text-emerald-100"
+      : status === "PARTIAL_SUCCESS"
+        ? "bg-amber-700 text-amber-100"
+        : status === "ERROR"
+          ? "bg-rose-700 text-rose-100"
+          : "bg-slate-600 text-slate-100";
+  const label =
+    status === "SUCCESS"
+      ? "Success"
+      : status === "PARTIAL_SUCCESS"
+        ? "Completed With Issues"
+        : status === "ERROR"
+          ? "Error"
+          : status === "RUNNING"
+            ? "Running"
+            : "Queued";
+  return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
+}
+
+function ImportJobHistory({
+  title,
+  jobs,
+  emptyMessage,
+}: {
+  title: string;
+  jobs: CRMImportJob[];
+  emptyMessage: string;
+}) {
+  return (
+    <div className="space-y-2 rounded-md border border-kk-dark-border bg-kk-dark-bg p-3">
+      <div className="text-xs font-semibold text-white">{title}</div>
+      {!jobs.length ? (
+        <div className="text-xs text-kk-dark-text-muted">{emptyMessage}</div>
+      ) : (
+        <div className="space-y-2">
+          {jobs.map((job) => (
+            <div
+              key={job.id}
+              className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs text-kk-dark-text-muted"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-medium text-white">
+                  {job.job_kind === "CSV" ? job.file_name || "CSV import" : job.source_label || "Connection import"}
+                </div>
+                {importJobStatusBadge(job.status)}
+              </div>
+              <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
+                <div>
+                  <div>Started</div>
+                  <div className="mt-1 text-white">{formatImportJobDate(job.started_at || job.created_at)}</div>
+                </div>
+                <div>
+                  <div>Finished</div>
+                  <div className="mt-1 text-white">{formatImportJobDate(job.finished_at)}</div>
+                </div>
+                <div>
+                  <div>Imported</div>
+                  <div className="mt-1 text-white">{job.record_count}</div>
+                </div>
+                <div>
+                  <div>Issues</div>
+                  <div className="mt-1 text-white">{job.failed_count + job.skipped_count}</div>
+                </div>
+              </div>
+              {job.message ? <div className="mt-2">{job.message}</div> : null}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function CRMSettingsPage() {
   const navigate = useNavigate();
+  const { jobs, registerJob } = useImportJobs();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<CRMSettingsRecord | null>(null);
 
@@ -67,7 +152,6 @@ export function CRMSettingsPage() {
   const [defaultContactType, setDefaultContactType] = useState<ContactType>("INDIVIDUAL");
   const [parsingCsv, setParsingCsv] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
-  const [importSummary, setImportSummary] = useState<CRMCSVCommitResult | null>(null);
 
   const [connectionOptions, setConnectionOptions] = useState<CRMConnectionImportOption[]>([]);
   const [connectionOptionsLoading, setConnectionOptionsLoading] = useState(true);
@@ -136,9 +220,19 @@ export function CRMSettingsPage() {
     return settings.enabled_categories.filter((category) => category !== "Portal Users");
   }, [settings]);
 
+  const csvImportJobs = useMemo(
+    () => jobs.filter((job) => job.job_kind === "CSV").slice(0, 5),
+    [jobs]
+  );
+
+  const connectionImportJobs = useMemo(
+    () => jobs.filter((job) => job.job_kind === "CONNECTION").slice(0, 5),
+    [jobs]
+  );
+
   useEffect(() => {
     setImportCategory((prev) => {
-      if (prev && csvImportCategoryOptions.includes(prev as CRMCategory)) {
+      if (prev && csvImportCategoryOptions.some((category) => category === prev)) {
         return prev;
       }
       return (csvImportCategoryOptions[0] || "") as CRMCategory | "";
@@ -214,7 +308,6 @@ export function CRMSettingsPage() {
       const parsed = await parseCRMImportCSV(csvFile);
       setCsvParsed(parsed);
       setColumnMapping(createDefaultMapping(parsed));
-      setImportSummary(null);
       showToast("CSV parsed successfully.", "success");
     } catch (err: any) {
       showToast(err?.response?.data?.detail || "Failed to parse CSV.");
@@ -235,16 +328,22 @@ export function CRMSettingsPage() {
 
     setImportingCsv(true);
     try {
-      const summary = await commitCRMImportCSV({
+      const job = await commitCRMImportCSV({
         file: csvFile,
         mapping: columnMapping,
         default_contact_type: defaultContactType,
         category: importCategory as CRMCategory,
       });
-      setImportSummary(summary);
-      showToast("CSV import complete.", "success");
+      registerJob(job);
     } catch (err: any) {
-      showToast(err?.response?.data?.detail || "Failed to import CSV.");
+      const detail = err?.response?.data?.detail;
+      if (detail) {
+        showToast(detail);
+      } else {
+        showToast(
+          "CSV import stopped before the server finished. Large imports in production may need a longer backend or proxy timeout. Some rows may already have been imported."
+        );
+      }
     } finally {
       setImportingCsv(false);
     }
@@ -336,7 +435,6 @@ export function CRMSettingsPage() {
                     setCsvFile(nextFile);
                     setCsvParsed(null);
                     setColumnMapping({});
-                    setImportSummary(null);
                   }}
                   className="max-w-sm rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
                 />
@@ -411,17 +509,14 @@ export function CRMSettingsPage() {
                       Portal Users are not available for CSV import because role and login setup is handled separately.
                     </p>
                   ) : null}
-
-                  {importSummary ? (
-                    <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated p-3 text-xs text-kk-dark-text-muted">
-                      <div>Created: {importSummary.created_count}</div>
-                      <div>Updated: {importSummary.updated_count}</div>
-                      <div>Skipped: {importSummary.skipped_count}</div>
-                      <div>Total rows: {importSummary.total_rows}</div>
-                    </div>
-                  ) : null}
                 </div>
               ) : null}
+
+              <ImportJobHistory
+                title="Recent CSV imports"
+                jobs={csvImportJobs}
+                emptyMessage="No CSV imports have been started yet."
+              />
             </section>
 
             <section className="space-y-3 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
@@ -462,6 +557,12 @@ export function CRMSettingsPage() {
                   ))}
                 </div>
               )}
+
+              <ImportJobHistory
+                title="Recent connection imports"
+                jobs={connectionImportJobs}
+                emptyMessage="No CRM connection imports have been started yet."
+              />
             </section>
 
             <section className="space-y-3 rounded-lg border border-kk-dark-border bg-kk-dark-bg-elevated p-4">

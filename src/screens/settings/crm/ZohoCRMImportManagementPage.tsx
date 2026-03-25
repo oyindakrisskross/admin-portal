@@ -4,12 +4,14 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import ToastModal from "../../../components/ui/ToastModal";
+import { useImportJobs } from "../../../contexts/ImportJobsContext";
 import {
   fetchCRMConnectionImportManagement,
   fetchCRMConnectionImportModuleFields,
   runCRMConnectionImports,
   updateCRMConnectionImportManagement,
   type CRMCategory,
+  type CRMImportJob,
   type CRMConnectionImportManagementRecord,
   type CRMConnectionImportMapping,
   type CRMConnectionImportModule,
@@ -95,6 +97,28 @@ function formatDateTime(value?: string | null) {
   return date.toLocaleString();
 }
 
+function importJobStatusBadge(status: CRMImportJob["status"]) {
+  const tone =
+    status === "SUCCESS"
+      ? "bg-emerald-700 text-emerald-100"
+      : status === "PARTIAL_SUCCESS"
+        ? "bg-amber-700 text-amber-100"
+        : status === "ERROR"
+          ? "bg-rose-700 text-rose-100"
+          : "bg-slate-600 text-slate-100";
+  const label =
+    status === "SUCCESS"
+      ? "Success"
+      : status === "PARTIAL_SUCCESS"
+        ? "Completed With Issues"
+        : status === "ERROR"
+          ? "Error"
+          : status === "RUNNING"
+            ? "Running"
+            : "Queued";
+  return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
+}
+
 function statusBadge(status?: CRMConnectionImportMapping["last_import_status"]) {
   const tone =
     status === "SUCCESS"
@@ -103,6 +127,26 @@ function statusBadge(status?: CRMConnectionImportMapping["last_import_status"]) 
         ? "bg-rose-700 text-rose-100"
         : "bg-slate-500 text-slate-100";
   const label = status === "SUCCESS" ? "Success" : status === "ERROR" ? "Error" : "Idle";
+  return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
+}
+
+function watchStatusBadge(status?: CRMConnectionImportMapping["watch_status"]) {
+  const tone =
+    status === "HEALTHY"
+      ? "bg-emerald-700 text-emerald-100"
+      : status === "EXPIRING_SOON"
+        ? "bg-amber-700 text-amber-100"
+        : status === "BROKEN"
+          ? "bg-rose-700 text-rose-100"
+          : "bg-slate-500 text-slate-100";
+  const label =
+    status === "HEALTHY"
+      ? "Healthy"
+      : status === "EXPIRING_SOON"
+        ? "Expiring Soon"
+        : status === "BROKEN"
+          ? "Broken"
+          : "Inactive";
   return <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-medium ${tone}`}>{label}</span>;
 }
 
@@ -147,10 +191,11 @@ function groupTargets(targets: CRMConnectionImportTargetField[]) {
 export function ZohoCRMImportManagementPage() {
   const { serviceKey = "zoho-crm" } = useParams<{ serviceKey: string }>();
   const navigate = useNavigate();
+  const { jobs, registerJob } = useImportJobs();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [running, setRunning] = useState(false);
+  const [queueingRun, setQueueingRun] = useState(false);
   const [management, setManagement] = useState<CRMConnectionImportManagementRecord | null>(null);
   const [drafts, setDrafts] = useState<Record<string, DraftMapping>>({});
   const [catalogs, setCatalogs] = useState<Record<string, CRMConnectionImportModuleFieldCatalog>>({});
@@ -209,6 +254,14 @@ export function ZohoCRMImportManagementPage() {
           field_map: normalizeFieldMap(row.field_map),
         })),
     [drafts]
+  );
+
+  const connectionImportJobs = useMemo(
+    () =>
+      jobs
+        .filter((job) => job.job_kind === "CONNECTION" && job.service_key === serviceKey)
+        .slice(0, 5),
+    [jobs, serviceKey]
   );
 
   const setDraft = (moduleApiName: string, patch: Partial<DraftMapping>) => {
@@ -294,6 +347,16 @@ export function ZohoCRMImportManagementPage() {
         mappings: selectedMappings,
       });
 
+      setManagement((prev) =>
+        prev
+          ? {
+              ...prev,
+              mappings: saved.mappings,
+              token_notice: saved.token_notice,
+            }
+          : prev
+      );
+
       if (runOneTime) {
         const oneTimeIds = saved.mappings
           .filter((row) => row.sync_mode === "ONE_TIME" && row.is_active)
@@ -302,17 +365,12 @@ export function ZohoCRMImportManagementPage() {
         if (!oneTimeIds.length) {
           showToast("Configuration saved. No one-time mappings were selected to run.", "info");
         } else {
-          setRunning(true);
+          setQueueingRun(true);
           try {
-            const result = await runCRMConnectionImports(serviceKey, { mapping_ids: oneTimeIds });
-            const imported = result.results.reduce((sum, row) => sum + row.record_count, 0);
-            if (result.errors.length) {
-              showToast(result.errors[0].detail || "Some imports failed.", "error");
-            } else {
-              showToast(`Configuration saved and ${imported} record(s) imported.`, "success");
-            }
+            const job = await runCRMConnectionImports(serviceKey, { mapping_ids: oneTimeIds });
+            registerJob(job);
           } finally {
-            setRunning(false);
+            setQueueingRun(false);
           }
         }
       } else {
@@ -410,19 +468,19 @@ export function ZohoCRMImportManagementPage() {
                   <button
                     type="button"
                     onClick={() => void saveMappings(false)}
-                    disabled={saving || running || Boolean(management.module_error)}
+                    disabled={saving || queueingRun || Boolean(management.module_error)}
                     className="inline-flex items-center gap-1 rounded-full border border-kk-dark-input-border px-4 py-2 text-xs hover:bg-kk-dark-hover disabled:opacity-60"
                   >
-                    {saving && !running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {saving && !queueingRun ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                     Save Configuration
                   </button>
                   <button
                     type="button"
                     onClick={() => void saveMappings(true)}
-                    disabled={saving || running || Boolean(management.module_error)}
+                    disabled={saving || queueingRun || Boolean(management.module_error)}
                     className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    {queueingRun ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                     Save And Run One-Time Imports
                   </button>
                 </div>
@@ -511,7 +569,7 @@ export function ZohoCRMImportManagementPage() {
                               className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm disabled:opacity-60"
                             >
                               <option value="ONE_TIME">One-time import</option>
-                              <option value="RECURRING">Recurring on new Zoho entries</option>
+                              <option value="RECURRING">Recurring on Zoho creates and edits</option>
                             </select>
                           </div>
                         </div>
@@ -588,10 +646,17 @@ export function ZohoCRMImportManagementPage() {
                           </div>
                         ) : null}
 
-                        <div className="grid grid-cols-1 gap-3 text-xs text-kk-dark-text-muted md:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-3 text-xs text-kk-dark-text-muted md:grid-cols-5">
                           <div>
                             <div>Last status</div>
                             <div className="mt-1">{saved ? statusBadge(saved.last_import_status) : "Not saved yet"}</div>
+                          </div>
+                          <div>
+                            <div>Watch health</div>
+                            <div className="mt-1">{saved ? watchStatusBadge(saved.watch_status) : "Not saved yet"}</div>
+                            {saved?.watch_status_detail ? (
+                              <div className="mt-1 text-[11px] text-kk-dark-text-muted">{saved.watch_status_detail}</div>
+                            ) : null}
                           </div>
                           <div>
                             <div>Last import</div>
@@ -617,6 +682,48 @@ export function ZohoCRMImportManagementPage() {
                   })}
                 </div>
               )}
+
+              <div className="space-y-2 rounded-md border border-kk-dark-border bg-kk-dark-bg p-3">
+                <div className="text-xs font-semibold text-white">Recent connection imports</div>
+                {!connectionImportJobs.length ? (
+                  <div className="text-xs text-kk-dark-text-muted">
+                    No Zoho CRM one-time imports have been started yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {connectionImportJobs.map((job) => (
+                      <div
+                        key={job.id}
+                        className="rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated px-3 py-2 text-xs text-kk-dark-text-muted"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="font-medium text-white">{job.source_label || "Zoho CRM import"}</div>
+                          {importJobStatusBadge(job.status)}
+                        </div>
+                        <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
+                          <div>
+                            <div>Started</div>
+                            <div className="mt-1 text-white">{formatDateTime(job.started_at || job.created_at)}</div>
+                          </div>
+                          <div>
+                            <div>Finished</div>
+                            <div className="mt-1 text-white">{formatDateTime(job.finished_at)}</div>
+                          </div>
+                          <div>
+                            <div>Imported</div>
+                            <div className="mt-1 text-white">{job.record_count}</div>
+                          </div>
+                          <div>
+                            <div>Issues</div>
+                            <div className="mt-1 text-white">{job.failed_count + job.skipped_count}</div>
+                          </div>
+                        </div>
+                        {job.message ? <div className="mt-2">{job.message}</div> : null}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </section>
           </>
         )}

@@ -39,6 +39,8 @@ const subscriptionStatusBadge = (label: string) => {
   const tone =
     label === "ACTIVE"
       ? "bg-emerald-700 text-emerald-100"
+      : label === "UNPAID"
+        ? "bg-orange-700 text-orange-100"
       : label === "DEPLETED"
         ? "bg-amber-700 text-amber-100"
         : label === "EXPIRED"
