@@ -1,6 +1,6 @@
 // src/screens/crm/user/UserListPage.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, TrashIcon } from "lucide-react";
 import { type UserProfile } from "../../../types/accounts";
@@ -9,7 +9,7 @@ import ListPageHeader from "../../../components/layout/ListPageHeader";
 import { fetchUsers } from "../../../api/accounts";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
 import { UserPeek } from "./UserPeek";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -41,6 +41,11 @@ export const UserListPage: React.FC = () => {
     setSelectedId(null);
   };
 
+  const applySort = (key: "details" | "portal" | "role" | "status") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
@@ -56,6 +61,7 @@ export const UserListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setUsers(data.results ?? []);
@@ -74,7 +80,7 @@ export const UserListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize]);
+  }, [debouncedSearch, page, pageSize, sort]);
 
   useEffect(() => {
     if (!hasId || !users.length) return;
@@ -87,15 +93,6 @@ export const UserListPage: React.FC = () => {
       setSelectedId(match.id!);
     }
   }, [hasId, id, users]);
-
-  const sortedUsers = useMemo(() => {
-    return sortBy(users, sort, {
-      details: (u) => `${u.contact_last_name ?? ""} ${u.contact_first_name ?? ""} ${u.email ?? ""}`,
-      portal: (u) => u.portal_name ?? "",
-      role: (u) => u.role_name ?? "",
-      status: (u) => u.status ?? "",
-    });
-  }, [users, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -190,13 +187,13 @@ export const UserListPage: React.FC = () => {
               <tr>
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "details"))}
+                  onClick={() => applySort("details")}
                 >
                   User Details{sortIndicator(sort, "details")}
                 </th>
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "portal"))}
+                  onClick={() => applySort("portal")}
                 >
                   Portal{sortIndicator(sort, "portal")}
                 </th>
@@ -204,13 +201,13 @@ export const UserListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "role"))}
+                      onClick={() => applySort("role")}
                     >
                       Role{sortIndicator(sort, "role")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       Status{sortIndicator(sort, "status")}
                     </th>
@@ -219,7 +216,7 @@ export const UserListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedUsers.map((u) => (
+              {users.map((u) => (
                 <tr key={u.id} className="cursor-pointer" onClick={() => openPeek(u)}>
                   <td>
                     <div className="flex flex-col gap-2">

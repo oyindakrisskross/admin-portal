@@ -49,7 +49,6 @@ export default function CategoriesReportPage() {
   const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
 
-  const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
   const [groupBy, setGroupBy] = useState<"top_level" | "all">("top_level");
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
@@ -79,7 +78,6 @@ export default function CategoriesReportPage() {
       try {
         const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
-          itemsMode,
           groupBy,
           granularity,
         };
@@ -117,7 +115,7 @@ export default function CategoriesReportPage() {
     return () => {
       alive = false;
     };
-  }, [start, end, itemsMode, groupBy, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
+  }, [start, end, groupBy, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   const gran = data?.range.granularity ?? granularity ?? "day";
   const categories = data?.categories ?? [];
@@ -240,18 +238,6 @@ export default function CategoriesReportPage() {
               </select>
             </div>
           )}
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-kk-dark-text-muted">Items mode</label>
-            <select
-              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-              value={itemsMode}
-              onChange={(e) => setItemsMode(e.target.value as any)}
-            >
-              <option value="parents">Parents only (default)</option>
-              <option value="all">All lines (incl. customizations)</option>
-            </select>
-          </div>
 
           <div className="flex flex-col gap-2">
             <label className="text-xs text-kk-dark-text-muted">Granularity</label>

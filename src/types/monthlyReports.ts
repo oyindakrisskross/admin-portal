@@ -1,5 +1,3 @@
-export type MonthlyItemsMode = "parents" | "all";
-
 export interface MonthlyReportSettings {
   enabled: boolean;
   export_backend: "LOCAL" | "GRAPH";
@@ -9,7 +7,6 @@ export interface MonthlyReportSettings {
   run_time: string; // "HH:MM:SS"
   apply_all_locations: boolean;
   location_ids: number[];
-  items_mode: MonthlyItemsMode;
   include_payments: boolean;
   include_item_lines: boolean;
   include_refunds: boolean;

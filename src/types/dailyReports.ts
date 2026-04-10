@@ -1,5 +1,3 @@
-export type DailyItemsMode = "parents" | "all";
-
 export interface DailyReportSettings {
   enabled: boolean;
   export_backend: "LOCAL" | "GRAPH";
@@ -9,7 +7,6 @@ export interface DailyReportSettings {
   run_time: string; // "HH:MM:SS"
   apply_all_locations: boolean;
   location_ids: number[];
-  items_mode: DailyItemsMode;
   include_payments: boolean;
   include_item_lines: boolean;
   include_refunds: boolean;

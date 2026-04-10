@@ -21,7 +21,7 @@ import {
   type SubscriptionPlan,
   type SubscriptionProduct,
 } from "../../../types/subscriptions";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { PlanPeek } from "./PlanPeek";
 import { ProductPeek } from "./ProductPeek";
 import { SubscriptionProductModal } from "./SubscriptionModals";
@@ -93,6 +93,18 @@ export function PlansListPage() {
   const hasPeek = Boolean(selectedPlan || selectedProduct);
   const canCreate = can("Subscriptions", "create");
 
+  const applyPlanSort = (
+    key: "product" | "name" | "code" | "description" | "status" | "pricing_model" | "billing_frequency" | "price"
+  ) => {
+    setPlanSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
+  const applyProductSort = (key: "name" | "description" | "status" | "plans" | "addons" | "coupons") => {
+    setProductSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
@@ -115,6 +127,7 @@ export function PlansListPage() {
             search: debouncedSearch || undefined,
             page,
             page_size: pageSize,
+            ...(planSort ? { sort: planSort.key, order: planSort.dir } : {}),
           });
           if (cancelled) return;
           setPlans(data.results ?? []);
@@ -126,6 +139,7 @@ export function PlansListPage() {
             search: debouncedSearch || undefined,
             page,
             page_size: pageSize,
+            ...(productSort ? { sort: productSort.key, order: productSort.dir } : {}),
           });
           if (cancelled) return;
           setProducts(data.results ?? []);
@@ -146,7 +160,7 @@ export function PlansListPage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, debouncedSearch, page, pageSize, refreshKey]);
+  }, [tab, debouncedSearch, page, pageSize, refreshKey, planSort, productSort]);
 
   useEffect(() => {
     const state = location.state as { selectedPlanId?: number } | null;
@@ -158,28 +172,7 @@ export function PlansListPage() {
     }
   }, [location.pathname, location.state, navigate, plans, tab]);
 
-  const rows = useMemo(() => {
-    if (tab === "plans") {
-      return sortBy(plans, planSort, {
-        product: (r) => r.product_name ?? "",
-        name: (r) => r.name ?? "",
-        code: (r) => r.code ?? "",
-        description: (r) => r.description ?? "",
-        status: (r) => r.status ?? "",
-        pricing_model: (r) => r.pricing_model ?? "",
-        billing_frequency: (r) => formatBillingFrequency(r.billing_frequency_value, r.billing_frequency_unit),
-        price: (r) => r.price ?? "",
-      });
-    }
-    return sortBy(products, productSort, {
-      name: (r) => r.name ?? "",
-      description: (r) => r.description ?? "",
-      status: (r) => r.status ?? "",
-      plans: (r) => r.plans_count ?? 0,
-      addons: (r) => r.addons_count ?? 0,
-      coupons: (r) => r.coupons_count ?? 0,
-    });
-  }, [tab, plans, products, planSort, productSort]);
+  const rows = useMemo(() => (tab === "plans" ? plans : products), [tab, plans, products]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -372,40 +365,40 @@ export function PlansListPage() {
               {tab === "plans" ? (
                 <tr>
                   {!hasPeek ? <th className="w-10" /> : null}
-                  <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "product"))}>
+                  <th className="cursor-pointer select-none" onClick={() => applyPlanSort("product")}>
                     {!hasPeek ? "Product Name" : "Plan"}
                     {sortIndicator(planSort, "product")}
                   </th>
                   {!hasPeek ? (
                     <>
-                      <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "name"))}>
+                      <th className="cursor-pointer select-none" onClick={() => applyPlanSort("name")}>
                         Plan Name{sortIndicator(planSort, "name")}
                       </th>
-                      <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "code"))}>
+                      <th className="cursor-pointer select-none" onClick={() => applyPlanSort("code")}>
                         Plan Code{sortIndicator(planSort, "code")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setPlanSort((s) => nextSort(s, "description"))}
+                        onClick={() => applyPlanSort("description")}
                       >
                         Description{sortIndicator(planSort, "description")}
                       </th>
-                      <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "status"))}>
+                      <th className="cursor-pointer select-none" onClick={() => applyPlanSort("status")}>
                         Status{sortIndicator(planSort, "status")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setPlanSort((s) => nextSort(s, "pricing_model"))}
+                        onClick={() => applyPlanSort("pricing_model")}
                       >
                         Pricing Model{sortIndicator(planSort, "pricing_model")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setPlanSort((s) => nextSort(s, "billing_frequency"))}
+                        onClick={() => applyPlanSort("billing_frequency")}
                       >
                         Billing Frequency{sortIndicator(planSort, "billing_frequency")}
                       </th>
-                      <th className="cursor-pointer select-none" onClick={() => setPlanSort((s) => nextSort(s, "price"))}>
+                      <th className="cursor-pointer select-none" onClick={() => applyPlanSort("price")}>
                         Price{sortIndicator(planSort, "price")}
                       </th>
                     </>
@@ -413,7 +406,7 @@ export function PlansListPage() {
                 </tr>
               ) : (
                 <tr>
-                  <th className="cursor-pointer select-none" onClick={() => setProductSort((s) => nextSort(s, "name"))}>
+                  <th className="cursor-pointer select-none" onClick={() => applyProductSort("name")}>
                     {!hasPeek ? "Product Name" : "Product"}
                     {sortIndicator(productSort, "name")}
                   </th>
@@ -421,28 +414,28 @@ export function PlansListPage() {
                     <>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setProductSort((s) => nextSort(s, "description"))}
+                        onClick={() => applyProductSort("description")}
                       >
                         Description{sortIndicator(productSort, "description")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setProductSort((s) => nextSort(s, "status"))}
+                        onClick={() => applyProductSort("status")}
                       >
                         Status{sortIndicator(productSort, "status")}
                       </th>
-                      <th className="cursor-pointer select-none" onClick={() => setProductSort((s) => nextSort(s, "plans"))}>
+                      <th className="cursor-pointer select-none" onClick={() => applyProductSort("plans")}>
                         Plans{sortIndicator(productSort, "plans")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setProductSort((s) => nextSort(s, "addons"))}
+                        onClick={() => applyProductSort("addons")}
                       >
                         Addons{sortIndicator(productSort, "addons")}
                       </th>
                       <th
                         className="cursor-pointer select-none"
-                        onClick={() => setProductSort((s) => nextSort(s, "coupons"))}
+                        onClick={() => applyProductSort("coupons")}
                       >
                         Coupons{sortIndicator(productSort, "coupons")}
                       </th>

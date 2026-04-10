@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Plus, Search, Users } from "lucide-react";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import { fetchCustomers } from "../../../api/customerPortal";
 import type { CustomerRecord } from "../../../types/customerPortal";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { useAuth } from "../../../auth/AuthContext";
 import { CustomerCreateModal } from "../../../components/crm/CustomerCreateModal";
 import { CustomerPeek } from "./CustomerPeek";
@@ -40,11 +40,17 @@ export const CustomerListPage: React.FC = () => {
 
   const hasPeek = Boolean(selectedCustomer);
 
+  const applySort = (key: "name" | "email" | "phone" | "status" | "minors" | "created") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const loadCustomers = async (params: { search?: string; page: number; page_size: number }) => {
     const data = await fetchCustomers({
       search: params.search,
       page: params.page,
       page_size: params.page_size,
+      ...(sort ? { sort: sort.key, order: sort.dir } : {}),
     });
     setCustomers(data.results ?? []);
     setTotalCount(Number(data.count ?? 0));
@@ -64,6 +70,7 @@ export const CustomerListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (cancelled) return;
         setCustomers(data.results ?? []);
@@ -80,18 +87,7 @@ export const CustomerListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize]);
-
-  const sortedCustomers = useMemo(() => {
-    return sortBy(customers, sort, {
-      name: (customer) => `${customer.last_name ?? ""} ${customer.first_name ?? ""}`,
-      email: (customer) => customer.email ?? "",
-      phone: (customer) => customer.phone ?? "",
-      status: (customer) => (customer.is_active ? "ACTIVE" : "INACTIVE"),
-      minors: (customer) => Number(customer.minors_count ?? 0),
-      created: (customer) => new Date(customer.created_at),
-    });
-  }, [customers, sort]);
+  }, [debouncedSearch, page, pageSize, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -189,25 +185,25 @@ export const CustomerListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "name"))}>
+                <th className="cursor-pointer select-none" onClick={() => applySort("name")}>
                   {!hasPeek ? "Name" : "Customer"}
                   {sortIndicator(sort, "name")}
                 </th>
                 {!hasPeek ? (
                   <>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "email"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("email")}>
                       Email{sortIndicator(sort, "email")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "phone"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("phone")}>
                       Phone{sortIndicator(sort, "phone")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "status"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("status")}>
                       Status{sortIndicator(sort, "status")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "minors"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("minors")}>
                       Active Minors{sortIndicator(sort, "minors")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "created"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("created")}>
                       Joined{sortIndicator(sort, "created")}
                     </th>
                   </>
@@ -215,7 +211,7 @@ export const CustomerListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedCustomers.map((customer) => (
+              {customers.map((customer) => (
                 <tr key={customer.id} className="cursor-pointer" onClick={() => setSelectedCustomer(customer)}>
                   {!hasPeek ? (
                     <>
@@ -256,7 +252,7 @@ export const CustomerListPage: React.FC = () => {
                 </tr>
               ) : null}
 
-              {!loading && !sortedCustomers.length ? (
+              {!loading && !customers.length ? (
                 <tr>
                   <td colSpan={hasPeek ? 1 : 6} className="px-3 py-8 text-center text-xs text-kk-dark-text-muted">
                     No customers found.

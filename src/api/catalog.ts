@@ -116,6 +116,8 @@ export async function fetchItemGroups(params?: {
   search?: string;
   page?: number;
   page_size?: number;
+  sort?: string;
+  order?: "asc" | "desc";
 }) {
   const res = await api.get(
     buildQueryPath("/api/catalog/item-groups/", {
@@ -123,6 +125,8 @@ export async function fetchItemGroups(params?: {
         search: params?.search,
         page: params?.page,
         page_size: params?.page_size,
+        sort: params?.sort,
+        order: params?.order,
       },
       filters: params?.filters,
     })
@@ -165,6 +169,8 @@ export async function fetchItems(params?: {
   search?: string;
   page?: number;
   page_size?: number;
+  sort?: string;
+  order?: "asc" | "desc";
 }) {
   const res = await api.get(
     buildQueryPath("/api/catalog/item-lte/", {
@@ -172,6 +178,8 @@ export async function fetchItems(params?: {
         search: params?.search,
         page: params?.page,
         page_size: params?.page_size,
+        sort: params?.sort,
+        order: params?.order,
       },
       filters: params?.filters,
     })

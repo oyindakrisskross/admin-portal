@@ -3,11 +3,14 @@ import React, { useEffect, useMemo, useState } from "react";
 import { fetchOutlets } from "../../../api/location";
 import {
   fetchCustomerSubscription,
+  fetchSubscriptionPlan,
+  fetchSubscriptionPlans,
   processSubscriptionPayment,
   resendSubscriptionPassEmail,
   updateCustomerSubscription,
 } from "../../../api/subscriptions";
 import { useAuth } from "../../../auth/AuthContext";
+import { TabNav } from "../../../components/layout/TabNav";
 import { CustomerSearchSelect } from "../../../components/crm/CustomerSearchSelect";
 import ToastModal from "../../../components/ui/ToastModal";
 import type { CustomerRecord } from "../../../types/customerPortal";
@@ -17,6 +20,7 @@ import type {
   CustomerSubscriptionStatus,
   SubscriptionCouponUsageHistoryEntry,
   SubscriptionPaymentHistoryEntry,
+  SubscriptionPlan,
   SubscriptionUsageHistoryEntry,
 } from "../../../types/subscriptions";
 
@@ -42,6 +46,7 @@ type EditablePaymentHistoryRow = {
 
 type EditState = {
   customer: CustomerRecord | null;
+  plan_id: string;
   physical_card_serial: string;
   started_at: string;
   expires_at: string;
@@ -56,6 +61,11 @@ const statusOptions: CustomerSubscriptionStatus[] = ["UNPAID", "ACTIVE", "EXPIRE
 const paymentMethodOptions: Array<EditablePaymentHistoryRow["method"]> = ["CASH", "CARD", "TRANSFER", "OTHER"];
 const fieldInputClass =
   "w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm outline-none focus:border-kk-primary";
+const currencyFormatter = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  maximumFractionDigits: 2,
+});
 
 const toDateTime = (value?: string | null) => {
   if (!value) return "-";
@@ -77,6 +87,64 @@ const fromDateTimeLocalValue = (value: string) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString();
+};
+
+const formatCurrency = (value: number) => currencyFormatter.format(value || 0);
+
+const estimatePlanGrandTotal = (plan: SubscriptionPlan | null | undefined) => {
+  if (!plan) return 0;
+  const subtotal = (Number(plan.price || 0) || 0) + (Number(plan.setup_fee || 0) || 0);
+  const taxRate = Number(plan.sales_tax_rate || 0) || 0;
+  return subtotal + (subtotal * taxRate) / 100;
+};
+
+const derivePlanTimingDefaults = (plan: SubscriptionPlan, startedAtValue: string) => {
+  const startIso = fromDateTimeLocalValue(startedAtValue) || new Date().toISOString();
+  const start = new Date(startIso);
+  const expiresAt = new Date(start);
+
+  const addDays = (days: number) => {
+    expiresAt.setDate(expiresAt.getDate() + days);
+    return toDateTimeLocalValue(expiresAt.toISOString());
+  };
+
+  const frequencyValue = Number(plan.billing_frequency_value || 1) || 1;
+  const multiplier =
+    plan.plan_type === "USAGE" && plan.billing_cycles_mode === "FIXED"
+      ? Math.max(Number(plan.billing_cycles || 1) || 1, 1)
+      : 1;
+  const totalFrequencyValue = frequencyValue * multiplier;
+
+  let nextExpiresAt = "";
+  if (plan.plan_type === "CYCLE") {
+    if (plan.billing_frequency_unit === "DAY") nextExpiresAt = addDays(totalFrequencyValue);
+    else if (plan.billing_frequency_unit === "WEEK") nextExpiresAt = addDays(totalFrequencyValue * 7);
+    else if (plan.billing_frequency_unit === "MONTH") nextExpiresAt = addDays(totalFrequencyValue * 30);
+    else if (plan.billing_frequency_unit === "YEAR") nextExpiresAt = addDays(totalFrequencyValue * 365);
+  } else if (plan.billing_cycles_mode === "FIXED") {
+    if (plan.billing_frequency_unit === "DAY") nextExpiresAt = addDays(totalFrequencyValue);
+    else if (plan.billing_frequency_unit === "WEEK") nextExpiresAt = addDays(totalFrequencyValue * 7);
+    else if (plan.billing_frequency_unit === "MONTH") nextExpiresAt = addDays(totalFrequencyValue * 30);
+    else if (plan.billing_frequency_unit === "YEAR") nextExpiresAt = addDays(totalFrequencyValue * 365);
+  }
+
+  return {
+    total_uses: plan.plan_type === "USAGE" ? (plan.included_uses == null ? "" : String(plan.included_uses)) : "",
+    expires_at: nextExpiresAt,
+  };
+};
+
+const mergePlans = (...groups: Array<SubscriptionPlan[]>) => {
+  const next = new Map<number, SubscriptionPlan>();
+  groups.flat().forEach((plan) => {
+    if (plan?.id == null) return;
+    next.set(plan.id, plan);
+  });
+  return Array.from(next.values()).sort((left, right) => {
+    const leftLabel = `${left.product_name || ""} ${left.name || ""}`.trim();
+    const rightLabel = `${right.product_name || ""} ${right.name || ""}`.trim();
+    return leftLabel.localeCompare(rightLabel);
+  });
 };
 
 const apiErrorMessage = (err: any, fallback: string) => {
@@ -142,6 +210,7 @@ const buildCustomerValue = (subscription: CustomerSubscriptionRecord): CustomerR
 
 const buildEditState = (subscription: CustomerSubscriptionRecord): EditState => ({
   customer: buildCustomerValue(subscription),
+  plan_id: String(subscription.plan),
   physical_card_serial: String(subscription.physical_card_serial || ""),
   started_at: toDateTimeLocalValue(subscription.started_at),
   expires_at: toDateTimeLocalValue(subscription.expires_at),
@@ -178,11 +247,15 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
   const [editing, setEditing] = useState(false);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [outlets, setOutlets] = useState<Outlet[]>([]);
+  const [planOptions, setPlanOptions] = useState<SubscriptionPlan[]>([]);
+  const [currentPlanDetail, setCurrentPlanDetail] = useState<SubscriptionPlan | null>(null);
+  const [loadingPlanOptions, setLoadingPlanOptions] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<EditablePaymentHistoryRow["method"]>("OTHER");
   const [paymentReference, setPaymentReference] = useState("");
+  const [tab, setTab] = useState<"overview" | "usage" | "payments" | "coupons">("overview");
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("info");
 
@@ -231,6 +304,10 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
   }, [subscription]);
 
   useEffect(() => {
+    setTab("overview");
+  }, [subscriptionId]);
+
+  useEffect(() => {
     if (!canEdit) return;
     let cancelled = false;
     (async () => {
@@ -245,6 +322,39 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
       cancelled = true;
     };
   }, [canEdit]);
+
+  useEffect(() => {
+    if (!canEdit || !subscription) {
+      setPlanOptions([]);
+      setCurrentPlanDetail(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      setLoadingPlanOptions(true);
+      try {
+        const [activePlansData, currentPlan] = await Promise.all([
+          fetchSubscriptionPlans({ status: "ACTIVE", page_size: 300 }),
+          fetchSubscriptionPlan(subscription.plan),
+        ]);
+        if (cancelled) return;
+        const merged = mergePlans(activePlansData.results ?? [], currentPlan ? [currentPlan] : []);
+        setPlanOptions(merged);
+        setCurrentPlanDetail(currentPlan);
+      } catch {
+        if (cancelled) return;
+        setPlanOptions([]);
+        setCurrentPlanDetail(null);
+      } finally {
+        if (!cancelled) setLoadingPlanOptions(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit, subscription?.id, subscription?.plan]);
 
   const usageHistory = useMemo(
     () => (Array.isArray(subscription?.usage_history) ? subscription.usage_history : []),
@@ -261,6 +371,29 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
   const invoiceGrandTotal = Number(subscription?.source_invoice_grand_total || 0) || 0;
   const recordedAmountPaid = Number(subscription?.source_invoice_amount_paid || 0) || 0;
   const remainingBalanceDue = Number(subscription?.source_invoice_balance_due || 0) || 0;
+  const canChangePlan = Boolean(
+    subscription?.can_change_plan ??
+      ((subscription?.used_uses ?? 0) === 0 && usageHistory.length === 0 && couponUsageHistory.length === 0)
+  );
+  const canChangeCardSerial = canChangePlan;
+  const selectedPlan = useMemo(() => {
+    if (!editState) return null;
+    return planOptions.find((plan) => String(plan.id) === editState.plan_id) ?? null;
+  }, [editState, planOptions]);
+  const effectivePlan = editing ? selectedPlan ?? currentPlanDetail : currentPlanDetail;
+  const effectivePlanUsesPhysicalCard = Boolean(effectivePlan?.uses_physical_card ?? subscription?.plan_uses_physical_card);
+  const effectivePlanRequiresCardSerial = Boolean(
+    effectivePlan?.requires_card_serial ?? subscription?.plan_requires_card_serial
+  );
+  const cardSerialRequired =
+    effectivePlanRequiresCardSerial && editState != null && !["CANCELLED", "EXPIRED"].includes(editState.status);
+  const planChangeDelta =
+    selectedPlan && currentPlanDetail && selectedPlan.id !== currentPlanDetail.id
+      ? estimatePlanGrandTotal(selectedPlan) - estimatePlanGrandTotal(currentPlanDetail)
+      : 0;
+  const projectedInvoiceTotal = invoiceGrandTotal + planChangeDelta;
+  const projectedRemainingBalance = Math.max(projectedInvoiceTotal - recordedAmountPaid, 0);
+  const projectedRefundAmount = Math.max(recordedAmountPaid - projectedInvoiceTotal, 0);
   const pendingPaymentAmount = paymentAmount.trim() ? Number(paymentAmount) || 0 : remainingBalanceDue;
   const projectedBalanceDue = Math.max(remainingBalanceDue - pendingPaymentAmount, 0);
 
@@ -286,6 +419,24 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
     }
   };
 
+  const handlePlanSelection = (planId: string) => {
+    setEditState((current) => {
+      if (!current) return current;
+      const nextPlan = planOptions.find((plan) => String(plan.id) === planId);
+      if (!nextPlan) {
+        return { ...current, plan_id: planId };
+      }
+      const derived = derivePlanTimingDefaults(nextPlan, current.started_at);
+      return {
+        ...current,
+        plan_id: planId,
+        total_uses: derived.total_uses,
+        expires_at: derived.expires_at,
+        physical_card_serial: nextPlan.uses_physical_card ? current.physical_card_serial : "",
+      };
+    });
+  };
+
   const handleSave = async () => {
     if (!editState.customer) {
       setToastVariant("error");
@@ -297,20 +448,35 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
       setToastMessage("Subscription start date is required.");
       return;
     }
-    if (subscription.plan_requires_card_serial && !editState.physical_card_serial.trim()) {
+    if (!editState.plan_id.trim()) {
+      setToastVariant("error");
+      setToastMessage("Select the subscription plan assigned to this subscription.");
+      return;
+    }
+    if (effectivePlanUsesPhysicalCard && cardSerialRequired && !editState.physical_card_serial.trim()) {
       setToastVariant("error");
       setToastMessage("Physical card serial is required for this subscription plan.");
       return;
     }
 
+    const nextPlanId = Number(editState.plan_id);
+    if (!Number.isFinite(nextPlanId) || nextPlanId <= 0) {
+      setToastVariant("error");
+      setToastMessage("Select a valid subscription plan.");
+      return;
+    }
+
+    const isPlanChanged = nextPlanId !== subscription.plan;
+
     const payload: Parameters<typeof updateCustomerSubscription>[1] = {
       customer: editState.customer.id,
+      plan: nextPlanId,
       status: editState.status === "UNPAID" ? "ACTIVE" : editState.status,
       started_at: fromDateTimeLocalValue(editState.started_at) || subscription.started_at,
       expires_at: editState.expires_at.trim() ? fromDateTimeLocalValue(editState.expires_at) : null,
       total_uses: editState.total_uses.trim() === "" ? null : Number(editState.total_uses),
       used_uses: editState.used_uses.trim() === "" ? 0 : Number(editState.used_uses),
-      physical_card_serial: subscription.plan_uses_physical_card ? editState.physical_card_serial.trim() || null : null,
+      physical_card_serial: effectivePlanUsesPhysicalCard ? editState.physical_card_serial.trim() || null : null,
       usage_history_input: editState.usage_history
         .filter((row) => row.visited_at.trim())
         .map((row) => ({
@@ -340,7 +506,13 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
       onUpdated?.(updated);
       setEditing(false);
       setToastVariant("success");
-      setToastMessage("Subscription updated.");
+      if (isPlanChanged && projectedRefundAmount > 0.009) {
+        setToastMessage(`Subscription updated. Refund recorded: ${formatCurrency(projectedRefundAmount)}.`);
+      } else if (isPlanChanged && projectedRemainingBalance > 0.009) {
+        setToastMessage(`Subscription updated. Remaining balance: ${formatCurrency(projectedRemainingBalance)}.`);
+      } else {
+        setToastMessage("Subscription updated.");
+      }
     } catch (err: any) {
       setToastVariant("error");
       setToastMessage(apiErrorMessage(err, "Failed to update subscription."));
@@ -416,8 +588,10 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
     <div className="flex h-full flex-col gap-6 p-5 pb-7">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold">{subscription.plan_name}</h2>
-          <p className="text-sm text-kk-dark-text-muted">{subscription.plan_code}</p>
+          <h2 className="text-2xl font-semibold">{editing ? effectivePlan?.name || subscription.plan_name : subscription.plan_name}</h2>
+          <p className="text-sm text-kk-dark-text-muted">
+            {editing ? effectivePlan?.code || subscription.plan_code : subscription.plan_code}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && editing ? (
@@ -462,10 +636,68 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
         </div>
       </div>
 
+      <div className="flex flex-wrap gap-x-7 gap-y-2">
+        <TabNav action={() => setTab("overview")} isActive={tab === "overview"}>
+          Overview
+        </TabNav>
+        <TabNav action={() => setTab("usage")} isActive={tab === "usage"}>
+          Usage History
+        </TabNav>
+        <TabNav action={() => setTab("payments")} isActive={tab === "payments"}>
+          Payment History
+        </TabNav>
+        <TabNav action={() => setTab("coupons")} isActive={tab === "coupons"}>
+          Coupon Usage
+        </TabNav>
+      </div>
+
+      {tab === "overview" ? (
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
           <p className="mb-2 text-xs uppercase tracking-[0.2em] text-kk-dark-text-muted">Assignment</p>
           <div className="space-y-3">
+            <div>
+              <p className="mb-1 text-sm text-kk-dark-text-muted">Plan</p>
+              {editing ? (
+                canChangePlan ? (
+                  <div className="space-y-2">
+                    <select
+                      className={fieldInputClass}
+                      value={editState.plan_id}
+                      onChange={(e) => handlePlanSelection(e.target.value)}
+                      disabled={loadingPlanOptions}
+                    >
+                      <option value="">Select a plan</option>
+                      {planOptions.map((plan) => (
+                        <option key={plan.id} value={plan.id}>
+                          {plan.name}
+                          {plan.code ? ` (${plan.code})` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-kk-dark-text-muted">
+                      {loadingPlanOptions ? "Loading available plans..." : "Only unused subscriptions can switch plans."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-sm text-kk-dark-text">
+                      {subscription.plan_name}
+                      {subscription.plan_code ? ` (${subscription.plan_code})` : ""}
+                    </p>
+                    <p className="text-xs text-kk-dark-text-muted">
+                      {subscription.plan_change_block_reason || "This subscription can no longer switch plans."}
+                    </p>
+                  </div>
+                )
+              ) : (
+                <p className="text-sm text-kk-dark-text">
+                  {subscription.plan_name}
+                  {subscription.plan_code ? ` (${subscription.plan_code})` : ""}
+                </p>
+              )}
+            </div>
+
             <div>
               <p className="mb-1 text-sm text-kk-dark-text-muted">Customer</p>
               {editing ? (
@@ -489,22 +721,32 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
 
             <div>
               <p className="mb-1 text-sm text-kk-dark-text-muted">Physical Card Serial</p>
-              {editing && subscription.plan_uses_physical_card ? (
+              {editing && effectivePlanUsesPhysicalCard ? (
                 <input
                   className={fieldInputClass}
                   value={editState.physical_card_serial}
+                  disabled={!canChangeCardSerial}
                   onChange={(e) =>
                     setEditState((current) =>
                       current ? { ...current, physical_card_serial: e.target.value } : current
                     )
                   }
-                  placeholder={subscription.plan_requires_card_serial ? "Required serial number" : "Serial number"}
+                  placeholder={cardSerialRequired ? "Required serial number" : "Serial number"}
                 />
               ) : (
                 <p className="text-sm text-kk-dark-text">
-                  {subscription.plan_uses_physical_card ? subscription.physical_card_serial || "-" : "Not used on this plan"}
+                  {effectivePlanUsesPhysicalCard ? subscription.physical_card_serial || "-" : "Not used on this plan"}
                 </p>
               )}
+              {editing && effectivePlanUsesPhysicalCard ? (
+                <p className="mt-1 text-xs text-kk-dark-text-muted">
+                  {!canChangeCardSerial
+                    ? "Card serial cannot be changed after the subscription has been used."
+                    : cardSerialRequired
+                    ? "Card serial is required unless the subscription is being cancelled or expired."
+                    : "Card serial is optional for the selected status."}
+                </p>
+              ) : null}
             </div>
 
             <div>
@@ -548,7 +790,22 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
                   className={fieldInputClass}
                   value={editState.started_at}
                   onChange={(e) =>
-                    setEditState((current) => (current ? { ...current, started_at: e.target.value } : current))
+                    setEditState((current) => {
+                      if (!current) return current;
+                      const nextStartedAt = e.target.value;
+                      const shouldRefreshPlanDefaults =
+                        selectedPlan != null && currentPlanDetail != null && selectedPlan.id !== currentPlanDetail.id;
+                      if (!shouldRefreshPlanDefaults) {
+                        return { ...current, started_at: nextStartedAt };
+                      }
+                      const derived = derivePlanTimingDefaults(selectedPlan, nextStartedAt);
+                      return {
+                        ...current,
+                        started_at: nextStartedAt,
+                        expires_at: derived.expires_at,
+                        total_uses: derived.total_uses,
+                      };
+                    })
                   }
                 />
               ) : (
@@ -631,7 +888,9 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
           </div>
         </div>
       </div>
+      ) : null}
 
+      {tab === "usage" ? (
       <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="text-lg font-semibold">Usage History</h3>
@@ -753,8 +1012,10 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
           <p className="text-sm text-kk-dark-text-muted">No usage recorded yet.</p>
         )}
       </div>
+      ) : null}
 
-      {subscription.source_invoice ? (
+      {tab === "payments" ? (
+        subscription.source_invoice ? (
         <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <h3 className="text-lg font-semibold">Payment History</h3>
@@ -812,6 +1073,43 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
               <p className="mt-1 text-sm font-semibold">NGN {remainingBalanceDue.toFixed(2)}</p>
             </div>
           </div>
+
+          {editing && planChangeDelta !== 0 ? (
+            <div className="mb-4 rounded-xl border border-kk-dark-input-border bg-kk-dark-bg px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold">Plan Change Impact</h4>
+                  <p className="text-xs text-kk-dark-text-muted">
+                    {planChangeDelta > 0
+                      ? "Switching to this plan increases the subscription amount."
+                      : "Switching to this plan reduces the subscription amount."}
+                  </p>
+                </div>
+                <div className="rounded-md bg-kk-dark-bg-elevated px-3 py-2 text-right">
+                  <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Plan Delta</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {planChangeDelta > 0 ? "+" : "-"}
+                    {formatCurrency(Math.abs(planChangeDelta))}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Projected Invoice Total</p>
+                  <p className="mt-1 text-sm font-semibold">{formatCurrency(projectedInvoiceTotal)}</p>
+                </div>
+                <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Projected Balance</p>
+                  <p className="mt-1 text-sm font-semibold">{formatCurrency(projectedRemainingBalance)}</p>
+                </div>
+                <div className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-3">
+                  <p className="text-[11px] uppercase tracking-wide text-kk-dark-text-muted">Auto Refund</p>
+                  <p className="mt-1 text-sm font-semibold">{formatCurrency(projectedRefundAmount)}</p>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {!editing && showPaymentForm ? (
             <div className="mb-4 space-y-3 rounded-xl border border-kk-dark-input-border bg-kk-dark-bg px-4 py-4">
@@ -917,7 +1215,6 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
                         <td className="px-2 py-2">
                           <input
                             type="number"
-                            min={0}
                             step="0.01"
                             className={fieldInputClass}
                             value={entry.amount}
@@ -1012,8 +1309,17 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
             <p className="text-sm text-kk-dark-text-muted">No payments recorded on the source invoice yet.</p>
           )}
         </div>
+        ) : (
+          <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
+            <h3 className="text-lg font-semibold">Payment History</h3>
+            <p className="mt-3 text-sm text-kk-dark-text-muted">
+              This subscription does not have a source invoice payment history.
+            </p>
+          </div>
+        )
       ) : null}
 
+      {tab === "coupons" ? (
       <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
         <h3 className="mb-3 text-lg font-semibold">Subscription Coupon Usage</h3>
         {couponUsageHistory.length ? (
@@ -1045,6 +1351,7 @@ export const SubscriptionPeek: React.FC<Props> = ({ subscriptionId, onUpdated })
           <p className="text-sm text-kk-dark-text-muted">No subscription coupon usage recorded yet.</p>
         )}
       </div>
+      ) : null}
 
       <ToastModal message={toastMessage} variant={toastVariant} onClose={() => setToastMessage(null)} />
     </div>

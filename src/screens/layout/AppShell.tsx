@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   ShoppingCart,
   TicketPercent,
+  Megaphone,
 } from "lucide-react";
 
 const toolboxItems = [
@@ -64,6 +65,11 @@ const portalLinks = [
     label: "Promotions",
     icon: <TicketPercent className="h-5 w-5" />,
     children: [{ to: "/promotions/coupons", label: "Coupons", perm: "Coupons" }],
+  },
+  {
+    label: "Marketing",
+    icon: <Megaphone className="h-5 w-5" />,
+    children: [{ to: "/marketing/whatsapp", label: "WhatsApp", perm: "Organization" }],
   },
   {
     label: "Sales",

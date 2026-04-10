@@ -69,6 +69,7 @@ import CouponsReportPage from "../screens/reports/CouponsReportPage";
 import CouponDetailReportPage from "../screens/reports/coupons/CouponDetailReportPage";
 import { CouponListPage } from "../screens/promotions/coupon/CouponListPage";
 import CouponFormPage from "../screens/promotions/coupon/CouponFormPage";
+import WhatsAppManagerPage from "../screens/marketing/whatsapp/WhatsAppManagerPage";
 import ProfilePage from "../screens/ProfilePage";
 
 /**
@@ -222,6 +223,16 @@ export default function App() {
           element={
             <RequirePerm perm="Coupons" action="edit">
               <CouponFormPage />
+            </RequirePerm>
+          }
+        />
+
+        {/* Marketing */}
+        <Route
+          path="marketing/whatsapp"
+          element={
+            <RequirePerm perm="Organization" action="view">
+              <WhatsAppManagerPage />
             </RequirePerm>
           }
         />

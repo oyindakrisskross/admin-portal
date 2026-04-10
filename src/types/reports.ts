@@ -30,7 +30,7 @@ export interface OverviewResponse {
     granularity: Granularity;
     available_granularities: Array<Granularity>; 
   };
-  scope: { location_ids: number[] | "ALL"; items_mode: "parents" | "all" };
+  scope: { location_ids: number[] | "ALL" };
   performance: {
     total_sales: string;
     net_sales: string;
@@ -74,6 +74,7 @@ export interface ResponseRow {
   subtotal?: string;
   discount_total?: string;
   subtotal_after_discount?: string;
+  refunded_amount?: string;
 };
 
 export interface ReportResponse {
@@ -83,7 +84,7 @@ export interface ReportResponse {
     granularity: Granularity;
     available_granularities: Array<Granularity>;
   };
-  scope: { location_ids: number[] | "ALL"; items_mode: "parents" | "all" };
+  scope: { location_ids: number[] | "ALL" };
   kpi: { 
     items_sold: string; 
     net_sales: string;
@@ -115,7 +116,7 @@ export interface GroupResponse {
     granularity: Granularity;
     available_granularities: Array<Granularity>;
   };
-  scope: { location_ids: number[] | "ALL"; items_mode: "parents" | "all" };
+  scope: { location_ids: number[] | "ALL" };
   group: { group_id: number; name: string };
   kpi: { items_sold: string; net_sales: string; orders: number };
   series: {
@@ -213,7 +214,6 @@ export interface CategoriesReportResponse {
   };
   scope: {
     location_ids: number[] | "ALL";
-    items_mode: "parents" | "all";
     group_by?: "all" | "top_level";
     parent_category_id?: number | null;
   };

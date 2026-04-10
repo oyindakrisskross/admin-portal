@@ -18,7 +18,6 @@ export default function ReportsOverviewPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
-  const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
@@ -35,7 +34,6 @@ export default function ReportsOverviewPage() {
     setErr(null);
     try {
       const commonArgs = {
-        itemsMode,
         granularity,
         locationIds: locationIds === "ALL" ? undefined : locationIds,
       };
@@ -76,7 +74,7 @@ export default function ReportsOverviewPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
+  }, [start, end, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
@@ -154,18 +152,6 @@ export default function ReportsOverviewPage() {
                 </select>
               </div>
             )}
-
-            <div className="flex flex-col gap-2">
-              <label className="text-xs text-kk-dark-text-muted">Items mode</label>
-              <select
-                className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                value={itemsMode}
-                onChange={(e) => setItemsMode(e.target.value as any)}
-              >
-                <option value="parents">Parents only (default)</option>
-                <option value="all">All lines (incl. customizations)</option>
-              </select>
-            </div>
 
             <div className="flex flex-col gap-2">
               <label className="text-xs text-kk-dark-text-muted">Granularity</label>

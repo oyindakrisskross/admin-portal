@@ -20,7 +20,7 @@ import type { Category } from "../../../types/catalog";
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 
 import { 
   // ArrowsUpDownIcon,
@@ -137,6 +137,11 @@ export const ItemGroupListPage: React.FC = () => {
 
   const clearSelection = () => setSelectedIds([]);
 
+  const applySort = (key: "name" | "stock" | "price" | "status" | "created") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const handleStatusChg = async () => {
     if (!selectedGroup || !selectedId) return;
 
@@ -230,6 +235,7 @@ export const ItemGroupListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setGroups(data.results ?? []);
@@ -251,17 +257,7 @@ export const ItemGroupListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [filters, debouncedSearch, page, pageSize]);
-
-  const sortedGroups = useMemo(() => {
-    return sortBy(groups, sort, {
-      name: (g) => g.name,
-      stock: (g) => (g.inventory_tracking ? (g.stock_on_hand ?? "") : ""),
-      price: (g) => g.min_price ?? g.max_price ?? "",
-      status: (g) => g.status ?? "",
-      created: (g) => (g.created_on ? new Date(g.created_on) : null),
-    });
-  }, [groups, sort]);
+  }, [filters, debouncedSearch, page, pageSize, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -490,7 +486,7 @@ export const ItemGroupListPage: React.FC = () => {
                 {!hasPeek && <th className="w-10" />}
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                  onClick={() => applySort("name")}
                 >
                   <BoldIcon className="table-icon" />
                   Name{sortIndicator(sort, "name")}
@@ -498,7 +494,7 @@ export const ItemGroupListPage: React.FC = () => {
                 {!hasPeek &&
                   <th
                     className="cursor-pointer select-none"
-                    onClick={() => setSort((s) => nextSort(s, "stock"))}
+                    onClick={() => applySort("stock")}
                   >
                     <HashtagIcon className="table-icon" />
                     Stock On Hand{sortIndicator(sort, "stock")}
@@ -506,7 +502,7 @@ export const ItemGroupListPage: React.FC = () => {
                 }
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "price"))}
+                  onClick={() => applySort("price")}
                 >
                   <BanknotesIcon className={`table-icon ${!hasPeek ? "text-left" : "text-right"}`} />
                   Price{sortIndicator(sort, "price")}
@@ -515,7 +511,7 @@ export const ItemGroupListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       <BoltIcon className="table-icon" />
                       Status{sortIndicator(sort, "status")}
@@ -526,7 +522,7 @@ export const ItemGroupListPage: React.FC = () => {
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "created"))}
+                      onClick={() => applySort("created")}
                     >
                       <CalendarDaysIcon className="table-icon" />
                       Date Created{sortIndicator(sort, "created")}
@@ -536,7 +532,7 @@ export const ItemGroupListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedGroups.map((g) => (
+              {groups.map((g) => (
                 <tr
                   key={g.id}
                   className={[

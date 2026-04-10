@@ -20,7 +20,7 @@ import { BulkEditCategoriesModal } from "../../../components/catalog/bulk/BulkEd
 
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 
 import { 
   HashtagIcon,
@@ -132,6 +132,11 @@ export const ItemListPage: React.FC = () => {
 
   const clearSelection = () => setSelectedIds([]);
 
+  const applySort = (key: "name" | "sku" | "price" | "stock" | "status" | "categories") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const handleStatusChg = async () => {
       if (!selectedItem || !selectedId) return;
   
@@ -226,6 +231,7 @@ export const ItemListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setItems(data.results ?? []);
@@ -247,18 +253,7 @@ export const ItemListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [filters, debouncedSearch, page, pageSize]);
-
-  const sortedItems = useMemo(() => {
-    return sortBy(items, sort, {
-      name: (i) => i.name,
-      sku: (i) => i.sku ?? "",
-      price: (i) => i.price ?? "",
-      stock: (i) => (i.inventory_tracking ? (i.stock_on_hand ?? "") : ""),
-      status: (i) => i.status ?? "",
-      categories: (i) => (i.categories ?? []).map((c) => c.category_name ?? "").join(", "),
-    });
-  }, [items, sort]);
+  }, [filters, debouncedSearch, page, pageSize, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -485,7 +480,7 @@ export const ItemListPage: React.FC = () => {
                 {!hasPeek && <th className="w-10" />}
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                  onClick={() => applySort("name")}
                 >
                   <BoldIcon className="table-icon" />
                   Name{sortIndicator(sort, "name")}
@@ -493,7 +488,7 @@ export const ItemListPage: React.FC = () => {
                 {!hasPeek &&
                   <th
                     className="cursor-pointer select-none"
-                    onClick={() => setSort((s) => nextSort(s, "sku"))}
+                    onClick={() => applySort("sku")}
                   >
                     <BoldIcon className="table-icon" />
                     SKU{sortIndicator(sort, "sku")}
@@ -501,7 +496,7 @@ export const ItemListPage: React.FC = () => {
                 }
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "price"))}
+                  onClick={() => applySort("price")}
                 >
                   <BanknotesIcon className="table-icon" />
                   Price{sortIndicator(sort, "price")}
@@ -510,21 +505,21 @@ export const ItemListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "stock"))}
+                      onClick={() => applySort("stock")}
                     >
                       <HashtagIcon className="table-icon" />
                       Stock On Hand{sortIndicator(sort, "stock")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       <BoltIcon className="table-icon" />
                       Status{sortIndicator(sort, "status")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "categories"))}
+                      onClick={() => applySort("categories")}
                     >
                       <TagIcon className="table-icon" />
                       Categories{sortIndicator(sort, "categories")}
@@ -534,7 +529,7 @@ export const ItemListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedItems.map((i) => (
+              {items.map((i) => (
                 <tr
                   key={i.id}
                   className={[

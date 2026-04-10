@@ -117,7 +117,6 @@ export default function MonthlyReportsSettingsPage() {
         run_time: normalizeTime(cfg.run_time),
         apply_all_locations: cfg.apply_all_locations,
         location_ids: cfg.location_ids,
-        items_mode: cfg.items_mode,
         include_payments: cfg.include_payments,
         include_item_lines: cfg.include_item_lines,
         include_refunds: cfg.include_refunds,
@@ -308,7 +307,7 @@ export default function MonthlyReportsSettingsPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-1">
                 <label className="text-xs text-kk-dark-text-muted">Timezone</label>
                 <input
@@ -329,17 +328,6 @@ export default function MonthlyReportsSettingsPage() {
                 <div className="text-[11px] text-kk-dark-text-muted">
                   Recommended: set this shortly after midnight on the first day of the month.
                 </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-kk-dark-text-muted">Items mode</label>
-                <select
-                  className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-                  value={cfg.items_mode}
-                  onChange={(e) => setCfg({ ...cfg, items_mode: e.target.value as any })}
-                >
-                  <option value="parents">Parents only (default)</option>
-                  <option value="all">All lines (incl. customizations)</option>
-                </select>
               </div>
             </div>
 

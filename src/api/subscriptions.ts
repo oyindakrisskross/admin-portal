@@ -221,6 +221,7 @@ export async function updateCustomerSubscription(
   id: number,
   payload: {
     customer?: number;
+    plan?: number;
     status?: "ACTIVE" | "EXPIRED" | "DEPLETED" | "CANCELLED";
     started_at?: string;
     expires_at?: string | null;

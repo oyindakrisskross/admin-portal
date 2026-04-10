@@ -1,6 +1,6 @@
 // src/screens/crm/contact/ContactListPage.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, Search, TrashIcon, Users } from "lucide-react";
 
@@ -13,7 +13,7 @@ import { fetchContacts } from "../../../api/contact";
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { FilterSet, ColumnMeta } from "../../../types/filters";
 import { PencilSquareIcon } from "@heroicons/react/24/outline";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -51,6 +51,11 @@ export const ContactListPage: React.FC = () => {
     setSelectedId(null);
   };
 
+  const applySort = (key: "name" | "company" | "email" | "phone") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
@@ -67,6 +72,7 @@ export const ContactListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setContacts(data.results ?? []);
@@ -85,7 +91,7 @@ export const ContactListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [filters, debouncedSearch, page, pageSize]);
+  }, [filters, debouncedSearch, page, pageSize, sort]);
 
   useEffect(() => {
     if (!hasId || !contacts.length) return;
@@ -97,15 +103,6 @@ export const ContactListPage: React.FC = () => {
       setSelectedId(match.id!);
     }
   }, [hasId, id, contacts]);
-
-  const sortedContacts = useMemo(() => {
-    return sortBy(contacts, sort, {
-      name: (c) => `${c.last_name ?? ""} ${c.first_name ?? ""}`,
-      company: (c) => c.company_name ?? "",
-      email: (c) => c.email ?? "",
-      phone: (c) => `${c.phone_1_code_code ?? ""}${c.phone_1 ?? ""}`,
-    });
-  }, [contacts, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -223,7 +220,7 @@ export const ContactListPage: React.FC = () => {
               <tr>
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                  onClick={() => applySort("name")}
                 >
                   Name{sortIndicator(sort, "name")}
                 </th>
@@ -231,19 +228,19 @@ export const ContactListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "company"))}
+                      onClick={() => applySort("company")}
                     >
                       Company Name{sortIndicator(sort, "company")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "email"))}
+                      onClick={() => applySort("email")}
                     >
                       Email{sortIndicator(sort, "email")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "phone"))}
+                      onClick={() => applySort("phone")}
                     >
                       Phone{sortIndicator(sort, "phone")}
                     </th>
@@ -252,7 +249,7 @@ export const ContactListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedContacts.map((c) => (
+              {contacts.map((c) => (
                 <tr key={c.id} className="cursor-pointer" onClick={() => openPeek(c)}>
                   <td>
                     <p>

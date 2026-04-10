@@ -9,7 +9,7 @@ import { fetchOutlets } from "../../../api/location";
 import { fetchItem, searchItems } from "../../../api/catalog";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { formatMoneyNGN, getPrepaidDisplayStatus, humanizeStatus, toDateStr } from "../../../helpers";
 import { ItemSearchSelect, type ItemOption } from "../../../components/catalog/ItemSearchSelect";
 import type { Outlet } from "../../../types/location";
@@ -103,6 +103,7 @@ export const PrePaidListPage: React.FC = () => {
   const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterCustomer, setFilterCustomer] = useState<CustomerRecord | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
@@ -195,6 +196,11 @@ export const PrePaidListPage: React.FC = () => {
     setToastMessage(message);
   };
 
+  const applySort = (key: "number" | "date" | "status" | "location" | "total") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const toggleSelected = (invoiceId: number, checked?: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -221,8 +227,10 @@ export const PrePaidListPage: React.FC = () => {
           type_id: "PREPAID",
           filters,
           search: debouncedSearch || undefined,
+          portal_customer: filterCustomer?.id ?? undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setRows(data.results ?? []);
@@ -240,7 +248,7 @@ export const PrePaidListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize, reloadTick, filters]);
+  }, [debouncedSearch, filterCustomer?.id, page, pageSize, reloadTick, filters, sort]);
 
   useEffect(() => {
     const visible = new Set(rows.map((row) => row.id));
@@ -331,18 +339,6 @@ export const PrePaidListPage: React.FC = () => {
     }
   }, []);
 
-  const sortedRows = useMemo(
-    () =>
-      sortBy(rows, sort, {
-        number: (i) => i.number ?? "",
-        date: (i) => new Date(i.invoice_date),
-        status: (i) => getPrepaidDisplayStatus(i),
-        location: (i) => i.location_name ?? "",
-        total: (i) => Number(i.amount_paid ?? 0),
-      }),
-    [rows, sort]
-  );
-
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   const mapInvoiceItemsToRows = (invoice: InvoiceResponse): CreateRow[] => {
@@ -377,7 +373,7 @@ export const PrePaidListPage: React.FC = () => {
     return err?.message || fallback;
   };
 
-  const visibleIds = useMemo(() => sortedRows.map((row) => row.id), [sortedRows]);
+  const visibleIds = useMemo(() => rows.map((row) => row.id), [rows]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((invoiceId) => selectedIdSet.has(invoiceId));
   const someVisibleSelected = visibleIds.some((invoiceId) => selectedIdSet.has(invoiceId));
 
@@ -975,6 +971,17 @@ export const PrePaidListPage: React.FC = () => {
                     placeholder="Search pre-paid invoice"
                   />
                 </div>
+                <div className="w-64 min-w-[16rem]">
+                  <CustomerSearchSelect
+                    value={filterCustomer}
+                    onChange={(customer) => {
+                      setFilterCustomer(customer);
+                      setPage(1);
+                    }}
+                    onError={(message) => showToast(message)}
+                    placeholder="Filter by customer"
+                  />
+                </div>
                 <FilterBar
                   columns={filterColumns}
                   filters={filters}
@@ -1104,29 +1111,29 @@ export const PrePaidListPage: React.FC = () => {
                     />
                   </th>
                 ) : null}
-                <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "number"))}>
+                <th className="cursor-pointer select-none" onClick={() => applySort("number")}>
                   {!hasPeek ? "Invoice Number" : "Invoice"}
                   {sortIndicator(sort, "number")}
                 </th>
                 {!hasPeek ? (
                   <>
                     <th>Pre-Paid Number</th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "date"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("date")}>
                       Date{sortIndicator(sort, "date")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       Status{sortIndicator(sort, "status")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "location"))}
+                      onClick={() => applySort("location")}
                     >
                       Location{sortIndicator(sort, "location")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "total"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("total")}>
                       Amount Paid{sortIndicator(sort, "total")}
                     </th>
                   </>
@@ -1134,7 +1141,7 @@ export const PrePaidListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((invoice) => (
+              {rows.map((invoice) => (
                 <tr key={invoice.id} className="cursor-pointer" onClick={() => void handleSelectInvoice(invoice)}>
                   {!hasPeek ? (
                     <td>

@@ -54,6 +54,8 @@ export async function fetchContacts(params?: {
   search?: string;
   page?: number;
   page_size?: number;
+  sort?: string;
+  order?: "asc" | "desc";
 }) {
   const res = await api.get(
     buildQueryPath("/api/contacts/contacts/", {
@@ -61,6 +63,8 @@ export async function fetchContacts(params?: {
         search: params?.search,
         page: params?.page,
         page_size: params?.page_size,
+        sort: params?.sort,
+        order: params?.order,
       },
       filters: params?.filters,
     })

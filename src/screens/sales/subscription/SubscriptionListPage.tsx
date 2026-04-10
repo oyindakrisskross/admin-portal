@@ -15,7 +15,7 @@ import {
 } from "../../../api/subscriptions";
 import type { CustomerRecord } from "../../../types/customerPortal";
 import type { CustomerSubscriptionRecord, SubscriptionPlan } from "../../../types/subscriptions";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { useAuth } from "../../../auth/AuthContext";
 import { CustomerCreateModal } from "../../../components/crm/CustomerCreateModal";
 import { CustomerSearchSelect } from "../../../components/crm/CustomerSearchSelect";
@@ -114,6 +114,11 @@ export const SubscriptionListPage: React.FC = () => {
   const [qrValue, setQrValue] = useState("");
   const [qrPassCode, setQrPassCode] = useState("");
 
+  const applySort = (key: "customer" | "plan" | "type" | "status" | "started" | "expires" | "uses") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const handleSubscriptionUpdated = useCallback((updated: CustomerSubscriptionRecord) => {
     setSelectedSubscription((current) => (current?.id === updated.id ? updated : current));
     setRows((current) => current.map((row) => (row.id === updated.id ? updated : row)));
@@ -188,6 +193,7 @@ export const SubscriptionListPage: React.FC = () => {
       page: params.page,
       page_size: params.page_size,
       filters: params.filters,
+      ...(sort ? { sort: sort.key, order: sort.dir } : {}),
     });
     setRows(data.results ?? []);
     setTotalCount(Number(data.count ?? 0));
@@ -246,6 +252,7 @@ export const SubscriptionListPage: React.FC = () => {
           page,
           page_size: pageSize,
           filters,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (cancelled) return;
         setRows(data.results ?? []);
@@ -262,7 +269,7 @@ export const SubscriptionListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize, filters]);
+  }, [debouncedSearch, page, pageSize, filters, sort]);
 
   useEffect(() => {
     let cancelled = false;
@@ -328,18 +335,6 @@ export const SubscriptionListPage: React.FC = () => {
       cancelled = true;
     };
   }, [showStartModal]);
-
-  const sortedRows = useMemo(() => {
-    return sortBy(rows, sort, {
-      customer: (r) => `${r.customer_name ?? ""} ${r.customer_email ?? ""}`,
-      plan: (r) => `${r.plan_name ?? ""} ${r.plan_code ?? ""}`,
-      type: (r) => r.plan_type ?? "",
-      status: (r) => r.status ?? "",
-      started: (r) => new Date(r.started_at),
-      expires: (r) => (r.expires_at ? new Date(r.expires_at) : new Date(0)),
-      uses: (r) => Number(r.total_uses ?? Number.MAX_SAFE_INTEGER),
-    });
-  }, [rows, sort]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const canPrev = page > 1;
@@ -616,28 +611,28 @@ export const SubscriptionListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "customer"))}>
+                <th className="cursor-pointer select-none" onClick={() => applySort("customer")}>
                   {!hasPeek ? "Customer" : "Subscription"}
                   {sortIndicator(sort, "customer")}
                 </th>
                 {!hasPeek ? (
                   <>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "plan"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("plan")}>
                       Plan{sortIndicator(sort, "plan")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "type"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("type")}>
                       Type{sortIndicator(sort, "type")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "status"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("status")}>
                       Status{sortIndicator(sort, "status")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "uses"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("uses")}>
                       Uses{sortIndicator(sort, "uses")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "started"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("started")}>
                       Started{sortIndicator(sort, "started")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "expires"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("expires")}>
                       Expires{sortIndicator(sort, "expires")}
                     </th>
                   </>
@@ -645,7 +640,7 @@ export const SubscriptionListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((row) => (
+              {rows.map((row) => (
                 <tr key={row.id} className="cursor-pointer" onClick={() => setSelectedSubscription(row)}>
                   {!hasPeek ? (
                     <>
@@ -700,7 +695,7 @@ export const SubscriptionListPage: React.FC = () => {
                 </tr>
               ) : null}
 
-              {!loading && !sortedRows.length ? (
+              {!loading && !rows.length ? (
                 <tr>
                   <td colSpan={hasPeek ? 1 : 7} className="px-3 py-8 text-center text-xs text-kk-dark-text-muted">
                     No subscriptions found.

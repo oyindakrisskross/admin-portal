@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, RefreshCcw, Search, TicketPercent } from "lucide-react";
 
@@ -8,7 +8,7 @@ import SidePeek from "../../../components/layout/SidePeek";
 import type { Coupon } from "../../../types/promotions";
 import { ACTION_CHOICES } from "../../../types/promotions";
 import { deleteCoupon, fetchCoupons, resetCouponUsage } from "../../../api/promotions";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { CouponPeek } from "./CouponPeek";
 import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
 import ToastModal from "../../../components/ui/ToastModal";
@@ -48,6 +48,13 @@ export const CouponListPage: React.FC = () => {
     setToastMessage(message);
   };
 
+  const applySort = (
+    key: "name" | "code" | "id" | "action" | "start" | "end" | "status" | "description"
+  ) => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
@@ -63,6 +70,7 @@ export const CouponListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setCoupons(data.results ?? []);
@@ -81,7 +89,7 @@ export const CouponListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize]);
+  }, [debouncedSearch, page, pageSize, sort]);
 
   useEffect(() => {
     if (!hasId || !coupons.length) return;
@@ -147,18 +155,7 @@ export const CouponListPage: React.FC = () => {
     }
   };
 
-  const rows = useMemo(() => {
-    return sortBy(coupons, sort, {
-      name: (c) => c.name ?? "",
-      code: (c) => c.code ?? "",
-      id: (c) => c.id ?? 0,
-      action: (c) => c.action_type ?? "",
-      start: (c) => (c.start_at ? new Date(c.start_at) : null),
-      end: (c) => (c.end_at ? new Date(c.end_at) : null),
-      status: (c) => (c.active ? "ACTIVE" : "INACTIVE"),
-      description: (c) => c.description ?? "",
-    });
-  }, [coupons, sort]);
+  const rows = coupons;
 
   const toDate = (v?: string) => (v ? new Date(v).toLocaleString() : "-");
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
@@ -256,7 +253,7 @@ export const CouponListPage: React.FC = () => {
               <tr>
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "name"))}
+                  onClick={() => applySort("name")}
                 >
                   {!hasPeek ? "Coupon Name" : "Coupon"}
                   {sortIndicator(sort, "name")}
@@ -265,43 +262,43 @@ export const CouponListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "code"))}
+                      onClick={() => applySort("code")}
                     >
                       Coupon Code{sortIndicator(sort, "code")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "id"))}
+                      onClick={() => applySort("id")}
                     >
                       Coupon ID{sortIndicator(sort, "id")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "action"))}
+                      onClick={() => applySort("action")}
                     >
                       Coupon Action Type{sortIndicator(sort, "action")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "start"))}
+                      onClick={() => applySort("start")}
                     >
                       Start Date{sortIndicator(sort, "start")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "end"))}
+                      onClick={() => applySort("end")}
                     >
                       End Date{sortIndicator(sort, "end")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       Status{sortIndicator(sort, "status")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "description"))}
+                      onClick={() => applySort("description")}
                     >
                       Description{sortIndicator(sort, "description")}
                     </th>

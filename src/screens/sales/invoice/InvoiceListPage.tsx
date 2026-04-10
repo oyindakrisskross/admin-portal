@@ -10,7 +10,7 @@ import { Plus, ReceiptText, Search, Trash2, UserPlus } from "lucide-react";
 import { formatMoneyNGN, getPrepaidDisplayStatus, humanizeStatus } from "../../../helpers";
 import SidePeek from "../../../components/layout/SidePeek";
 import { InvoicePeek } from "./InvoicePeek";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { FilterBar } from "../../../components/filter/FilterBar";
 import type { ColumnMeta, FilterSet } from "../../../types/filters";
 import { BulkActionBar } from "../../../components/catalog/bulk/BulkActionBar";
@@ -85,6 +85,11 @@ export const InvoiceListPage: React.FC = () => {
     setSelectedInvoice(null);
   };
 
+  const applySort = (key: "number" | "date" | "status" | "location" | "total" | "sales") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   const showToast = (message: string, variant: "error" | "success" | "info" = "error") => {
     setToastVariant(variant);
     setToastMessage(message);
@@ -153,6 +158,7 @@ export const InvoiceListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
           setInvoices(data.results ?? []);
@@ -171,7 +177,7 @@ export const InvoiceListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [location.search, filters, debouncedSearch, page, pageSize]);
+  }, [location.search, filters, debouncedSearch, page, pageSize, sort]);
 
   useEffect(() => {
     const visible = new Set(invoices.map((inv) => inv.id));
@@ -217,23 +223,7 @@ export const InvoiceListPage: React.FC = () => {
     };
   }, [hasId, id, invoices, selectedInvoice?.id]);
 
-  const sortedInvoices = useMemo(() => {
-    return sortBy(invoices, sort, {
-      number: (i) => i.number ?? "",
-      date: (i) => new Date(i.invoice_date),
-      status: (i) =>
-        i.type_id === "PREPAID"
-          ? (i.prepaid_redeem_status ?? "UNUSED")
-          : i.type_id === "SALE" && Number(i.refunded_total ?? 0) > 0.01
-          ? "REFUNDED"
-          : (i.status ?? ""),
-      location: (i) => i.location_name ?? "",
-      total: (i) => Number(i.net_grand_total ?? i.grand_total ?? 0),
-      sales: (i) => i.created_by_name ?? "",
-    });
-  }, [invoices, sort]);
-
-  const visibleIds = useMemo(() => sortedInvoices.map((inv) => inv.id), [sortedInvoices]);
+  const visibleIds = useMemo(() => invoices.map((inv) => inv.id), [invoices]);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((invId) => selectedIdSet.has(invId));
   const someVisibleSelected = visibleIds.some((invId) => selectedIdSet.has(invId));
 
@@ -550,7 +540,7 @@ export const InvoiceListPage: React.FC = () => {
                 )}
                 <th
                   className="cursor-pointer select-none"
-                  onClick={() => setSort((s) => nextSort(s, "number"))}
+                  onClick={() => applySort("number")}
                 >
                   {!hasPeek ? "Invoice Number" : "Invoice"}
                   {sortIndicator(sort, "number")}
@@ -559,31 +549,31 @@ export const InvoiceListPage: React.FC = () => {
                   <>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "date"))}
+                      onClick={() => applySort("date")}
                     >
                       Date{sortIndicator(sort, "date")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "status"))}
+                      onClick={() => applySort("status")}
                     >
                       Status{sortIndicator(sort, "status")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "location"))}
+                      onClick={() => applySort("location")}
                     >
                       Location{sortIndicator(sort, "location")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "total"))}
+                      onClick={() => applySort("total")}
                     >
                       Total{sortIndicator(sort, "total")}
                     </th>
                     <th
                       className="cursor-pointer select-none"
-                      onClick={() => setSort((s) => nextSort(s, "sales"))}
+                      onClick={() => applySort("sales")}
                     >
                       Sales Person{sortIndicator(sort, "sales")}
                     </th>
@@ -592,7 +582,7 @@ export const InvoiceListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedInvoices.map((i) => {
+              {invoices.map((i) => {
                 const normalizedStatus = displayStatus(i);
                 return (
                   <tr key={i.id} className="cursor-pointer" onClick={() => openPeek(i)}>

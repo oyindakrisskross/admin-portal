@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { CreditCard, Search } from "lucide-react";
 
 import ListPageHeader from "../../../components/layout/ListPageHeader";
@@ -6,7 +6,7 @@ import SidePeek from "../../../components/layout/SidePeek";
 import { formatMoneyNGN } from "../../../helpers";
 import { fetchSalesPayment, fetchSalesPayments } from "../../../api/invoice";
 import type { PaymentRecord } from "../../../types/invoice";
-import { nextSort, sortBy, sortIndicator, type SortState } from "../../../utils/sort";
+import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -43,6 +43,11 @@ export const PaymentListPage: React.FC = () => {
 
   const hasPeek = !!selected;
 
+  const applySort = (key: "invoice" | "date" | "method" | "amount" | "location" | "customer") => {
+    setSort((current) => nextSort(current, key));
+    setPage(1);
+  };
+
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => window.clearTimeout(t);
@@ -57,6 +62,7 @@ export const PaymentListPage: React.FC = () => {
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
+          ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (cancelled) return;
         setRows(data.results ?? []);
@@ -72,20 +78,7 @@ export const PaymentListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize]);
-
-  const sortedRows = useMemo(
-    () =>
-      sortBy(rows, sort, {
-        invoice: (p) => `${p.invoice_number || ""}-${p.prepaid_number || ""}`,
-        date: (p) => new Date(p.paid_on),
-        method: (p) => p.method || "",
-        amount: (p) => Number(p.amount || 0),
-        location: (p) => p.location_name || "",
-        customer: (p) => customerName(p),
-      }),
-    [rows, sort]
-  );
+  }, [debouncedSearch, page, pageSize, sort]);
 
   const openPeek = async (payment: PaymentRecord) => {
     setSelected(payment);
@@ -178,25 +171,25 @@ export const PaymentListPage: React.FC = () => {
           <table className="min-w-full table-auto">
             <thead>
               <tr>
-                <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "invoice"))}>
+                <th className="cursor-pointer select-none" onClick={() => applySort("invoice")}>
                   {!hasPeek ? "Invoice" : "Payment"}
                   {sortIndicator(sort, "invoice")}
                 </th>
                 {!hasPeek ? (
                   <>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "date"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("date")}>
                       Date{sortIndicator(sort, "date")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "method"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("method")}>
                       Method{sortIndicator(sort, "method")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "amount"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("amount")}>
                       Amount{sortIndicator(sort, "amount")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "location"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("location")}>
                       Location{sortIndicator(sort, "location")}
                     </th>
-                    <th className="cursor-pointer select-none" onClick={() => setSort((s) => nextSort(s, "customer"))}>
+                    <th className="cursor-pointer select-none" onClick={() => applySort("customer")}>
                       Customer{sortIndicator(sort, "customer")}
                     </th>
                   </>
@@ -204,7 +197,7 @@ export const PaymentListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((payment) => (
+              {rows.map((payment) => (
                 <tr key={payment.id} className="cursor-pointer" onClick={() => void openPeek(payment)}>
                   <td>
                     {!hasPeek ? (

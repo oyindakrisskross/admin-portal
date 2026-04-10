@@ -17,6 +17,8 @@ export async function fetchCustomers(params?: {
   page?: number;
   page_size?: number;
   is_active?: boolean;
+  sort?: string;
+  order?: "asc" | "desc";
 }) {
   const res = await api.get<PaginatedResult<CustomerRecord>>(
     buildQueryPath("/api/customer-portal/customers/", {
@@ -25,6 +27,8 @@ export async function fetchCustomers(params?: {
         page: params?.page,
         page_size: params?.page_size,
         is_active: params?.is_active,
+        sort: params?.sort,
+        order: params?.order,
       },
     })
   );

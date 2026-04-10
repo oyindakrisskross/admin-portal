@@ -8,17 +8,18 @@ import type { DailyReportRunResponse, DailyReportSettings } from "../types/daily
 import type { MonthlyReportRunResponse, MonthlyReportSettings } from "../types/monthlyReports";
 import api from "./client";
 
+const REPORT_ITEMS_MODE = "all" as const;
+
 export async function fetchOverviewReport(args: {
   start: string; // YYYY-MM-DD
   end: string;   // YYYY-MM-DD
-  itemsMode: "parents" | "all";
   locationIds?: number[]; // omit => all allowed
   granularity?: "hour" | "day" | "week" | "month" | "year";
 }): Promise<OverviewResponse> {
   const params: Record<string, any> = {
     start: args.start,
     end: args.end,
-    items_mode: args.itemsMode,
+    items_mode: REPORT_ITEMS_MODE,
     granularity: args.granularity,
   };
 
@@ -37,7 +38,6 @@ export async function fetchProductsReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  itemsMode?: "parents" | "all";
   granularity?: "hour" | "day" | "week" | "month" | "year";
   itemIds?: number[];
   seriesByItem?: boolean;
@@ -50,7 +50,7 @@ export async function fetchProductsReport(args: {
   const q = new URLSearchParams();
   q.set("start", args.start);
   q.set("end", args.end);
-  q.set("items_mode", args.itemsMode ?? "parents");
+  q.set("items_mode", REPORT_ITEMS_MODE);
   if (args.granularity) q.set("granularity", args.granularity);
   if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
   if (args.itemIds?.length) q.set("item_ids", args.itemIds.join(","));
@@ -69,7 +69,6 @@ export async function fetchVariationsReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  itemsMode?: "parents" | "all";
   granularity?: "hour" | "day" | "week" | "month" | "year";
   search?: string;
   sort?: "items_sold" | "net_sales" | "orders" | "name";
@@ -80,7 +79,7 @@ export async function fetchVariationsReport(args: {
   const q = new URLSearchParams();
   q.set("start", args.start);
   q.set("end", args.end);
-  q.set("items_mode", args.itemsMode ?? "parents");
+  q.set("items_mode", REPORT_ITEMS_MODE);
   if (args.granularity) q.set("granularity", args.granularity);
   if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
   if (args.search) q.set("search", args.search);
@@ -126,13 +125,12 @@ export async function fetchGroupReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  itemsMode?: "parents" | "all";
   granularity?: "hour" | "day" | "week" | "month" | "year";
 }) {
   const q = new URLSearchParams();
   q.set("start", args.start);
   q.set("end", args.end);
-  q.set("items_mode", args.itemsMode ?? "parents");
+  q.set("items_mode", REPORT_ITEMS_MODE);
   if (args.locationIds?.length) q.set("location_ids", args.locationIds.join(","));
   if (args.granularity) q.set("granularity", args.granularity);
 
@@ -197,7 +195,6 @@ export async function fetchCategoriesReport(args: {
   start: string;
   end: string;
   locationIds?: number[];
-  itemsMode?: "parents" | "all";
   granularity?: "hour" | "day" | "week" | "month" | "year";
   groupBy?: "all" | "top_level";
   parentCategoryId?: number;
@@ -205,7 +202,7 @@ export async function fetchCategoriesReport(args: {
   const q = new URLSearchParams();
   q.set("start", args.start);
   q.set("end", args.end);
-  q.set("items_mode", args.itemsMode ?? "parents");
+  q.set("items_mode", REPORT_ITEMS_MODE);
   q.set("group_by", args.groupBy ?? "all");
   if (args.parentCategoryId != null && Number.isFinite(args.parentCategoryId)) {
     q.set("parent_category_id", String(args.parentCategoryId));
@@ -251,7 +248,10 @@ export async function fetchDailyReportSettings(): Promise<DailyReportSettings> {
 export async function updateDailyReportSettings(
   patch: Partial<DailyReportSettings>
 ): Promise<DailyReportSettings> {
-  const res = await api.put<DailyReportSettings>("/api/sales/reports/daily/settings/", patch);
+  const res = await api.put<DailyReportSettings>("/api/sales/reports/daily/settings/", {
+    ...patch,
+    items_mode: REPORT_ITEMS_MODE,
+  });
   return res.data;
 }
 
@@ -271,7 +271,10 @@ export async function fetchMonthlyReportSettings(): Promise<MonthlyReportSetting
 export async function updateMonthlyReportSettings(
   patch: Partial<MonthlyReportSettings>
 ): Promise<MonthlyReportSettings> {
-  const res = await api.put<MonthlyReportSettings>("/api/sales/reports/monthly/settings/", patch);
+  const res = await api.put<MonthlyReportSettings>("/api/sales/reports/monthly/settings/", {
+    ...patch,
+    items_mode: REPORT_ITEMS_MODE,
+  });
   return res.data;
 }
 

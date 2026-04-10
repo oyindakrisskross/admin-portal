@@ -289,13 +289,14 @@ export default function InvoicesReportPage() {
         offset: 0,
       });
 
-      const header = ["Date", "Invoice #", "Location", "Items sold", "Coupons", "Subtotal"];
+      const header = ["Date", "Invoice #", "Location", "Items sold", "Coupons", "Refunded", "Subtotal"];
       const rows = (res.results ?? []).map((r) => [
         csvEscape(toDateStrShort(r.invoice_date ?? "")),
         csvEscape(r.invoice_number ?? ""),
         csvEscape(r.location ?? ""),
         csvEscape(r.items_sold ?? 0),
         csvEscape((r.coupon_code ?? "").trim() || ""),
+        csvEscape(r.refunded_amount ?? 0),
         csvEscape(r.subtotal_after_discount ?? 0),
       ]);
 
@@ -842,6 +843,7 @@ export default function InvoicesReportPage() {
                 <th className="px-4 py-2 text-right font-medium">Location</th>
                 <th className="px-4 py-2 text-right font-medium">Items Sold</th>
                 <th className="px-4 py-2 text-right font-medium">Coupons</th>
+                <th className="px-4 py-2 text-right font-medium">Refunded</th>
                 <th className="px-4 py-2 text-right font-medium">Subtotal</th>
               </tr>
             </thead>
@@ -866,6 +868,7 @@ export default function InvoicesReportPage() {
                     <td className="px-4 py-2">{r.location}</td>
                     <td className="px-4 py-2">{r.items_sold}</td>
                     <td className="px-4 py-2">{(r.coupon_code ?? "").trim() || "-"}</td>
+                    <td className="px-4 py-2 text-right">{formatMoneyNGN(Number(r.refunded_amount ?? 0))}</td>
                     <td className="px-4 py-2">
                       {formatMoneyNGN(
                         Number(
@@ -880,7 +883,7 @@ export default function InvoicesReportPage() {
 
               {!loading && (data?.results?.length ?? 0) === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-kk-dark-text-muted">
+                  <td colSpan={7} className="px-4 py-6 text-center text-kk-dark-text-muted">
                     No results for this range.
                   </td>
                 </tr>

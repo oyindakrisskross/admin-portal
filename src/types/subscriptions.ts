@@ -293,6 +293,8 @@ export interface CustomerSubscriptionRecord {
   plan_name: string;
   plan_code: string;
   plan_type: PlanType;
+  can_change_plan?: boolean;
+  plan_change_block_reason?: string;
   plan_uses_physical_card?: boolean;
   plan_requires_card_serial?: boolean;
   status: CustomerSubscriptionStatus;

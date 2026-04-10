@@ -3,8 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Search } from "lucide-react";
 
 import { fetchConnectionServices, fetchConnectionSettings } from "../../../api/payments";
+import { useAuth } from "../../../auth/AuthContext";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import type { ConnectionService, ConnectionSetting } from "../../../types/payments";
+import {
+  addSyntheticWhatsAppService,
+  isWhatsAppService,
+} from "../../../utils/whatsapp";
 
 const DEFAULT_TYPE = "Other";
 
@@ -23,6 +28,9 @@ type AppRow = {
 };
 
 function appSummary(service: ConnectionService) {
+  if (isWhatsAppService(service)) {
+    return "Connect a business number, create templates for review, send marketing and utility messages, and manage WhatsApp platform operations.";
+  }
   const parts: string[] = [];
   if (service.required_connection_inputs.length) {
     parts.push(`Inputs: ${service.required_connection_inputs.join(", ")}`);
@@ -57,12 +65,18 @@ function AppCard({
         </div>
       </div>
       <p className="mt-3 text-xs text-kk-dark-text-muted">{appSummary(row.service)}</p>
+      {isWhatsAppService(row.service) ? (
+        <div className="mt-3 inline-flex rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-medium text-emerald-300">
+          Marketing
+        </div>
+      ) : null}
     </button>
   );
 }
 
 export function ConnectionsPage() {
   const navigate = useNavigate();
+  const { me } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,10 +96,14 @@ export function ConnectionsPage() {
           fetchConnectionSettings(),
         ]);
         if (!mounted) return;
-        setServices(servicesRes);
-        setSettings(settingsRes);
+        const augmented = addSyntheticWhatsAppService(servicesRes, settingsRes, {
+          portalId: me?.portal,
+          userId: me?.id,
+        });
+        setServices(augmented.services);
+        setSettings(augmented.settings);
         const types = Array.from(
-          new Set(servicesRes.map((svc) => (svc.service_type || DEFAULT_TYPE).trim() || DEFAULT_TYPE))
+          new Set(augmented.services.map((svc) => (svc.service_type || DEFAULT_TYPE).trim() || DEFAULT_TYPE))
         ).sort((a, b) => a.localeCompare(b));
         setSelectedTypes(new Set(types));
       } catch (err: any) {
@@ -100,7 +118,7 @@ export function ConnectionsPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [me?.id, me?.portal]);
 
   const serviceTypes = useMemo(
     () =>
@@ -126,7 +144,8 @@ export function ConnectionsPage() {
 
   const filteredRows = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return rows.filter((row) => {
+    return rows
+      .filter((row) => {
       const typeName = (row.service.service_type || DEFAULT_TYPE).trim() || DEFAULT_TYPE;
       if (!selectedTypes.has(typeName)) return false;
       if (!q) return true;
@@ -135,7 +154,13 @@ export function ConnectionsPage() {
         typeName.toLowerCase().includes(q) ||
         appSummary(row.service).toLowerCase().includes(q)
       );
-    });
+      })
+      .sort((a, b) => {
+        const aWhatsApp = isWhatsAppService(a.service) ? 0 : 1;
+        const bWhatsApp = isWhatsAppService(b.service) ? 0 : 1;
+        if (aWhatsApp !== bWhatsApp) return aWhatsApp - bWhatsApp;
+        return a.service.name.localeCompare(b.service.name);
+      });
   }, [rows, query, selectedTypes]);
 
   const connectedRows = filteredRows.filter((row) => row.connected);

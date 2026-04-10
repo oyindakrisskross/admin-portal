@@ -126,6 +126,8 @@ export async function fetchSalesPayments(params?: {
   type_id?: string;
   start?: string;
   end?: string;
+  sort?: string;
+  order?: "asc" | "desc";
 }) {
   const res = await api.get<PaginatedResult<PaymentRecord>>(
     buildQueryPath("/api/sales/payments/", {

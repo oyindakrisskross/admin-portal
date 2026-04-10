@@ -82,13 +82,11 @@ export function downloadCsv(filename: string, csvText: string) {
 export function makeFilename(
   locationIds: number[] | "ALL", 
   start: string, 
-  end: string, 
-  itemsMode: string = ""
+  end: string
 ) {
-  // example: variations_2025-09-01_to_2025-09-30_parents_ALL.csv
   const loc =
     locationIds === "ALL" ? "ALL" : `loc_${locationIds.join("-")}`;
-  return `variations_${start}_to_${end}_${itemsMode}_${loc}.csv`;
+  return `report_${start}_to_${end}_${loc}.csv`;
 }
 
 export function toDateStr (str: string) {

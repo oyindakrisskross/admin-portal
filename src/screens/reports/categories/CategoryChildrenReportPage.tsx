@@ -63,8 +63,6 @@ export default function CategoryChildrenReportPage() {
     setSp(next, { replace: true });
   }, [end, setSp, sp, start]);
 
-  const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
-
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
 
@@ -96,7 +94,6 @@ export default function CategoryChildrenReportPage() {
       try {
         const commonArgs = {
           locationIds: locationIds === "ALL" ? undefined : locationIds,
-          itemsMode,
           groupBy: "all" as const,
           parentCategoryId,
           granularity,
@@ -135,7 +132,7 @@ export default function CategoryChildrenReportPage() {
     return () => {
       alive = false;
     };
-  }, [parentCategoryId, start, end, itemsMode, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
+  }, [parentCategoryId, start, end, locationIds, granularity, compareRange?.start, compareRange?.end, refreshTick]);
 
   const gran = data?.range.granularity ?? granularity ?? "day";
   const categories = data?.categories ?? [];
@@ -278,18 +275,6 @@ export default function CategoryChildrenReportPage() {
               </select>
             </div>
           )}
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs text-kk-dark-text-muted">Items mode</label>
-            <select
-              className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-              value={itemsMode}
-              onChange={(e) => setItemsMode(e.target.value as any)}
-            >
-              <option value="parents">Parents only (default)</option>
-              <option value="all">All lines (incl. customizations)</option>
-            </select>
-          </div>
 
           <div className="flex flex-col gap-2">
             <label className="text-xs text-kk-dark-text-muted">Granularity</label>

@@ -1,4 +1,4 @@
-// src/screens/reports/products/ProductsReportPage.tsx
+﻿// src/screens/reports/products/ProductsReportPage.tsx
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -45,8 +45,6 @@ export default function ProductsReportPage() {
   const { start, end, setStart, setEnd } = useReportDateRange();
   const { compareEnabled, compareRange, compareMode, setCompareMode } = useComparePeriod({ start, end });
   const refreshTick = useReportAutoRefresh({ start, end, onlyWhenRangeIncludesToday: true });
-
-  const [itemsMode, setItemsMode] = useState<"parents" | "all">("parents");
 
   const [outlets, setOutlets] = useState<Outlet[]>([]);
   const [locationIds, setLocationIds] = useState<number[] | "ALL">("ALL");
@@ -111,7 +109,6 @@ export default function ProductsReportPage() {
             start: rangeStart,
             end: rangeEnd,
             locationIds: locationIds === "ALL" ? undefined : locationIds,
-            itemsMode,
             granularity,
             sort,
             order,
@@ -162,7 +159,6 @@ export default function ProductsReportPage() {
     start,
     end,
     locationIds,
-    itemsMode,
     search,
     sort,
     order,
@@ -179,7 +175,7 @@ export default function ProductsReportPage() {
 
   useEffect(() => {
     fetchOutlets().then(setOutlets).catch(() => {
-      // keep non-blocking; selector can still show “All locations”
+      // keep non-blocking; selector can still show â€œAll locationsâ€
       setOutlets([]);
     });
   }, []);
@@ -283,7 +279,6 @@ export default function ProductsReportPage() {
         start,
         end,
         locationIds: locationIds === "ALL" ? undefined : locationIds,
-        itemsMode,
         granularity,
         sort,
         order,
@@ -321,7 +316,7 @@ export default function ProductsReportPage() {
       ]);
 
       const csv = [header.join(","), ...rows.map((r) => r.join(","))].join("\n");
-      downloadCsv(makeFilename(locationIds, start, end, itemsMode), csv);
+      downloadCsv(makeFilename(locationIds, start, end), csv);
     } catch (e: any) {
       setErr(e?.message ?? "Failed to export CSV");
     } finally {
@@ -380,21 +375,6 @@ export default function ProductsReportPage() {
               </select>
             </div>
             )}
-          </div>
-
-          <div className="md:col-span-1">
-            <label className="text-xs text-kk-dark-text-muted">Items mode</label>
-            <select
-              value={itemsMode}
-              onChange={(e) => {
-                setOffset(0);
-                setItemsMode(e.target.value as any);
-              }}
-              className="mt-1 w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
-            >
-              <option value="parents">Parents only (default)</option>
-              <option value="all">All lines (parents + children)</option>
-            </select>
           </div>
 
           <div className="md:col-span-1">
@@ -600,17 +580,17 @@ export default function ProductsReportPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <KpiCard
           label="Items Sold"
-          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "�"}
+          value={data ? formatNumber(Number(data.kpi.items_sold ?? 0)) : "—"}
           sub={data ? compareSub(Number(data.kpi.items_sold ?? 0), Number(compareData?.kpi.items_sold ?? 0), formatNumber) : undefined}
         />
         <KpiCard
           label="Net Sales"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "�"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_sales ?? 0)) : "—"}
           sub={data ? compareSub(Number(data.kpi.net_sales ?? 0), Number(compareData?.kpi.net_sales ?? 0), formatMoneyNGN) : undefined}
         />
         <KpiCard
           label="Net Discount"
-          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "�"}
+          value={data ? formatMoneyNGN(Number(data.kpi.net_discount ?? 0)) : "—"}
           sub={
             data
               ? compareSub(Number(data.kpi.net_discount ?? 0), Number(compareData?.kpi.net_discount ?? 0), formatMoneyNGN)
@@ -619,7 +599,7 @@ export default function ProductsReportPage() {
         />
         <KpiCard
           label="Orders"
-          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "�"}
+          value={data ? formatNumber(Number(data.kpi.orders ?? 0)) : "—"}
           sub={data ? compareSub(Number(data.kpi.orders ?? 0), Number(compareData?.kpi.orders ?? 0), formatNumber) : undefined}
         />
       </div>
@@ -786,4 +766,5 @@ export default function ProductsReportPage() {
       </div>
   );
 }
+
 

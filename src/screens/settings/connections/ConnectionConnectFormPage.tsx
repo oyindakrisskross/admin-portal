@@ -3,9 +3,17 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
 import { fetchConnectionSetting, upsertConnectionSetting } from "../../../api/payments";
+import { useAuth } from "../../../auth/AuthContext";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import ToastModal from "../../../components/ui/ToastModal";
 import type { ConnectionSetting } from "../../../types/payments";
+import {
+  formatConnectionModeLabel,
+  isWhatsAppService,
+  loadWhatsAppConnectionWithFallback,
+  saveWhatsAppConnectionWithFallback,
+  WHATSAPP_SERVICE_KEY,
+} from "../../../utils/whatsapp";
 
 const META_CONNECTION_NAME = "meta_connection_name";
 const META_SCOPE = "meta_scope";
@@ -48,13 +56,51 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function whatsappPlaceholderFor(label: string) {
+  const lowered = label.toLowerCase();
+  if (lowered.includes("access token")) return "EAAG... system user token with WhatsApp permissions";
+  if (lowered.includes("business account")) return "WhatsApp Business Account ID";
+  if (lowered.includes("phone number id")) return "Phone Number ID from the Meta app dashboard";
+  if (lowered.includes("portfolio") || lowered.includes("business id")) return "Business Portfolio ID";
+  if (lowered.includes("display phone")) return "+234...";
+  if (lowered.includes("app secret")) return "Meta app secret used for webhook signature validation";
+  if (lowered.includes("verify token")) return "A token you will also configure in Meta webhooks";
+  if (lowered.includes("graph api version")) return "v24.0";
+  return label;
+}
+
+function whatsappHintFor(label: string) {
+  const lowered = label.toLowerCase();
+  if (lowered.includes("access token")) {
+    return "Use a permanent system user token with whatsapp_business_management and whatsapp_business_messaging access.";
+  }
+  if (lowered.includes("business account")) {
+    return "This is the WhatsApp Business Account ID used for template management and phone number discovery.";
+  }
+  if (lowered.includes("phone number id")) {
+    return "This is the sender profile ID used for outbound /messages requests.";
+  }
+  if (lowered.includes("app secret")) {
+    return "Webhook POSTs are signed with this Meta app secret and rejected if the signature does not match.";
+  }
+  if (lowered.includes("verify token")) {
+    return "Use the same value when you configure your webhook subscription in the Meta app.";
+  }
+  if (lowered.includes("graph api version")) {
+    return "Keep this aligned with the version enabled in your Meta app.";
+  }
+  return "";
+}
+
 export function ConnectionConnectFormPage() {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
+  const { me } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [setting, setSetting] = useState<ConnectionSetting | null>(null);
+  const [connectionMode, setConnectionMode] = useState<"remote" | "session">("remote");
   const [values, setValues] = useState<Record<string, string>>({});
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
@@ -71,24 +117,29 @@ export function ConnectionConnectFormPage() {
     (async () => {
       setLoading(true);
       try {
-        const detail = await fetchConnectionSetting(appId);
+        const detail =
+          appId === WHATSAPP_SERVICE_KEY
+            ? await loadWhatsAppConnectionWithFallback({ portalId: me?.portal, userId: me?.id })
+            : { mode: "remote" as const, setting: await fetchConnectionSetting(appId) };
         if (!mounted) return;
 
-        setSetting(detail);
+        setSetting(detail.setting);
+        setConnectionMode(detail.mode);
 
         const initial: Record<string, string> = {};
-        const inputValues = isPlainObject(detail.connection_inputs) ? detail.connection_inputs : {};
+        const inputValues = isPlainObject(detail.setting.connection_inputs) ? detail.setting.connection_inputs : {};
 
-        for (const label of detail.required_connection_inputs) {
+        for (const label of detail.setting.required_connection_inputs) {
           initial[`in_${toFieldKey(label)}`] = toStringValue(inputValues[toFieldKey(label)]);
         }
 
-        initial[META_CONNECTION_NAME] = detail.connection_name || `${detail.service_name} Connection`;
-        initial[META_SCOPE] = detail.scope || DEFAULT_SCOPE;
-        initial[META_SERVICE_LINK] = detail.service_link_name || detail.service_name;
-        initial[META_ASSOCIATIONS] = detail.connections_associated || DEFAULT_ASSOCIATIONS;
+        initial[META_CONNECTION_NAME] =
+          detail.setting.connection_name || `${detail.setting.service_name} Connection`;
+        initial[META_SCOPE] = detail.setting.scope || DEFAULT_SCOPE;
+        initial[META_SERVICE_LINK] = detail.setting.service_link_name || detail.setting.service_name;
+        initial[META_ASSOCIATIONS] = detail.setting.connections_associated || DEFAULT_ASSOCIATIONS;
         setValues(initial);
-        setSelectedOptions(new Set(detail.integration_targets || []));
+        setSelectedOptions(new Set(detail.setting.integration_targets || []));
       } catch (err: any) {
         if (!mounted) return;
         showToast(err?.response?.data?.detail || "Failed to load connection details.");
@@ -102,7 +153,7 @@ export function ConnectionConnectFormPage() {
     return () => {
       mounted = false;
     };
-  }, [appId]);
+  }, [appId, me?.id, me?.portal]);
 
   if (!appId) {
     return (
@@ -120,6 +171,11 @@ export function ConnectionConnectFormPage() {
   }
 
   const integrationOptions = setting?.integration_options || [];
+  const isWhatsApp = isWhatsAppService({
+    key: setting?.service_key,
+    name: setting?.service_name,
+    service_type: setting?.service_type,
+  });
 
   const toggleIntegrationOption = (option: string) => {
     setSelectedOptions((prev) => {
@@ -184,20 +240,47 @@ export function ConnectionConnectFormPage() {
         }
       }
 
-      await upsertConnectionSetting(setting.service_key, {
-        status: "CONNECTED",
-        connection_name: (values[META_CONNECTION_NAME] || `${setting.service_name} Connection`).trim(),
-        scope: (values[META_SCOPE] || DEFAULT_SCOPE).trim(),
-        service_link_name: (values[META_SERVICE_LINK] || setting.service_name).trim(),
-        connections_associated: (values[META_ASSOCIATIONS] || DEFAULT_ASSOCIATIONS).trim(),
-        integration_targets: integrationTargets,
-        connection_inputs: connectionInputs,
-        connection_outputs: connectionOutputs,
-        last_ping_success: true,
-        last_ping_message: "Connection saved successfully.",
-      });
+      const result =
+        setting.service_key === WHATSAPP_SERVICE_KEY
+          ? await saveWhatsAppConnectionWithFallback(
+              { portalId: me?.portal, userId: me?.id },
+              {
+                status: "CONNECTED",
+                connection_name: (values[META_CONNECTION_NAME] || `${setting.service_name} Connection`).trim(),
+                scope: (values[META_SCOPE] || DEFAULT_SCOPE).trim(),
+                service_link_name: (values[META_SERVICE_LINK] || setting.service_name).trim(),
+                connections_associated: (values[META_ASSOCIATIONS] || DEFAULT_ASSOCIATIONS).trim(),
+                integration_targets: integrationTargets,
+                connection_inputs: connectionInputs,
+                connection_outputs: connectionOutputs,
+                last_ping_success: true,
+                last_ping_message: "Connection saved successfully.",
+              }
+            )
+          : {
+              mode: "remote" as const,
+              setting: await upsertConnectionSetting(setting.service_key, {
+                status: "CONNECTED",
+                connection_name: (values[META_CONNECTION_NAME] || `${setting.service_name} Connection`).trim(),
+                scope: (values[META_SCOPE] || DEFAULT_SCOPE).trim(),
+                service_link_name: (values[META_SERVICE_LINK] || setting.service_name).trim(),
+                connections_associated: (values[META_ASSOCIATIONS] || DEFAULT_ASSOCIATIONS).trim(),
+                integration_targets: integrationTargets,
+                connection_inputs: connectionInputs,
+                connection_outputs: connectionOutputs,
+                last_ping_success: true,
+                last_ping_message: "Connection saved successfully.",
+              }),
+            };
 
-      showToast("Connection saved.", "success");
+      setConnectionMode(result.mode);
+      setSetting(result.setting);
+      showToast(
+        result.mode === "session"
+          ? "Connection saved in this browser session."
+          : "Connection saved.",
+        "success"
+      );
       navigate(`/settings/connections/${setting.service_key}`);
     } catch (err: any) {
       showToast(err?.response?.data?.detail || "Failed to save connection.");
@@ -226,6 +309,20 @@ export function ConnectionConnectFormPage() {
             </div>
           ) : (
             <>
+              {connectionMode === "session" ? (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-100">
+                  Saving mode: {formatConnectionModeLabel(connectionMode)}. This WhatsApp connection is kept in the
+                  current browser session because the backend does not yet expose a WhatsApp connection service.
+                </div>
+              ) : null}
+
+              {isWhatsApp ? (
+                <div className="rounded-md border border-kk-dark-border bg-kk-dark-bg p-3 text-xs text-kk-dark-text-muted">
+                  Configure the Meta system-user token, WhatsApp Business Account ID, and sender phone number ID here.
+                  Template submission uses the WABA ID, while outbound messages are sent through the phone number ID.
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 {setting.required_connection_inputs.map((label) => {
                   const key = toFieldKey(label);
@@ -240,9 +337,12 @@ export function ConnectionConnectFormPage() {
                         type={inputTypeFor(label)}
                         value={values[valueKey] || ""}
                         onChange={(e) => setValues((prev) => ({ ...prev, [valueKey]: e.target.value }))}
-                        placeholder={label}
+                        placeholder={isWhatsApp ? whatsappPlaceholderFor(label) : label}
                         className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
                       />
+                      {isWhatsApp && whatsappHintFor(label) ? (
+                        <p className="text-[11px] text-kk-dark-text-muted">{whatsappHintFor(label)}</p>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -317,7 +417,7 @@ export function ConnectionConnectFormPage() {
                   className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                  Connect
+                  {setting.status === "CONNECTED" ? "Save Connection" : "Connect"}
                 </button>
               </div>
             </>
