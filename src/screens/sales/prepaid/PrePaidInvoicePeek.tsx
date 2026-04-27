@@ -45,6 +45,12 @@ export const PrePaidInvoicePeek: React.FC<Props> = ({ invoice }) => {
   const paymentHistory = [...(invoice.payments || [])].sort(
     (a, b) => new Date(b.paid_on).getTime() - new Date(a.paid_on).getTime()
   );
+  const appliedCouponCodes = (invoice.coupon_codes && invoice.coupon_codes.length
+    ? invoice.coupon_codes
+    : invoice.coupon_code
+      ? [invoice.coupon_code]
+      : []
+  ).filter(Boolean);
 
   const canSendEmail = Boolean(invoice.portal_customer || invoice.customer);
 
@@ -199,6 +205,12 @@ export const PrePaidInvoicePeek: React.FC<Props> = ({ invoice }) => {
                       <p>Discount</p>
                       <p>{formatMoneyNGN(+invoice.discount_total)}</p>
                     </div>
+                    {appliedCouponCodes.length > 0 && +invoice.discount_total > 0 ? (
+                      <div className="flex justify-between text-xs text-kk-dark-text-muted">
+                        <p>Code{appliedCouponCodes.length > 1 ? "s" : ""}</p>
+                        <p>{appliedCouponCodes.join(", ")}</p>
+                      </div>
+                    ) : null}
                     <div className="flex justify-between">
                       <p>VAT (7.5%)</p>
                       <p>{formatMoneyNGN(+invoice.tax_total)}</p>

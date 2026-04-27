@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Plus, RefreshCcw, Search, TicketPercent } from "lucide-react";
 
@@ -7,11 +7,27 @@ import ListPageHeader from "../../../components/layout/ListPageHeader";
 import SidePeek from "../../../components/layout/SidePeek";
 import type { Coupon } from "../../../types/promotions";
 import { ACTION_CHOICES } from "../../../types/promotions";
-import { deleteCoupon, fetchCoupons, resetCouponUsage } from "../../../api/promotions";
+import {
+  bulkCoupons,
+  deleteCoupon,
+  fetchCoupons,
+  resetCouponUsage,
+} from "../../../api/promotions";
 import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { CouponPeek } from "./CouponPeek";
-import { PencilSquareIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  CalendarDaysIcon,
+  PencilSquareIcon,
+  PlayIcon,
+  PauseIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import ToastModal from "../../../components/ui/ToastModal";
+import { FilterBar } from "../../../components/filter/FilterBar";
+import { BulkActionBar } from "../../../components/catalog/bulk/BulkActionBar";
+import { RowSelectCheckbox } from "../../../components/catalog/bulk/RowSelectCheckbox";
+import { BulkCouponDateModal } from "../../../components/promotions/BulkCouponDateModal";
+import type { ColumnMeta, FilterSet } from "../../../types/filters";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
@@ -27,6 +43,7 @@ export const CouponListPage: React.FC = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [selectedCoupon, setSelectedCoupon] = useState<Coupon | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [filters, setFilters] = useState<FilterSet>({ clauses: [] });
   const [sort, setSort] = useState<
     SortState<
       "name" | "code" | "id" | "action" | "start" | "end" | "status" | "description"
@@ -38,15 +55,66 @@ export const CouponListPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkDateAction, setBulkDateAction] = useState<"set_start_date" | "set_end_date" | null>(
+    null
+  );
 
   const hasPeek = !!selectedCoupon;
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("success");
 
+  const filterColumns: ColumnMeta[] = useMemo(
+    () => [
+      {
+        id: "status",
+        label: "Status",
+        type: "choice",
+        choices: [
+          { value: "ACTIVE", label: "Active" },
+          { value: "INACTIVE", label: "Inactive" },
+        ],
+      },
+      { id: "name", label: "Name", type: "text" },
+      { id: "code", label: "Code", type: "text" },
+      {
+        id: "action_type",
+        label: "Coupon action type",
+        type: "choice",
+        choices: ACTION_CHOICES.map((choice) => ({
+          value: choice.value,
+          label: choice.label,
+        })),
+      },
+    ],
+    []
+  );
+
   const showToast = (message: string, variant: "error" | "success" | "info" = "success") => {
     setToastVariant(variant);
     setToastMessage(message);
   };
+
+  const extractApiDetail = (err: any, fallback: string) => {
+    const data = err?.response?.data;
+    if (typeof data === "string") return data;
+    if (data?.detail) return String(data.detail);
+    return fallback;
+  };
+
+  const toggleSelected = (couponId: number, checked?: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const shouldSelect = checked ?? !next.has(couponId);
+      if (shouldSelect) next.add(couponId);
+      else next.delete(couponId);
+      return Array.from(next);
+    });
+  };
+
+  const clearSelection = () => setSelectedIds([]);
 
   const applySort = (
     key: "name" | "code" | "id" | "action" | "start" | "end" | "status" | "description"
@@ -67,19 +135,26 @@ export const CouponListPage: React.FC = () => {
       setLoading(true);
       try {
         const data = await fetchCoupons({
+          filters,
           search: debouncedSearch || undefined,
           page,
           page_size: pageSize,
           ...(sort ? { sort: sort.key, order: sort.dir } : {}),
         });
         if (!cancelled) {
-          setCoupons(data.results ?? []);
+          const results = data.results ?? [];
+          setCoupons(results);
           setTotalCount(Number(data.count ?? 0));
+          const visible = new Set(
+            results.map((row: any) => Number(row.id)).filter((value: number) => Number.isFinite(value))
+          );
+          setSelectedIds((prev) => prev.filter((couponId) => visible.has(couponId)));
         }
       } catch {
         if (!cancelled) {
           setCoupons([]);
           setTotalCount(0);
+          setSelectedIds([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -89,7 +164,7 @@ export const CouponListPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [debouncedSearch, page, pageSize, sort]);
+  }, [debouncedSearch, filters, page, pageSize, sort]);
 
   useEffect(() => {
     if (!hasId || !coupons.length) return;
@@ -152,6 +227,107 @@ export const CouponListPage: React.FC = () => {
       const data = err?.response?.data;
       const detail = typeof data === "string" ? data : data?.detail;
       showToast(String(detail ?? "Unable to reset coupon usage."), "error");
+    }
+  };
+
+  const handleBulkStatusUpdate = async (active: boolean) => {
+    setBulkBusy(true);
+    try {
+      const res = await bulkCoupons({
+        ids: selectedIds,
+        action: active ? "make_active" : "make_inactive",
+      });
+      const okSet = new Set((res.ok_ids ?? []).map(Number));
+      setCoupons((prev) =>
+        prev.map((coupon) =>
+          okSet.has(Number(coupon.id)) ? { ...coupon, active } : coupon
+        )
+      );
+      showToast(`Updated ${okSet.size} coupon(s).`, "success");
+    } catch (err: any) {
+      showToast(extractApiDetail(err, "Bulk update failed."), "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!selectedIds.length) return;
+    if (
+      !confirm(
+        "Delete the selected coupons? Coupons already used in a transaction will be deactivated instead."
+      )
+    ) {
+      return;
+    }
+
+    setBulkBusy(true);
+    try {
+      const res = await bulkCoupons({ ids: selectedIds, action: "delete" });
+      const deletedSet = new Set((res.deleted_ids ?? []).map(Number));
+      const deactivatedSet = new Set((res.deactivated_ids ?? []).map(Number));
+      const failedIds = (res.failed ?? []).map((failure) => Number(failure.id)).filter(Number.isFinite);
+
+      if (deletedSet.size || deactivatedSet.size) {
+        setCoupons((prev) =>
+          prev
+            .filter((coupon) => !deletedSet.has(Number(coupon.id)))
+            .map((coupon) =>
+              deactivatedSet.has(Number(coupon.id)) ? { ...coupon, active: false } : coupon
+            )
+        );
+        setTotalCount((prev) => Math.max(0, prev - deletedSet.size));
+      }
+
+      if (failedIds.length) {
+        setSelectedIds(failedIds);
+      } else {
+        clearSelection();
+      }
+
+      const deletedCount = deletedSet.size;
+      const deactivatedCount = deactivatedSet.size;
+      if (deletedCount || deactivatedCount) {
+        const parts: string[] = [];
+        if (deletedCount) parts.push(`Deleted ${deletedCount} coupon(s)`);
+        if (deactivatedCount) parts.push(`Deactivated ${deactivatedCount} used coupon(s)`);
+        showToast(`${parts.join(". ")}.`, deactivatedCount ? "info" : "success");
+      } else if (!failedIds.length) {
+        showToast("No coupons were updated.", "info");
+      }
+    } catch (err: any) {
+      showToast(extractApiDetail(err, "Bulk delete failed."), "error");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const handleBulkDateApply = async (value: string) => {
+    if (!bulkDateAction) return;
+
+    setBulkBusy(true);
+    try {
+      const res = await bulkCoupons({
+        ids: selectedIds,
+        action: bulkDateAction,
+        value,
+      });
+      const okSet = new Set((res.ok_ids ?? []).map(Number));
+      const field = bulkDateAction === "set_start_date" ? "start_at" : "end_at";
+      setCoupons((prev) =>
+        prev.map((coupon) =>
+          okSet.has(Number(coupon.id)) ? { ...coupon, [field]: value } : coupon
+        )
+      );
+      showToast(
+        `${bulkDateAction === "set_start_date" ? "Start" : "End"} date updated for ${okSet.size} coupon(s).`,
+        "success"
+      );
+      setBulkDateAction(null);
+    } catch (err: any) {
+      showToast(extractApiDetail(err, "Bulk date update failed."), "error");
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -231,6 +407,15 @@ export const CouponListPage: React.FC = () => {
                     placeholder="Search coupon name or code"
                   />
                 </div>
+                <FilterBar
+                  columns={filterColumns}
+                  filters={filters}
+                  showPills={false}
+                  onChange={(next) => {
+                    setFilters(next);
+                    setPage(1);
+                  }}
+                />
                 {can("Coupons", "create") ? (
                   <button
                     onClick={() => navigate("/promotions/coupons/new")}
@@ -243,7 +428,68 @@ export const CouponListPage: React.FC = () => {
               </div>
             ) : null
           }
+          below={
+            !hasPeek ? (
+              <FilterBar
+                columns={filterColumns}
+                filters={filters}
+                showTrigger={false}
+                onChange={(next) => {
+                  setFilters(next);
+                  setPage(1);
+                }}
+              />
+            ) : null
+          }
         />
+
+        {!hasPeek && selectedIds.length > 0 && (
+          <BulkActionBar
+            count={selectedIds.length}
+            onClear={clearSelection}
+            actions={[
+              {
+                key: "delete",
+                label: "Delete",
+                icon: <TrashIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Coupons", "delete"),
+                onClick: handleBulkDelete,
+              },
+              {
+                key: "inactive",
+                label: "Make inactive",
+                icon: <PauseIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Coupons", "edit"),
+                onClick: () => {
+                  void handleBulkStatusUpdate(false);
+                },
+              },
+              {
+                key: "active",
+                label: "Make active",
+                icon: <PlayIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Coupons", "edit"),
+                onClick: () => {
+                  void handleBulkStatusUpdate(true);
+                },
+              },
+              {
+                key: "start_date",
+                label: "Set start date",
+                icon: <CalendarDaysIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Coupons", "edit"),
+                onClick: () => setBulkDateAction("set_start_date"),
+              },
+              {
+                key: "end_date",
+                label: "Set end date",
+                icon: <CalendarDaysIcon className="h-4 w-4" />,
+                disabled: bulkBusy || !can("Coupons", "edit"),
+                onClick: () => setBulkDateAction("set_end_date"),
+              },
+            ]}
+          />
+        )}
 
         {paginationControls}
 
@@ -251,6 +497,7 @@ export const CouponListPage: React.FC = () => {
           <table className="min-w-full">
             <thead>
               <tr>
+                {!hasPeek && <th className="w-10" />}
                 <th
                   className="cursor-pointer select-none"
                   onClick={() => applySort("name")}
@@ -308,7 +555,30 @@ export const CouponListPage: React.FC = () => {
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id} className="cursor-pointer" onClick={() => openCoupon(c)}>
+                <tr
+                  key={c.id}
+                  className={[
+                    "cursor-pointer group",
+                    !hasPeek && selectedIdSet.has(Number(c.id)) ? "bg-blue-600/10" : "",
+                  ].join(" ")}
+                  onClick={() => {
+                    if (!hasPeek && selectedIds.length) {
+                      toggleSelected(c.id!, !selectedIdSet.has(c.id!));
+                      return;
+                    }
+                    openCoupon(c);
+                  }}
+                >
+                  {!hasPeek && (
+                    <td className="w-10 px-2">
+                      <div className={selectedIdSet.has(c.id!) ? "" : "opacity-0 group-hover:opacity-100"}>
+                        <RowSelectCheckbox
+                          checked={selectedIdSet.has(c.id!)}
+                          onChange={(checked) => toggleSelected(c.id!, checked)}
+                        />
+                      </div>
+                    </td>
+                  )}
                   <td>
                     {!hasPeek ? (
                       c.name
@@ -364,7 +634,7 @@ export const CouponListPage: React.FC = () => {
               {loading && (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 1 : 8}
+                    colSpan={hasPeek ? 1 : 9}
                     className="px-3 py-6 text-center text-xs text-kk-dark-text-muted"
                   >
                     Loading coupons...
@@ -375,7 +645,7 @@ export const CouponListPage: React.FC = () => {
               {!loading && !rows.length && (
                 <tr>
                   <td
-                    colSpan={hasPeek ? 1 : 8}
+                    colSpan={hasPeek ? 1 : 9}
                     className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
                   >
                     No coupons yet. Click "New" to create your first one.
@@ -427,6 +697,19 @@ export const CouponListPage: React.FC = () => {
         message={toastMessage}
         variant={toastVariant}
         onClose={() => setToastMessage(null)}
+      />
+      <BulkCouponDateModal
+        open={bulkDateAction !== null}
+        busy={bulkBusy}
+        title={bulkDateAction === "set_start_date" ? "Set start date" : "Set end date"}
+        description={
+          bulkDateAction === "set_start_date"
+            ? "Apply the same start date and time to all selected coupons."
+            : "Apply the same end date and time to all selected coupons."
+        }
+        label={bulkDateAction === "set_start_date" ? "Start date" : "End date"}
+        onClose={() => setBulkDateAction(null)}
+        onApply={handleBulkDateApply}
       />
     </div>
   );

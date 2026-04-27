@@ -3,7 +3,7 @@
 import api from "./client";
 import { buildQueryPath } from "./query";
 import type { PaginatedResult } from "./types";
-import { type InvoiceResponse, type PaymentRecord } from "../types/invoice";
+import { type InvoiceResponse, type PaymentRecord, type PriceCartPreviewResponse } from "../types/invoice";
 import type { FilterSet } from "../types/filters";
 
 export async function fetchOrders(params?: (Record<string, any> & { filters?: FilterSet })) {
@@ -60,11 +60,23 @@ export type CreatePrepaidInvoicePayload = {
   payment_made?: boolean;
   amount_paid?: string | number;
   payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER" | string;
+  coupon_code?: string;
+  coupon_codes?: string[];
   items: PrepaidCreateItemInput[];
 };
 
 export async function createPrepaidInvoice(payload: CreatePrepaidInvoicePayload) {
   const res = await api.post<InvoiceResponse>("/api/sales/prepaid/create/", payload);
+  return res.data;
+}
+
+export async function fetchPriceCartPreview(payload: {
+  location: number;
+  coupon_code?: string;
+  coupon_codes?: string[];
+  items: PrepaidCreateItemInput[];
+}) {
+  const res = await api.post<PriceCartPreviewResponse>("/api/sales/price-cart/", payload);
   return res.data;
 }
 
@@ -76,6 +88,8 @@ export type UpdatePrepaidInvoicePayload = {
   payment_made?: boolean;
   amount_paid?: string | number;
   payment_method?: "CASH" | "CARD" | "TRANSFER" | "OTHER" | string;
+  coupon_code?: string;
+  coupon_codes?: string[];
   items?: PrepaidCreateItemInput[];
 };
 

@@ -8,31 +8,32 @@ import {
   HashtagIcon,
   MapPinIcon,
   ScaleIcon,
+  TagIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
 
-import type { InventoryTransfer } from "../../../types/catalog";
+import type { InventoryAdjustmentOrder } from "../../../types/catalog";
 import { useAuth } from "../../../auth/AuthContext";
 import SidePeek from "../../../components/layout/SidePeek";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
 import ToastModal from "../../../components/ui/ToastModal";
-import { fetchInventoryTransfers } from "../../../api/catalog";
-import { InventoryTransferPeek } from "./InventoryTransferPeek";
+import { fetchInventoryAdjustments } from "../../../api/catalog";
+import { InventoryAdjustmentPeek } from "./InventoryAdjustmentPeek";
 
 const badgeClass = (status?: string) => {
-  if (status === "TRANSFERRED") return "bg-emerald-600/20 text-emerald-300 border-emerald-600/30";
+  if (status === "ADJUSTED") return "bg-emerald-600/20 text-emerald-300 border-emerald-600/30";
   if (status === "PENDING") return "bg-yellow-600/20 text-yellow-200 border-yellow-600/30";
   return "bg-gray-600/20 text-gray-200 border-gray-600/30";
 };
 
-export const InventoryTransferListPage: React.FC = () => {
+export const InventoryAdjustmentListPage: React.FC = () => {
   const { can } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams();
   const hasId = Boolean(id);
 
-  const [rows, setRows] = useState<InventoryTransfer[]>([]);
-  const [selected, setSelected] = useState<InventoryTransfer | null>(null);
+  const [rows, setRows] = useState<InventoryAdjustmentOrder[]>([]);
+  const [selected, setSelected] = useState<InventoryAdjustmentOrder | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [toastVariant, setToastVariant] = useState<"error" | "success" | "info">("error");
@@ -50,18 +51,18 @@ export const InventoryTransferListPage: React.FC = () => {
   };
 
   const refresh = async () => {
-    const data = await fetchInventoryTransfers();
+    const data = await fetchInventoryAdjustments();
     setRows(data.results ?? []);
   };
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
 
   useEffect(() => {
     if (!hasId || !rows.length) return;
-    const transferId = Number(id);
-    const match = rows.find((r) => r.id === transferId);
+    const adjustmentId = Number(id);
+    const match = rows.find((row) => row.id === adjustmentId);
     if (match) {
       setSelected(match);
       setSelectedId(match.id!);
@@ -81,16 +82,16 @@ export const InventoryTransferListPage: React.FC = () => {
     <div className="flex-1 flex gap-4">
       <div className={`flex flex-col gap-4 ${!hasPeek ? "w-full" : "w-1/4"} ${hasPeek ? "h-screen overflow-hidden" : ""}`}>
         <ListPageHeader
-          icon={<span className="text-lg">📦</span>}
+          icon={<span className="text-lg">#</span>}
           section="Catalog"
-          title="Transfer Orders"
-          subtitle="Record inventory movement between locations."
+          title="Inventory Adjustments"
+          subtitle="Review draft, pending, and completed stock adjustment orders."
           right={
             !hasPeek ? (
               <div className="flex items-center gap-2 text-xs">
-                {can("Transfer Orders", "create") && (
+                {can("Inventory Adjustment", "create") && (
                   <button
-                    onClick={() => navigate("/catalog/transfer-inventory/new")}
+                    onClick={() => navigate("/catalog/inventory-adjustment/new")}
                     className="new inline-flex items-center gap-1 rounded-full"
                   >
                     <Plus className="h-3 w-3" />
@@ -114,11 +115,15 @@ export const InventoryTransferListPage: React.FC = () => {
                 </th>
                 <th>
                   <HashtagIcon className="table-icon" />
-                  Transfer #
+                  Adjustment #
                 </th>
                 <th>
                   <DocumentTextIcon className="table-icon" />
                   Description
+                </th>
+                <th>
+                  <TagIcon className="table-icon" />
+                  Reason
                 </th>
                 <th>
                   <BoltIcon className="table-icon" />
@@ -130,11 +135,7 @@ export const InventoryTransferListPage: React.FC = () => {
                 </th>
                 <th>
                   <MapPinIcon className="table-icon" />
-                  Source
-                </th>
-                <th>
-                  <MapPinIcon className="table-icon" />
-                  Destination
+                  Location
                 </th>
                 <th>
                   <UserIcon className="table-icon" />
@@ -143,37 +144,37 @@ export const InventoryTransferListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((r) => (
+              {sortedRows.map((row) => (
                 <tr
-                  key={r.id}
+                  key={row.id}
                   className={[
                     "cursor-pointer group",
-                    selectedId === r.id ? "bg-blue-600/10" : "",
+                    selectedId === row.id ? "bg-blue-600/10" : "",
                   ].join(" ")}
                   onClick={() => {
-                    setSelected(r);
-                    setSelectedId(r.id!);
-                    navigate(`/catalog/transfer-inventory/${r.id}`);
+                    setSelected(row);
+                    setSelectedId(row.id!);
+                    navigate(`/catalog/inventory-adjustment/${row.id}`);
                   }}
                 >
-                  <td>{r.request_date ? new Date(r.request_date).toLocaleDateString() : "-"}</td>
-                  <td>{r.number ?? "-"}</td>
-                  <td>{r.description || "-"}</td>
+                  <td>{row.request_date ? new Date(row.request_date).toLocaleDateString() : "-"}</td>
+                  <td>{row.number ?? "-"}</td>
+                  <td>{row.description || "-"}</td>
+                  <td>{row.reason ?? "-"}</td>
                   <td>
-                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${badgeClass(r.status)}`}>
-                      {r.status ?? "DRAFT"}
+                    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${badgeClass(row.status)}`}>
+                      {row.status ?? "DRAFT"}
                     </span>
                   </td>
-                  <td>{r.total_quantity ?? "-"}</td>
-                  <td>{r.source_location_name ?? r.source_location}</td>
-                  <td>{r.destination_location_name ?? r.destination_location}</td>
-                  <td>{r.created_by_email ?? "-"}</td>
+                  <td>{row.total_quantity ?? "-"}</td>
+                  <td>{row.location_name ?? row.location}</td>
+                  <td>{row.created_by_email ?? "-"}</td>
                 </tr>
               ))}
               {!sortedRows.length && (
                 <tr>
                   <td className="px-3 py-10 text-center text-xs text-kk-dark-text-muted" colSpan={8}>
-                    No transfers yet.
+                    No inventory adjustments yet.
                   </td>
                 </tr>
               )}
@@ -186,33 +187,29 @@ export const InventoryTransferListPage: React.FC = () => {
         isOpen={!!selected}
         onClose={() => {
           closePeek();
-          navigate("/catalog/transfer-inventory");
+          navigate("/catalog/inventory-adjustment");
         }}
         widthClass="w-3/4"
-        actions={<div className="text-xs font-semibold">{selected?.number ?? "Transfer"}</div>}
+        actions={<div className="text-xs font-semibold">{selected?.number ?? "Adjustment"}</div>}
       >
         {selected && (
-          <InventoryTransferPeek
-            transfer={selected}
+          <InventoryAdjustmentPeek
+            adjustment={selected}
             showToast={showToast}
             onUpdated={(next) => {
               setSelected(next);
-              setRows((prev) => prev.map((p) => (p.id === next.id ? next : p)));
+              setRows((prev) => prev.map((row) => (row.id === next.id ? next : row)));
             }}
             onDeleted={() => {
-              setRows((prev) => prev.filter((p) => p.id !== selected.id));
+              setRows((prev) => prev.filter((row) => row.id !== selected.id));
               closePeek();
-              navigate("/catalog/transfer-inventory");
+              navigate("/catalog/inventory-adjustment");
             }}
           />
         )}
       </SidePeek>
 
-      <ToastModal
-        message={toastMessage}
-        variant={toastVariant}
-        onClose={() => setToastMessage(null)}
-      />
+      <ToastModal message={toastMessage} variant={toastVariant} onClose={() => setToastMessage(null)} />
     </div>
   );
 };

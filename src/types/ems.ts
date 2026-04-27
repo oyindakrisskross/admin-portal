@@ -14,6 +14,77 @@ export type JobPosition = {
   is_active?: boolean;
 };
 
+export type LeavePolicyScope = "COMPANY_WIDE" | "DEPARTMENT" | "POSITION";
+export type LeavePolicyUnit = "DAYS" | "HOURS";
+export type LeaveAccrualMode = "NONE" | "HOURS_WORKED" | "MONTHLY" | "YEARLY" | "TENURE_SCHEDULE";
+export type LeaveResetFrequency = "NONE" | "MONTHLY" | "YEARLY" | "CUSTOM_MONTHS" | "HIRE_ANNIVERSARY";
+
+export type LeavePolicyTier = {
+  after_months: number;
+  grant: number | string;
+  cap?: number | string | null;
+};
+
+export type LeavePolicyRate = {
+  hours_worked?: number | string | null;
+  hours_earned?: number | string | null;
+  amount?: number | string | null;
+};
+
+export type LeavePolicyConfig = {
+  unit: LeavePolicyUnit;
+  wait_period_months: number;
+  starting_balance: number | string;
+  accrual_mode: LeaveAccrualMode;
+  accrual_rate: LeavePolicyRate;
+  tiers: LeavePolicyTier[];
+  cap?: number | string | null;
+  reset: {
+    enabled: boolean;
+    frequency: LeaveResetFrequency;
+    interval_months?: number | null;
+    amount?: number | string | null;
+  };
+  rollover: {
+    enabled: boolean;
+    cap?: number | string | null;
+    expiry_months?: number | null;
+  };
+};
+
+export type LeavePolicyOverride = {
+  department?: number | null;
+  position?: number | null;
+  policy: LeavePolicyConfig;
+};
+
+export type EmsHoliday = {
+  name: string;
+  date: string;
+  repeats_annually?: boolean;
+};
+
+export type EmsSettings = {
+  id?: number;
+  portal?: number | null;
+  portal_name?: string | null;
+  pto_scope: LeavePolicyScope;
+  pto_policy: LeavePolicyConfig;
+  pto_fallback_policy: LeavePolicyConfig;
+  pto_overrides: LeavePolicyOverride[];
+  sick_scope: LeavePolicyScope;
+  sick_policy: LeavePolicyConfig;
+  sick_fallback_policy: LeavePolicyConfig;
+  sick_overrides: LeavePolicyOverride[];
+  regular_day_multiplier: number | string;
+  holiday_multiplier: number | string;
+  holiday_calendar: EmsHoliday[];
+  department_options?: Department[];
+  position_options?: JobPosition[];
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type Employee = {
   id?: number;
   contact: number;
@@ -46,10 +117,16 @@ export type Employee = {
   last_name?: string | null;
   email?: string | null;
   phone?: string | null;
+  pto_available_days?: number | string | null;
   pto_used_days?: number | string | null;
+  pto_remaining_days?: number | string | null;
+  sick_available_days?: number | string | null;
   sick_used_days?: number | string | null;
+  sick_remaining_days?: number | string | null;
   compensation_history?: EmployeeCompensationHistory[];
   change_reason?: string | null;
+  calculated_hourly_rate?: number | string | null;
+  calculated_hourly_rate_note?: string | null;
 };
 
 export type EmployeeCompensationHistory = {

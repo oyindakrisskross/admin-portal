@@ -3,7 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { TicketPercent, Loader2 } from "lucide-react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 
-import type { Coupon, CouponSchedule } from "../../types/promotions";
+import {
+  COUPON_COMBINE_DISCOUNT_BASIS_OPTIONS,
+  type Coupon,
+  type CouponSchedule,
+} from "../../types/promotions";
 import ListPageHeader from "../layout/ListPageHeader";
 import ToastModal from "../ui/ToastModal";
 import { createCoupon, updateCoupon } from "../../api/promotions";
@@ -14,7 +18,8 @@ import {
 } from "../../api/promotions";
 import { fetchLocations } from "../../api/location";
 import type { Location } from "../../types/location";
-import { fetchCategories, fetchItemGroups, fetchItems } from "../../api/catalog";
+import { fetchCategories, fetchItem, fetchItemGroups, fetchItems } from "../../api/catalog";
+import type { Item } from "../../types/catalog";
 
 import {
   CouponConditionsEditor,
@@ -40,6 +45,7 @@ const EMPTY: Coupon = {
   active: true,
   auto_apply: true,
   allow_combine: false,
+  combine_discount_basis: "DISCOUNTED_SUBTOTAL",
   max_uses: 0,
   use_count: 0,
   available_online: false,
@@ -212,6 +218,30 @@ export function actionDraftFromCoupon(c: Coupon): ActionDraft {
     const dtype = String(discount.type || "FREE").toUpperCase();
     const discount_type =
       dtype === "PERCENT" || dtype === "AMOUNT" || dtype === "FREE" ? dtype : "FREE";
+    const free_customizations_by_item: Record<
+      number,
+      Array<{ customization_id: number; quantity: number }>
+    > = {};
+    const rawCustomizationMap: any = get.customizations_by_item || {};
+    if (rawCustomizationMap && typeof rawCustomizationMap === "object") {
+      Object.entries(rawCustomizationMap).forEach(([rawItemId, rows]) => {
+        const itemId = Number(rawItemId);
+        if (!Number.isFinite(itemId) || !Array.isArray(rows)) return;
+        const normalized = rows
+          .map((row: any) => ({
+            customization_id: Number(row?.customization_id ?? row?.id),
+            quantity: Number(row?.quantity ?? 0),
+          }))
+          .filter(
+            (row) =>
+              Number.isFinite(row.customization_id) &&
+              row.customization_id > 0 &&
+              Number.isFinite(row.quantity) &&
+              row.quantity > 0
+          );
+        if (normalized.length) free_customizations_by_item[itemId] = normalized;
+      });
+    }
     return {
       buy_item_ids: Array.isArray(buy.items) ? buy.items : [],
       get_item_ids: Array.isArray(get.items) ? get.items : [],
@@ -221,6 +251,7 @@ export function actionDraftFromCoupon(c: Coupon): ActionDraft {
       discount_value: discount.value != null ? String(discount.value) : "",
       repeat: Boolean(cfg.repeat ?? true),
       apply_cheapest: Boolean(cfg.apply_cheapest ?? true),
+      free_customizations_by_item,
     };
   })();
 
@@ -382,6 +413,38 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
       discountValue = 0;
     }
 
+    const customized = {
+      include_in_conditions: Boolean(draft.customized?.include_in_conditions ?? true),
+      apply_discount: Boolean(draft.customized?.apply_discount ?? true),
+      discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
+    };
+
+    const freeCustomizationsByItem =
+      discountType === "FREE"
+        ? Object.fromEntries(
+            Object.entries(draft.bxgy.free_customizations_by_item ?? {})
+              .filter(([rawItemId]) =>
+                draft.bxgy.get_item_ids.includes(Number(rawItemId))
+              )
+              .map(([rawItemId, rows]) => [
+                String(rawItemId),
+                (rows ?? [])
+                  .map((row) => ({
+                    customization_id: Number(row.customization_id),
+                    quantity: Number(row.quantity),
+                  }))
+                  .filter(
+                    (row) =>
+                      Number.isFinite(row.customization_id) &&
+                      row.customization_id > 0 &&
+                      Number.isFinite(row.quantity) &&
+                      row.quantity > 0
+                  ),
+              ])
+              .filter(([, rows]) => Array.isArray(rows) && rows.length > 0)
+          )
+        : {};
+
     return {
       config: {
         buy: {
@@ -398,7 +461,11 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
             type: discountType,
             value: discountType === "FREE" ? 100 : discountValue,
           },
+          ...(Object.keys(freeCustomizationsByItem).length
+            ? { customizations_by_item: freeCustomizationsByItem }
+            : {}),
         },
+        customized,
         repeat: Boolean(draft.bxgy.repeat),
         apply_cheapest: Boolean(draft.bxgy.apply_cheapest),
       },
@@ -431,6 +498,7 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [itemOptions, setItemOptions] = useState<SelectOption[]>([]);
+  const [itemDetailsById, setItemDetailsById] = useState<Record<number, Item>>({});
   const [groupOptions, setGroupOptions] = useState<SelectOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const [categoryCascade, setCategoryCascade] = useState<{ descendantsById: Record<number, number[]> }>({
@@ -504,6 +572,44 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
 	      }
 	    })();
 	  }, []);
+
+  useEffect(() => {
+    const requestedIds = Array.from(
+      new Set(
+        (actionDraft.bxgy.get_item_ids ?? []).filter((id) => Number.isFinite(Number(id)))
+      )
+    );
+    const missingIds = requestedIds.filter((id) => !itemDetailsById[id]);
+    if (!missingIds.length) return;
+
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const item = await fetchItem(id);
+            return [id, item] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      setItemDetailsById((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (!result) return;
+          next[result[0]] = result[1];
+        });
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [actionDraft.bxgy.get_item_ids, itemDetailsById]);
 
   const selectedLocations = useMemo(() => coupon.locations ?? [], [coupon.locations]);
 
@@ -612,6 +718,7 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
       active: Boolean(coupon.active),
       auto_apply: Boolean(coupon.auto_apply),
       allow_combine: Boolean(coupon.allow_combine),
+      combine_discount_basis: coupon.combine_discount_basis ?? "DISCOUNTED_SUBTOTAL",
       max_uses: Math.floor(Math.max(0, Number(coupon.max_uses ?? 0))),
       available_online: Boolean(coupon.available_online),
       auto_apply_online: Boolean(coupon.auto_apply_online),
@@ -762,6 +869,32 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
                 />
                 Allow coupon to be combined with another
               </label>
+            </div>
+
+            <div className="grid grid-cols-6 gap-2 items-center">
+              <p>Combined Discount Basis</p>
+              <div className="col-span-5 flex flex-col gap-2">
+                <select
+                  className="rounded-md border border-kk-dark-input-border px-3 py-2"
+                  value={coupon.combine_discount_basis ?? "DISCOUNTED_SUBTOTAL"}
+                  disabled={!coupon.allow_combine}
+                  onChange={(e) =>
+                    setCoupon((c) => ({
+                      ...c,
+                      combine_discount_basis: e.target.value as Coupon["combine_discount_basis"],
+                    }))
+                  }
+                >
+                  {COUPON_COMBINE_DISCOUNT_BASIS_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-kk-dark-text-muted">
+                  Choose whether this coupon calculates from the original subtotal or the subtotal after earlier discounts when it is combined.
+                </p>
+              </div>
             </div>
 
             <div className="grid grid-cols-6 gap-2">
@@ -946,13 +1079,14 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
 	          }}
 	        />
 
-	        <CouponActionEditor
-	          value={actionDraft}
-	          onChange={setActionDraft}
-	          itemOptions={itemOptions}
-	          categoryOptions={categoryOptions}
-	          categoryCascade={categoryCascade}
-	        />
+            <CouponActionEditor
+              value={actionDraft}
+              onChange={setActionDraft}
+              itemOptions={itemOptions}
+              itemDetailsById={itemDetailsById}
+              categoryOptions={categoryOptions}
+              categoryCascade={categoryCascade}
+            />
 
         <CouponScheduleEditor
           useSchedule={useSchedule}

@@ -8,7 +8,9 @@ import { useAuth } from "../../../auth/AuthContext";
 type SettingsNavItem = {
   label: string;
   to?: string;
-  children?: { label: string; to: string }[];
+  perm?: string;
+  perms?: string[];
+  children?: { label: string; to: string; perm?: string; perms?: string[] }[];
 };
 
 const settingsLinks = [
@@ -26,6 +28,11 @@ const settingsLinks = [
     to: "crm-settings",
     label: "CRM Settings",
     perm: "Contacts",
+  },
+  {
+    to: "ems",
+    label: "EMS Settings",
+    perms: ["Time-Off (PTO)", "Overtime", "Payroll"],
   },
   {
     to: "taxes",
@@ -64,6 +71,11 @@ const settingsLinks = [
 export default function SettingsShell() {
   const { can } = useAuth();
   const [openSection, setOpenSection] = useState<string | null>(null);
+  const canAccessItem = (item: { perm?: string; perms?: string[] }) => {
+    if (item.perm) return can(item.perm, "view");
+    if (item.perms?.length) return item.perms.some((perm) => can(perm, "view") || can(perm, "create") || can(perm, "edit"));
+    return true;
+  };
 
   return (
     <div className="flex h-full w-full overflow-hidden bg-kk-dark-bg text-kk-dark-text">
@@ -76,7 +88,7 @@ export default function SettingsShell() {
 
               // simple link (no children)
               if (item.to) {
-                if (!item.perm || can(item.perm, "view")) {
+                if (canAccessItem(item)) {
                   return (
                     <NavLink
                       key={item.to}
@@ -102,7 +114,7 @@ export default function SettingsShell() {
 
               // filter children by perm
               const visibleChildren = (item.children || []).filter(
-                (child) => !child.perm || can(child.perm, "view")
+                (child) => canAccessItem(child)
               );
               if (!visibleChildren.length) return null; // hide section if nothing visible
 

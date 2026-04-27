@@ -37,7 +37,7 @@ export const OvertimeTab: React.FC<{ employeeId: number; locations: Location[] }
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Overtime", "create")) return;
     try {
       await createOvertime({
         employee: employeeId,
@@ -54,13 +54,13 @@ export const OvertimeTab: React.FC<{ employeeId: number; locations: Location[] }
   };
 
   const handleApprove = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Overtime", "approve")) return;
     await approveOvertime(id);
     await load();
   };
 
   const handleDecline = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Overtime", "approve")) return;
     if (!window.confirm("Decline this request?")) return;
     await declineOvertime(id);
     await load();
@@ -88,7 +88,7 @@ export const OvertimeTab: React.FC<{ employeeId: number; locations: Location[] }
               <td>{statusLabel(row)}</td>
               <td>{row.reason || "-"}</td>
               <td className="text-right">
-                {row.status_value === "REQUESTED" && can("Employee", "approve") && (
+                {row.status_value === "REQUESTED" && can("Overtime", "approve") && (
                   <div className="flex justify-end gap-2">
                     <button className="text-emerald-400" onClick={() => handleApprove(row.id!)}>Approve</button>
                     <button className="text-red-400" onClick={() => handleDecline(row.id!)}>Decline</button>
@@ -105,7 +105,7 @@ export const OvertimeTab: React.FC<{ employeeId: number; locations: Location[] }
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Overtime", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <input
             type="date"

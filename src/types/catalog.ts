@@ -24,6 +24,20 @@ export interface TaxRule {
   compound: boolean;
 }
 
+export type TaxCalculationBasis = "AFTER_DISCOUNTS" | "BEFORE_DISCOUNTS";
+
+export const TAX_CALCULATION_BASIS_OPTIONS: {
+  value: TaxCalculationBasis;
+  label: string;
+}[] = [
+  { value: "AFTER_DISCOUNTS", label: "Calculate tax after discounts" },
+  { value: "BEFORE_DISCOUNTS", label: "Calculate tax before discounts" },
+];
+
+export interface TaxSettings {
+  tax_calculation_basis: TaxCalculationBasis;
+}
+
 export interface Attribute {
   id: number;
   name: string;
@@ -93,6 +107,8 @@ export interface ItemCustomization {
   id?: number;
   parent?: number;
   child?: number;
+  child_name?: string;
+  child_sku?: string;
   label?: string;
   pricing_type?: PricingType;
   price_delta?: string;
@@ -147,6 +163,8 @@ export interface Inventory {
   location: number;
   location_name: string;
   stock_qty: string;
+  held_qty: string;
+  available_qty: string;
   reorder_point: string;
   wasted: string;
   last_update: string;
@@ -165,6 +183,43 @@ export interface InventoryInput {
 export interface ReorderPointInput {
   location_id: number;
   reorder_point: string;
+}
+
+export type InventoryAdjustmentStatus = "DRAFT" | "PENDING" | "ADJUSTED";
+
+export interface InventoryAdjustmentLine {
+  id?: number;
+  item: number;
+  item_name?: string;
+  item_sku?: string;
+  quantity: string;
+}
+
+export interface InventoryAdjustmentOrder {
+  id?: number;
+  number?: string;
+  request_date: string;
+  created_on?: string;
+  created_by?: number;
+  created_by_email?: string;
+  description?: string;
+  status?: InventoryAdjustmentStatus;
+
+  location: number;
+  location_name?: string;
+  reason: TrxReason;
+
+  submitted_on?: string | null;
+  submitted_by?: number | null;
+  submitted_by_email?: string | null;
+
+  approved_on?: string | null;
+  approved_by?: number | null;
+  approved_by_email?: string | null;
+
+  total_quantity?: string;
+  lines?: InventoryAdjustmentLine[];
+  lines_input?: InventoryAdjustmentLine[];
 }
 
 export type InventoryTransferStatus = "DRAFT" | "PENDING" | "TRANSFERRED";

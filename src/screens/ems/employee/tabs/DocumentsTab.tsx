@@ -29,7 +29,7 @@ export const DocumentsTab: React.FC<{ employeeId: number }> = ({ employeeId }) =
   }, [employeeId]);
 
   const handleUpload = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Documents", "create")) return;
     if (!file) {
       setToast({ message: "Select a file to upload.", variant: "error" });
       return;
@@ -45,7 +45,7 @@ export const DocumentsTab: React.FC<{ employeeId: number }> = ({ employeeId }) =
   };
 
   const handleDelete = async (id: number) => {
-    if (!can("Employee", "delete")) return;
+    if (!can("Documents", "delete")) return;
     if (!window.confirm("Delete this document?")) return;
     try {
       await deleteDocument(id);
@@ -73,7 +73,7 @@ export const DocumentsTab: React.FC<{ employeeId: number }> = ({ employeeId }) =
               <td>{row.file_name || row.file}</td>
               <td>{row.expiry_date || "-"}</td>
               <td className="text-right">
-                {can("Employee", "delete") && (
+                {can("Documents", "delete") && (
                   <button className="text-red-400" onClick={() => handleDelete(row.id!)}>
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -89,7 +89,7 @@ export const DocumentsTab: React.FC<{ employeeId: number }> = ({ employeeId }) =
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Documents", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <select className="col-span-3 rounded-md border bg-kk-dark-bg border-kk-dark-input-border px-2 py-1" value={docType} onChange={(e) => setDocType(e.target.value)}>
             {DOCUMENT_TYPE_CHOICES.map((opt) => (

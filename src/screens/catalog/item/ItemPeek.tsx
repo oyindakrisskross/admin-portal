@@ -110,7 +110,16 @@ export const ItemPeek: React.FC<Props> = ({ item }) => {
       {tab === 'overview' && <Overview itemId={item.id!}/> }
       {tab === "availability" && <Availability itemId={item.id!} />}
       {tab === "inventory" && <Locations itemId={item.id!} />}
-      {tab === 'transactions' && <Transactions itemId={item.id!}/> }
+      {tab === "transactions" && (
+        <Transactions
+          itemId={item.id!}
+          currentStockOnHand={peekItem?.stock_on_hand ?? item?.stock_on_hand ?? "0"}
+          showBalance={
+            (peekItem?.type_id ?? item?.type_id) === "GOOD" &&
+            Boolean(peekItem?.inventory_tracking ?? item?.inventory_tracking)
+          }
+        />
+      )}
       {tab === "schedule" && <Schedule itemId={item.id!} />}
       {tab === "customizations" && <Customizations itemId={item.id!} />}
       {tab === 'history' && <History itemId={item.id!}/> }

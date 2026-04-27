@@ -60,7 +60,7 @@ export const AttendanceTab: React.FC<{ employeeId: number; locations: Location[]
   }, [selectedId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Attendance", "create")) return;
     try {
       const payload: any = {
         employee: employeeId,
@@ -82,7 +82,7 @@ export const AttendanceTab: React.FC<{ employeeId: number; locations: Location[]
   };
 
   const handleEdit = async () => {
-    if (!can("Employee", "edit")) return;
+    if (!can("Attendance", "edit")) return;
     if (!editForm.attendanceId || !editForm.reason) {
       setToast({ message: "Select attendance and provide a reason.", variant: "error" });
       return;
@@ -157,7 +157,7 @@ export const AttendanceTab: React.FC<{ employeeId: number; locations: Location[]
         </div>
       )}
 
-      {can("Employee", "create") && (
+      {can("Attendance", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4">
           <div className="col-span-12 text-xs font-semibold">Add Attendance</div>
           <input
@@ -207,7 +207,7 @@ export const AttendanceTab: React.FC<{ employeeId: number; locations: Location[]
         </div>
       )}
 
-      {can("Employee", "edit") && (
+      {can("Attendance", "edit") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4">
           <div className="col-span-12 text-xs font-semibold">Edit Attendance</div>
           <select

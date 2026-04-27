@@ -38,7 +38,7 @@ export const WalletTab: React.FC<{ employeeId: number; locations: Location[] }> 
   }, [employeeId]);
 
   const handleAdjust = async () => {
-    if (!can("Employee", "edit")) return;
+    if (!can("Wallet", "edit")) return;
     try {
       await adjustWallet({
         employee_id: employeeId,
@@ -91,7 +91,7 @@ export const WalletTab: React.FC<{ employeeId: number; locations: Location[] }> 
         </tbody>
       </table>
 
-      {can("Employee", "edit") && (
+      {can("Wallet", "edit") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <input type="number" step="0.01" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.amount} onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))} placeholder="Amount" />
           <select className="col-span-2 rounded-md border bg-kk-dark-bg border-kk-dark-input-border px-2 py-1" value={form.txn_type} onChange={(e) => setForm((prev) => ({ ...prev, txn_type: e.target.value }))}>

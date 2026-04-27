@@ -3,8 +3,15 @@ import { Download, Plus, ReceiptText, Search, Trash2, UserPlus } from "lucide-re
 import { useNavigate } from "react-router-dom";
 import { QRCodeCanvas } from "qrcode.react";
 import { useAuth } from "../../../auth/AuthContext";
-import type { InvoicePayment, InvoiceResponse } from "../../../types/invoice";
-import { bulkInvoices, createPrepaidInvoice, fetchInvoice, fetchOrders, updatePrepaidInvoice } from "../../../api/invoice";
+import type { AppliedCouponPreview, InvoicePayment, InvoiceResponse, PriceCartPreviewResponse } from "../../../types/invoice";
+import {
+  bulkInvoices,
+  createPrepaidInvoice,
+  fetchInvoice,
+  fetchOrders,
+  fetchPriceCartPreview,
+  updatePrepaidInvoice,
+} from "../../../api/invoice";
 import { fetchOutlets } from "../../../api/location";
 import { fetchItem, searchItems } from "../../../api/catalog";
 import ListPageHeader from "../../../components/layout/ListPageHeader";
@@ -29,6 +36,28 @@ const PAYMENT_METHOD_OPTIONS = ["CASH", "CARD", "TRANSFER", "OTHER"] as const;
 const isPaymentMethod = (value: string): value is (typeof PAYMENT_METHOD_OPTIONS)[number] =>
   (PAYMENT_METHOD_OPTIONS as readonly string[]).includes(value);
 const PREPAID_QR_CANVAS_ID = "prepaid-pass-qr-canvas";
+
+const normalizeCouponCodeList = (codes: string[]) =>
+  Array.from(
+    new Set(
+      codes
+        .map((code) => String(code || "").trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+const getAppliedCouponLabel = (coupon?: AppliedCouponPreview | null) => {
+  const name = String(coupon?.name || coupon?.coupon_name || "").trim();
+  if (name) return name;
+  const code = String(coupon?.code || "").trim();
+  return code || "Coupon";
+};
+
+const getInvoiceCouponCodes = (invoice: InvoiceResponse) =>
+  normalizeCouponCodeList([
+    ...(Array.isArray(invoice.coupon_codes) ? invoice.coupon_codes : []),
+    String(invoice.coupon_code || ""),
+  ]);
 
 type CreateRow = {
   key: string;
@@ -129,6 +158,12 @@ export const PrePaidListPage: React.FC = () => {
   const [createAmountPaid, setCreateAmountPaid] = useState("");
   const [createPaymentMethod, setCreatePaymentMethod] = useState<(typeof PAYMENT_METHOD_OPTIONS)[number]>("OTHER");
   const [createItems, setCreateItems] = useState<CreateRow[]>([buildEmptyRow()]);
+  const [createCouponDraft, setCreateCouponDraft] = useState("");
+  const [createManualCouponCodes, setCreateManualCouponCodes] = useState<string[]>([]);
+  const [createPricingPreview, setCreatePricingPreview] = useState<PriceCartPreviewResponse | null>(null);
+  const [createPricingLoading, setCreatePricingLoading] = useState(false);
+  const [createPricingError, setCreatePricingError] = useState<string | null>(null);
+  const [createCouponBusy, setCreateCouponBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -143,6 +178,12 @@ export const PrePaidListPage: React.FC = () => {
   const [editRecordedPayments, setEditRecordedPayments] = useState<InvoicePayment[]>([]);
   const [editRecordedPaidTotal, setEditRecordedPaidTotal] = useState(0);
   const [editItems, setEditItems] = useState<CreateRow[]>([buildEmptyRow()]);
+  const [editCouponDraft, setEditCouponDraft] = useState("");
+  const [editManualCouponCodes, setEditManualCouponCodes] = useState<string[]>([]);
+  const [editPricingPreview, setEditPricingPreview] = useState<PriceCartPreviewResponse | null>(null);
+  const [editPricingLoading, setEditPricingLoading] = useState(false);
+  const [editPricingError, setEditPricingError] = useState<string | null>(null);
+  const [editCouponBusy, setEditCouponBusy] = useState(false);
   const [showCreateCustomerModal, setShowCreateCustomerModal] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
@@ -620,17 +661,203 @@ export const PrePaidListPage: React.FC = () => {
     []
   );
 
+  const buildPrepaidPayload = (items: CreateRow[]) => {
+    const payloadItems: Array<{
+      item: number;
+      quantity: string;
+      unit_price: string;
+      description: string;
+    }> = [];
+    const rowKeys: string[] = [];
+
+    items.forEach((row) => {
+      if (!row.itemId || Number(row.quantity) <= 0) return;
+      rowKeys.push(row.key);
+      payloadItems.push({
+        item: Number(row.itemId),
+        quantity: row.quantity,
+        unit_price: computeEffectiveUnitPrice(row).toFixed(2),
+        description: composeRowDescription(row),
+      });
+    });
+
+    return { items: payloadItems, rowKeys };
+  };
+
+  const createPayload = useMemo(
+    () => buildPrepaidPayload(createItems),
+    [createItems, itemMetaVersion]
+  );
+  const createManualCouponCodeSet = useMemo(
+    () => new Set(normalizeCouponCodeList(createManualCouponCodes)),
+    [createManualCouponCodes]
+  );
+  const createAppliedCoupons = useMemo(() => {
+    const coupons = Array.isArray(createPricingPreview?.applied_coupons)
+      ? createPricingPreview.applied_coupons
+      : createPricingPreview?.applied_coupon
+        ? [createPricingPreview.applied_coupon]
+        : [];
+    return coupons.filter((coupon): coupon is AppliedCouponPreview => Boolean(coupon?.code));
+  }, [createPricingPreview]);
+  const createPreviewLineByKey = useMemo(() => {
+    const lines = Array.isArray(createPricingPreview?.lines) ? createPricingPreview.lines : [];
+    const mapped = new Map<string, (typeof lines)[number]>();
+    createPayload.rowKeys.forEach((key, idx) => {
+      const line = lines[idx];
+      if (line) mapped.set(key, line);
+    });
+    return mapped;
+  }, [createPayload.rowKeys, createPricingPreview]);
+  const createPreviewSubtotal = useMemo(
+    () => (createPricingPreview ? parseNumber(createPricingPreview.subtotal, 0) : computeInvoiceSubtotal(createItems)),
+    [computeInvoiceSubtotal, createItems, createPricingPreview, itemMetaVersion]
+  );
+  const createPreviewTax = useMemo(
+    () => (createPricingPreview ? parseNumber(createPricingPreview.tax_total, 0) : computeInvoiceTax(createItems)),
+    [computeInvoiceTax, createItems, createPricingPreview, itemMetaVersion]
+  );
+  const createPreviewDiscount = useMemo(
+    () => (createPricingPreview ? parseNumber(createPricingPreview.discount_total, 0) : 0),
+    [createPricingPreview]
+  );
+  const createPreviewGrandTotal = useMemo(
+    () =>
+      createPricingPreview
+        ? parseNumber(createPricingPreview.grand_total, 0)
+        : createPreviewSubtotal + createPreviewTax,
+    [createPreviewSubtotal, createPreviewTax, createPricingPreview]
+  );
+
+  useEffect(() => {
+    if (!createOpen) return;
+    if (!Number(createLocation) || !createPayload.items.length) {
+      setCreatePricingPreview(null);
+      setCreatePricingLoading(false);
+      if (!createManualCouponCodes.length) setCreatePricingError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setCreatePricingLoading(true);
+
+    (async () => {
+      try {
+        const data = await fetchPriceCartPreview({
+          location: Number(createLocation),
+          coupon_code: createManualCouponCodes[0] || undefined,
+          coupon_codes: createManualCouponCodes.length ? createManualCouponCodes : undefined,
+          items: createPayload.items,
+        });
+        if (cancelled) return;
+
+        if (createManualCouponCodes.length && data?.coupon_error) {
+          setCreateManualCouponCodes([]);
+          setCreatePricingPreview(null);
+          setCreatePricingError(String(data.coupon_error.detail || "The coupon no longer applies to the selected items."));
+          return;
+        }
+
+        setCreatePricingPreview(data);
+        setCreatePricingError(data?.coupon_error ? String(data.coupon_error.detail || "Unable to apply coupon.") : null);
+      } catch (err: any) {
+        if (cancelled) return;
+        setCreatePricingPreview(null);
+        setCreatePricingError(parseApiError(err, "Unable to calculate pre-paid totals."));
+      } finally {
+        if (!cancelled) setCreatePricingLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [createLocation, createManualCouponCodes, createOpen, createPayload.items]);
+
+  const applyCreateCoupon = async () => {
+    const rawCode = createCouponDraft.trim();
+    if (!rawCode) {
+      setCreatePricingError("Enter a coupon code.");
+      return;
+    }
+    if (!Number(createLocation)) {
+      setCreatePricingError("Select a location before applying a coupon.");
+      return;
+    }
+    if (!createPayload.items.length) {
+      setCreatePricingError("Add at least one valid item row before applying a coupon.");
+      return;
+    }
+
+    const normalizedCode = rawCode.toUpperCase();
+    if (createManualCouponCodeSet.has(normalizedCode)) {
+      setCreatePricingError("Coupon already added.");
+      return;
+    }
+
+    const nextCodes = normalizeCouponCodeList([...createManualCouponCodes, normalizedCode]);
+    setCreateCouponBusy(true);
+    setCreatePricingError(null);
+    try {
+      const data = await fetchPriceCartPreview({
+        location: Number(createLocation),
+        coupon_code: nextCodes[0] || undefined,
+        coupon_codes: nextCodes,
+        items: createPayload.items,
+      });
+      if (data?.coupon_error) {
+        setCreatePricingError(String(data.coupon_error.detail || "Coupon not valid."));
+        return;
+      }
+      setCreateManualCouponCodes(nextCodes);
+      setCreateCouponDraft("");
+      setCreatePricingPreview(data);
+    } catch (err: any) {
+      setCreatePricingError(parseApiError(err, "Unable to apply coupon."));
+    } finally {
+      setCreateCouponBusy(false);
+    }
+  };
+
+  const removeCreateCoupon = (code: string) => {
+    setCreateManualCouponCodes((prev) => prev.filter((current) => current !== String(code || "").trim().toUpperCase()));
+    setCreatePricingError(null);
+  };
+
+  const editPayload = useMemo(
+    () => buildPrepaidPayload(editItems),
+    [editItems, itemMetaVersion]
+  );
+  const editManualCouponCodeSet = useMemo(
+    () => new Set(normalizeCouponCodeList(editManualCouponCodes)),
+    [editManualCouponCodes]
+  );
+  const editAppliedCoupons = useMemo(() => {
+    const coupons = Array.isArray(editPricingPreview?.applied_coupons)
+      ? editPricingPreview.applied_coupons
+      : editPricingPreview?.applied_coupon
+        ? [editPricingPreview.applied_coupon]
+        : [];
+    return coupons.filter((coupon): coupon is AppliedCouponPreview => Boolean(coupon?.code));
+  }, [editPricingPreview]);
   const editPreviewSubtotal = useMemo(
-    () => computeInvoiceSubtotal(editItems),
-    [computeInvoiceSubtotal, editItems, itemMetaVersion]
+    () => (editPricingPreview ? parseNumber(editPricingPreview.subtotal, 0) : computeInvoiceSubtotal(editItems)),
+    [computeInvoiceSubtotal, editItems, editPricingPreview, itemMetaVersion]
   );
   const editPreviewTax = useMemo(
-    () => computeInvoiceTax(editItems),
-    [computeInvoiceTax, editItems, itemMetaVersion]
+    () => (editPricingPreview ? parseNumber(editPricingPreview.tax_total, 0) : computeInvoiceTax(editItems)),
+    [computeInvoiceTax, editItems, editPricingPreview, itemMetaVersion]
+  );
+  const editPreviewDiscount = useMemo(
+    () => (editPricingPreview ? parseNumber(editPricingPreview.discount_total, 0) : 0),
+    [editPricingPreview]
   );
   const editPreviewGrandTotal = useMemo(
-    () => editPreviewSubtotal + editPreviewTax,
-    [editPreviewSubtotal, editPreviewTax]
+    () =>
+      editPricingPreview
+        ? parseNumber(editPricingPreview.grand_total, 0)
+        : editPreviewSubtotal + editPreviewTax,
+    [editPreviewSubtotal, editPreviewTax, editPricingPreview]
   );
   const editRemainingBeforePayment = useMemo(
     () => Math.max(editPreviewGrandTotal - editRecordedPaidTotal, 0),
@@ -664,8 +891,103 @@ export const PrePaidListPage: React.FC = () => {
     [editPreviewGrandTotal, editProjectedAmountPaid, editProjectedBalanceDue]
   );
 
+  useEffect(() => {
+    if (!editOpen) return;
+    if (!Number(editLocation) || !editPayload.items.length) {
+      setEditPricingPreview(null);
+      setEditPricingLoading(false);
+      if (!editManualCouponCodes.length) setEditPricingError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setEditPricingLoading(true);
+
+    (async () => {
+      try {
+        const data = await fetchPriceCartPreview({
+          location: Number(editLocation),
+          coupon_code: editManualCouponCodes[0] || undefined,
+          coupon_codes: editManualCouponCodes.length ? editManualCouponCodes : undefined,
+          items: editPayload.items,
+        });
+        if (cancelled) return;
+
+        if (data?.coupon_error) {
+          setEditPricingPreview(null);
+          setEditPricingError(String(data.coupon_error.detail || "Unable to apply coupon."));
+          return;
+        }
+
+        setEditPricingPreview(data);
+        setEditPricingError(null);
+      } catch (err: any) {
+        if (cancelled) return;
+        setEditPricingPreview(null);
+        setEditPricingError(parseApiError(err, "Unable to calculate pre-paid totals."));
+      } finally {
+        if (!cancelled) setEditPricingLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editLocation, editManualCouponCodes, editOpen, editPayload.items]);
+
+  const applyEditCoupon = async () => {
+    const rawCode = editCouponDraft.trim();
+    if (!rawCode) {
+      setEditPricingError("Enter a coupon code.");
+      return;
+    }
+    if (!Number(editLocation)) {
+      setEditPricingError("Select a location before applying a coupon.");
+      return;
+    }
+    if (!editPayload.items.length) {
+      setEditPricingError("Add at least one valid item row before applying a coupon.");
+      return;
+    }
+
+    const normalizedCode = rawCode.toUpperCase();
+    if (editManualCouponCodeSet.has(normalizedCode)) {
+      setEditPricingError("Coupon already added.");
+      return;
+    }
+
+    const nextCodes = normalizeCouponCodeList([...editManualCouponCodes, normalizedCode]);
+    setEditCouponBusy(true);
+    setEditPricingError(null);
+    try {
+      const data = await fetchPriceCartPreview({
+        location: Number(editLocation),
+        coupon_code: nextCodes[0] || undefined,
+        coupon_codes: nextCodes,
+        items: editPayload.items,
+      });
+      if (data?.coupon_error) {
+        setEditPricingError(String(data.coupon_error.detail || "Coupon not valid."));
+        return;
+      }
+      setEditManualCouponCodes(nextCodes);
+      setEditCouponDraft("");
+      setEditPricingPreview(data);
+    } catch (err: any) {
+      setEditPricingError(parseApiError(err, "Unable to apply coupon."));
+    } finally {
+      setEditCouponBusy(false);
+    }
+  };
+
+  const removeEditCoupon = (code: string) => {
+    setEditManualCouponCodes((prev) => prev.filter((current) => current !== String(code || "").trim().toUpperCase()));
+    setEditPricingError(null);
+  };
+
   const openCreate = () => {
     setCreateError(null);
+    setCreatePricingError(null);
     setCreateLocation("");
     setCreateNotes("");
     setCreatePaymentMade(true);
@@ -673,11 +995,22 @@ export const PrePaidListPage: React.FC = () => {
     setCreatePaymentMethod("OTHER");
     setCreatePortalCustomer(null);
     setCreateItems([buildEmptyRow()]);
+    setCreateCouponDraft("");
+    setCreateManualCouponCodes([]);
+    setCreatePricingPreview(null);
+    setCreatePricingLoading(false);
+    setCreateCouponBusy(false);
     setCreateOpen(true);
   };
 
   const closeCreate = () => {
     if (createSaving) return;
+    setCreateCouponDraft("");
+    setCreateManualCouponCodes([]);
+    setCreatePricingPreview(null);
+    setCreatePricingError(null);
+    setCreatePricingLoading(false);
+    setCreateCouponBusy(false);
     setCreateOpen(false);
   };
 
@@ -715,14 +1048,7 @@ export const PrePaidListPage: React.FC = () => {
       return;
     }
 
-    const payloadItems = createItems
-      .filter((row) => row.itemId && Number(row.quantity) > 0)
-      .map((row) => ({
-        item: Number(row.itemId),
-        quantity: row.quantity,
-        unit_price: computeEffectiveUnitPrice(row).toFixed(2),
-        description: composeRowDescription(row),
-      }));
+    const payloadItems = createPayload.items;
 
     if (!payloadItems.length) {
       setCreateError("Add at least one valid item row.");
@@ -738,6 +1064,8 @@ export const PrePaidListPage: React.FC = () => {
         payment_made: createPaymentMade,
         amount_paid: createAmountPaid.trim() || undefined,
         payment_method: createPaymentMethod,
+        coupon_code: createManualCouponCodes[0] || undefined,
+        coupon_codes: createManualCouponCodes.length ? createManualCouponCodes : undefined,
         items: payloadItems,
       });
       setCreateOpen(false);
@@ -774,6 +1102,12 @@ export const PrePaidListPage: React.FC = () => {
     setEditPaymentMethod(isPaymentMethod(defaultMethod) ? defaultMethod : "OTHER");
     const mapped = mapInvoiceItemsToRows(invoice);
     setEditItems(mapped);
+    setEditCouponDraft("");
+    setEditManualCouponCodes(getInvoiceCouponCodes(invoice));
+    setEditPricingPreview(null);
+    setEditPricingLoading(false);
+    setEditPricingError(null);
+    setEditCouponBusy(false);
     setEditPortalCustomer(null);
     setEditOpen(true);
 
@@ -811,6 +1145,12 @@ export const PrePaidListPage: React.FC = () => {
     setEditPaymentTouched(false);
     setEditPaymentAmount("");
     setEditPaymentMethod("OTHER");
+    setEditCouponDraft("");
+    setEditManualCouponCodes([]);
+    setEditPricingPreview(null);
+    setEditPricingLoading(false);
+    setEditPricingError(null);
+    setEditCouponBusy(false);
   };
 
   useEffect(() => {
@@ -857,14 +1197,7 @@ export const PrePaidListPage: React.FC = () => {
       return;
     }
 
-    const payloadItems = editItems
-      .filter((row) => row.itemId && Number(row.quantity) > 0)
-      .map((row) => ({
-        item: Number(row.itemId),
-        quantity: row.quantity,
-        unit_price: computeEffectiveUnitPrice(row).toFixed(2),
-        description: composeRowDescription(row),
-      }));
+    const payloadItems = editPayload.items;
 
     if (!payloadItems.length) {
       setEditError("Add at least one valid item row.");
@@ -900,6 +1233,8 @@ export const PrePaidListPage: React.FC = () => {
         payment_made: editRecordPayment,
         amount_paid: editRecordPayment ? editPaymentAmount.trim() || undefined : undefined,
         payment_method: editRecordPayment ? editPaymentMethod : undefined,
+        coupon_code: editManualCouponCodes[0] || undefined,
+        coupon_codes: editManualCouponCodes,
         items: payloadItems,
       });
       setEditOpen(false);
@@ -1357,7 +1692,7 @@ export const PrePaidListPage: React.FC = () => {
 
       {createOpen ? (
         <div className="fixed inset-0 z-[90] flex items-start justify-center overflow-y-auto bg-kk-dark-bg/70 p-4 sm:items-center">
-          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-6xl flex-col rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated shadow-soft">
             <div className="border-b border-kk-dark-border px-5 py-4">
               <h2 className="text-lg font-semibold">Create Pre-Paid Invoice</h2>
               <p className="text-xs text-kk-dark-text-muted">
@@ -1365,7 +1700,9 @@ export const PrePaidListPage: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-kk-dark-text-muted">Location</label>
@@ -1415,7 +1752,9 @@ export const PrePaidListPage: React.FC = () => {
                     value={createAmountPaid}
                     onChange={(e) => setCreateAmountPaid(e.target.value)}
                     className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm disabled:opacity-60"
-                    placeholder="Defaults to invoice total"
+                    placeholder={
+                      createPaymentMade ? `Defaults to ${formatMoneyNGN(createPreviewGrandTotal)}` : "No payment recorded"
+                    }
                     disabled={!createPaymentMade}
                   />
                 </div>
@@ -1473,16 +1812,25 @@ export const PrePaidListPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <div className="grid grid-cols-[2fr_2fr_110px_130px_130px_44px] gap-2 text-[11px] text-kk-dark-text-muted">
+                  <div className="grid grid-cols-[2fr_2fr_90px_110px_110px_120px_44px] gap-2 text-[11px] text-kk-dark-text-muted">
                     <span className="text-left">Item</span>
                     <span className="text-left">Customizations</span>
                     <span className="text-left">Qty</span>
                     <span className="text-left">Rate</span>
-                    <span className="text-left">Tax</span>
+                    <span className="text-left">Tax / Discount</span>
+                    <span className="text-left">Line Total</span>
                     <span />
                   </div>
-                  {createItems.map((row) => (
-                    <div key={row.key} className="grid grid-cols-[2fr_2fr_110px_130px_130px_44px] gap-2">
+                  {createItems.map((row) => {
+                    const previewLine = createPreviewLineByKey.get(row.key);
+                    const rowTax = previewLine ? parseNumber(previewLine.tax, 0) : computeRowTax(row);
+                    const rowDiscount = previewLine ? parseNumber(previewLine.total_discount_amount, 0) : 0;
+                    const rowTotal = previewLine
+                      ? parseNumber(previewLine.base_net_after_inv_discount, 0) + parseNumber(previewLine.tax, 0)
+                      : computeRowSubtotal(row) + computeRowTax(row);
+
+                    return (
+                    <div key={row.key} className="grid grid-cols-[2fr_2fr_90px_110px_110px_120px_44px] gap-2">
                       <ItemSearchSelect
                         valueId={row.itemId}
                         valueLabel={row.itemLabel}
@@ -1577,11 +1925,18 @@ export const PrePaidListPage: React.FC = () => {
                         placeholder="Rate"
                       />
 
+                      <div className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-left text-xs text-kk-dark-text-muted">
+                        <p>Tax: {formatMoneyNGN(rowTax)}</p>
+                        <p className={rowDiscount > 0 ? "text-red-500" : ""}>
+                          Discount: {rowDiscount > 0 ? `-${formatMoneyNGN(rowDiscount)}` : formatMoneyNGN(0)}
+                        </p>
+                      </div>
+
                       <div
-                        className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-left text-sm text-kk-dark-text-muted"
-                        title="Calculated tax (read-only)"
+                        className="rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-left text-sm font-medium"
+                        title="Calculated line total (read-only)"
                       >
-                        {formatMoneyNGN(computeRowTax(row))}
+                        {formatMoneyNGN(rowTotal)}
                       </div>
 
                       <button
@@ -1594,11 +1949,123 @@ export const PrePaidListPage: React.FC = () => {
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
-              {createError ? <p className="text-xs font-medium text-red-500">{createError}</p> : null}
+                </div>
+
+                <div className="space-y-4 xl:sticky xl:top-0">
+                  <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold">Coupon & Totals</h3>
+                        <p className="text-xs text-kk-dark-text-muted">
+                          Auto-apply coupons are included whenever the selected items qualify.
+                        </p>
+                      </div>
+                      {createPricingLoading ? (
+                        <span className="rounded-full bg-kk-dark-hover px-2 py-1 text-[11px] text-kk-dark-text-muted">
+                          Updating...
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 flex gap-2">
+                      <input
+                        value={createCouponDraft}
+                        onChange={(e) => setCreateCouponDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter") return;
+                          e.preventDefault();
+                          void applyCreateCoupon();
+                        }}
+                        className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                        placeholder="Enter coupon code"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void applyCreateCoupon()}
+                        className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm hover:bg-kk-dark-hover disabled:opacity-60"
+                        disabled={createCouponBusy || createPricingLoading}
+                      >
+                        {createCouponBusy ? "Applying..." : "Apply"}
+                      </button>
+                    </div>
+
+                    {!createLocation ? (
+                      <p className="mt-2 text-xs text-kk-dark-text-muted">Select a location before validating coupons.</p>
+                    ) : null}
+                    {!createPayload.items.length ? (
+                      <p className="mt-2 text-xs text-kk-dark-text-muted">Add at least one valid item to preview totals.</p>
+                    ) : null}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {createAppliedCoupons.length ? (
+                        createAppliedCoupons.map((coupon, idx) => {
+                          const normalizedCode = String(coupon.code || "").trim().toUpperCase();
+                          const isManual = createManualCouponCodeSet.has(normalizedCode);
+                          return (
+                            <div
+                              key={`${normalizedCode}-${idx}`}
+                              className="inline-flex items-center gap-2 rounded-full border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-1 text-xs"
+                            >
+                              <span className="font-medium">{getAppliedCouponLabel(coupon)}</span>
+                              <span className="text-kk-dark-text-muted">{normalizedCode}</span>
+                              {isManual ? (
+                                <button
+                                  type="button"
+                                  onClick={() => removeCreateCoupon(normalizedCode)}
+                                  className="text-red-500 hover:text-red-400"
+                                  title="Remove coupon"
+                                >
+                                  x
+                                </button>
+                              ) : (
+                                <span className="rounded-full bg-kk-dark-hover px-2 py-0.5 text-[10px] text-kk-dark-text-muted">
+                                  Auto
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-kk-dark-input-border px-3 py-3 text-xs text-kk-dark-text-muted">
+                          No coupons applied.
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span>
+                          Subtotal ({createPayload.items.length} item{createPayload.items.length === 1 ? "" : "s"})
+                        </span>
+                        <span>{formatMoneyNGN(createPreviewSubtotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Tax</span>
+                        <span>{formatMoneyNGN(createPreviewTax)}</span>
+                      </div>
+                      {createPreviewDiscount > 0 ? (
+                        <div className="flex justify-between text-red-500">
+                          <span>Discount</span>
+                          <span>-{formatMoneyNGN(createPreviewDiscount)}</span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="mt-4 flex items-center justify-between border-t border-kk-dark-border pt-3 text-lg font-semibold">
+                      <span>Total</span>
+                      <span>{formatMoneyNGN(createPreviewGrandTotal)}</span>
+                    </div>
+                  </div>
+
+                  {createPricingError ? <p className="text-xs font-medium text-red-500">{createPricingError}</p> : null}
+                  {createError ? <p className="text-xs font-medium text-red-500">{createError}</p> : null}
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-kk-dark-border px-5 py-4">
@@ -1966,6 +2433,112 @@ export const PrePaidListPage: React.FC = () => {
                 </div>
               </div>
 
+              <div className="space-y-4 rounded-xl border border-kk-dark-border bg-kk-dark-bg px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold">Coupon & Totals</h3>
+                    <p className="text-xs text-kk-dark-text-muted">
+                      Add or remove coupon codes here before saving changes to this pre-paid invoice.
+                    </p>
+                  </div>
+                  {editPricingLoading ? (
+                    <span className="rounded-full bg-kk-dark-hover px-2 py-1 text-[11px] text-kk-dark-text-muted">
+                      Updating...
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={editCouponDraft}
+                    onChange={(e) => setEditCouponDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      void applyEditCoupon();
+                    }}
+                    className="w-full rounded-md border border-kk-dark-input-border bg-kk-dark-bg px-3 py-2 text-sm"
+                    placeholder="Enter coupon code"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void applyEditCoupon()}
+                    className="rounded-md border border-kk-dark-input-border px-3 py-2 text-sm hover:bg-kk-dark-hover disabled:opacity-60"
+                    disabled={editCouponBusy || editPricingLoading}
+                  >
+                    {editCouponBusy ? "Applying..." : "Apply"}
+                  </button>
+                </div>
+
+                {!editLocation ? (
+                  <p className="mt-2 text-xs text-kk-dark-text-muted">Select a location before validating coupons.</p>
+                ) : null}
+                {!editPayload.items.length ? (
+                  <p className="mt-2 text-xs text-kk-dark-text-muted">Add at least one valid item to preview totals.</p>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {editAppliedCoupons.length ? (
+                    editAppliedCoupons.map((coupon, idx) => {
+                      const normalizedCode = String(coupon.code || "").trim().toUpperCase();
+                      const isManual = editManualCouponCodeSet.has(normalizedCode);
+                      return (
+                        <div
+                          key={`${normalizedCode}-${idx}`}
+                          className="inline-flex items-center gap-2 rounded-full border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-1 text-xs"
+                        >
+                          <span className="font-medium">{getAppliedCouponLabel(coupon)}</span>
+                          <span className="text-kk-dark-text-muted">{normalizedCode}</span>
+                          {isManual ? (
+                            <button
+                              type="button"
+                              onClick={() => removeEditCoupon(normalizedCode)}
+                              className="text-red-500 hover:text-red-400"
+                              title="Remove coupon"
+                            >
+                              x
+                            </button>
+                          ) : (
+                            <span className="rounded-full bg-kk-dark-hover px-2 py-0.5 text-[10px] text-kk-dark-text-muted">
+                              Auto
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-kk-dark-input-border px-3 py-3 text-xs text-kk-dark-text-muted">
+                      No coupons applied.
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>
+                      Subtotal ({editPayload.items.length} item{editPayload.items.length === 1 ? "" : "s"})
+                    </span>
+                    <span>{formatMoneyNGN(editPreviewSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Tax</span>
+                    <span>{formatMoneyNGN(editPreviewTax)}</span>
+                  </div>
+                  {editPreviewDiscount > 0 ? (
+                    <div className="flex justify-between text-red-500">
+                      <span>Discount</span>
+                      <span>-{formatMoneyNGN(editPreviewDiscount)}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-kk-dark-border pt-3 text-lg font-semibold">
+                  <span>Total</span>
+                  <span>{formatMoneyNGN(editPreviewGrandTotal)}</span>
+                </div>
+              </div>
+
+              {editPricingError ? <p className="text-xs font-medium text-red-500">{editPricingError}</p> : null}
               {editError ? <p className="text-xs font-medium text-red-500">{editError}</p> : null}
             </div>
 

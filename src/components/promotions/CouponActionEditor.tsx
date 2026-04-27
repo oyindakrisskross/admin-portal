@@ -1,8 +1,14 @@
 import { useMemo } from "react";
 
 import type { CouponAction } from "../../types/promotions";
+import type { Item } from "../../types/catalog";
 import { ACTION_CHOICES, BXGY_CHOICES, type BXGYType } from "../../types/promotions";
 import { SearchMultiSelectDropdown, type SelectOption } from "./SearchMultiSelectDropdown";
+
+type BXGYFreeCustomizationSelection = {
+  customization_id: number;
+  quantity: number;
+};
 
 export type ActionDraft = {
   action_type: CouponAction;
@@ -26,6 +32,7 @@ export type ActionDraft = {
     discount_value: string; // used when discount_type !== "FREE"
     repeat: boolean;
     apply_cheapest: boolean;
+    free_customizations_by_item: Record<number, BXGYFreeCustomizationSelection[]>;
   };
   redeemFreeItems: {
     item_ids: number[];
@@ -37,11 +44,19 @@ type Props = {
   value: ActionDraft;
   onChange: (next: ActionDraft) => void;
   itemOptions: SelectOption[];
+  itemDetailsById?: Record<number, Item>;
   categoryOptions: SelectOption[];
   categoryCascade?: { descendantsById: Record<number, number[]> };
 };
 
-export function CouponActionEditor({ value, onChange, itemOptions, categoryOptions, categoryCascade }: Props) {
+export function CouponActionEditor({
+  value,
+  onChange,
+  itemOptions,
+  itemDetailsById,
+  categoryOptions,
+  categoryCascade,
+}: Props) {
   const selected = value.action_type;
 
   const itemSummary = useMemo(() => {
@@ -88,6 +103,52 @@ export function CouponActionEditor({ value, onChange, itemOptions, categoryOptio
     if (!count) return "";
     return `${count} item(s), ${qty} free each`;
   }, [selected, value.redeemFreeItems]);
+
+  const itemLabelById = useMemo(
+    () => new Map(itemOptions.map((option) => [Number(option.id), option.label])),
+    [itemOptions]
+  );
+
+  const updateFreeCustomizationQty = (
+    itemId: number,
+    customizationId: number,
+    rawQuantity: string
+  ) => {
+    const quantity = Math.max(0, Number(rawQuantity || 0));
+    const byItem = { ...(value.bxgy.free_customizations_by_item ?? {}) };
+    const current = [...(byItem[itemId] ?? [])];
+    const existingIndex = current.findIndex(
+      (entry) => Number(entry.customization_id) === Number(customizationId)
+    );
+
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      if (existingIndex >= 0) current.splice(existingIndex, 1);
+    } else if (existingIndex >= 0) {
+      current[existingIndex] = { customization_id: customizationId, quantity };
+    } else {
+      current.push({ customization_id: customizationId, quantity });
+    }
+
+    if (current.length) {
+      byItem[itemId] = current;
+    } else {
+      delete byItem[itemId];
+    }
+
+    onChange({
+      ...value,
+      bxgy: {
+        ...value.bxgy,
+        free_customizations_by_item: byItem,
+      },
+    });
+  };
+
+  const getFreeCustomizationQty = (itemId: number, customizationId: number) => {
+    const current = value.bxgy.free_customizations_by_item?.[itemId] ?? [];
+    return current.find((entry) => Number(entry.customization_id) === Number(customizationId))
+      ?.quantity ?? 0;
+  };
 
   return (
     <section className="flex gap-6 py-7">
@@ -748,6 +809,136 @@ export function CouponActionEditor({ value, onChange, itemOptions, categoryOptio
                 <span className="col-span-3 text-xs text-kk-dark-text-muted">
                   {value.bxgy.discount_type === "PERCENT" ? "0 - 100" : "Currency amount per unit"}
                 </span>
+              </div>
+            )}
+
+            {value.bxgy.discount_type === "FREE" && value.bxgy.get_item_ids.length > 0 && (
+              <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
+                <div className="text-sm font-medium text-kk-dark-text">Free Y Customizations</div>
+                <div className="mt-1 text-xs text-kk-dark-text-muted">
+                  These add-ons will be attached to the synthetic free Y item and cannot be changed in POS.
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {value.bxgy.get_item_ids.map((itemId) => {
+                    const itemDetail = itemDetailsById?.[itemId];
+                    const itemLabel =
+                      itemDetail?.name || itemLabelById.get(itemId) || `Item #${itemId}`;
+                    const customizations = itemDetail?.customizations ?? [];
+
+                    return (
+                      <div
+                        key={itemId}
+                        className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg px-3 py-3"
+                      >
+                        <div className="text-sm font-medium text-kk-dark-text">{itemLabel}</div>
+
+                        {!itemDetail ? (
+                          <div className="mt-2 text-xs text-kk-dark-text-muted">
+                            Loading available customizations...
+                          </div>
+                        ) : !itemDetail.customized || !customizations.length ? (
+                          <div className="mt-2 text-xs text-kk-dark-text-muted">
+                            This item has no configurable customizations.
+                          </div>
+                        ) : (
+                          <div className="mt-3 space-y-2">
+                            {customizations.map((customization) => (
+                              <div
+                                key={customization.id}
+                                className="grid grid-cols-12 gap-3 items-end rounded-lg border border-kk-dark-input-border px-3 py-2"
+                              >
+                                <div className="col-span-7">
+                                  <div className="text-sm text-kk-dark-text">
+                                    {customization.label}
+                                  </div>
+                                  <div className="text-xs text-kk-dark-text-muted">
+                                    {customization.child_name}
+                                  </div>
+                                </div>
+                                <div className="col-span-5">
+                                  <div className="mb-1 text-xs font-medium text-kk-dark-text-muted">
+                                    Qty per free item
+                                  </div>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step={customization.step_qty || "1"}
+                                    className="w-full rounded-md border border-kk-dark-input-border px-3 py-2"
+                                    value={getFreeCustomizationQty(itemId, customization.id ?? 0)}
+                                    onChange={(e) =>
+                                      updateFreeCustomizationQty(
+                                        itemId,
+                                        Number(customization.id || 0),
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {value.bxgy.discount_type !== "FREE" && (
+              <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
+                <div className="text-sm font-medium text-kk-dark-text">Customized Y Pricing</div>
+                <div className="mt-1 text-xs text-kk-dark-text-muted">
+                  Choose whether Y add-ons should be discounted together with the selected product.
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  <div className="grid grid-cols-6 gap-2 items-center">
+                    <p>Include customizations</p>
+                    <label className="col-span-5 flex items-center gap-2 text-xs text-kk-dark-text-muted">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={value.customized.apply_discount}
+                        onChange={(e) =>
+                          onChange({
+                            ...value,
+                            customized: {
+                              ...value.customized,
+                              apply_discount: e.target.checked,
+                            },
+                          })
+                        }
+                      />
+                      Apply the BXGY discount to Y add-ons as well
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-6 gap-2 items-center">
+                    <p>Discount scope</p>
+                    <div className="col-span-3">
+                      <select
+                        className="w-full rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-3 py-2"
+                        value={value.customized.discount_scope}
+                        disabled={!value.customized.apply_discount}
+                        onChange={(e) =>
+                          onChange({
+                            ...value,
+                            customized: {
+                              ...value.customized,
+                              discount_scope: e.target.value as any,
+                            },
+                          })
+                        }
+                      >
+                        <option value="AUTO">Auto (recommended)</option>
+                        <option value="PARENT_ONLY">Parent only (ignore add-ons)</option>
+                        <option value="BUNDLE">Bundle (include add-ons)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

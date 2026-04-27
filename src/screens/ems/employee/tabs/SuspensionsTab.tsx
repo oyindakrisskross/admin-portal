@@ -31,7 +31,7 @@ export const SuspensionsTab: React.FC<{ employeeId: number }> = ({ employeeId })
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Suspensions", "create")) return;
     try {
       await createSuspension({ employee: employeeId, start_date: form.start_date, end_date: form.end_date, reason: form.reason } as any);
       setForm({ start_date: "", end_date: "", reason: "" });
@@ -42,13 +42,13 @@ export const SuspensionsTab: React.FC<{ employeeId: number }> = ({ employeeId })
   };
 
   const handleApprove = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Suspensions", "approve")) return;
     await approveSuspension(id);
     await load();
   };
 
   const handleRevoke = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Suspensions", "approve")) return;
     if (!window.confirm("Revoke this suspension?")) return;
     await revokeSuspension(id);
     await load();
@@ -72,10 +72,10 @@ export const SuspensionsTab: React.FC<{ employeeId: number }> = ({ employeeId })
               <td>{statusLabel(row)}</td>
               <td>{row.reason || "-"}</td>
               <td className="text-right">
-                {row.approved_by == null && can("Employee", "approve") && (
+                {row.approved_by == null && can("Suspensions", "approve") && (
                   <button className="text-emerald-400" onClick={() => handleApprove(row.id!)}>Approve</button>
                 )}
-                {row.status_value === "ACTIVE" && can("Employee", "approve") && (
+                {row.status_value === "ACTIVE" && can("Suspensions", "approve") && (
                   <button className="ml-2 text-red-400" onClick={() => handleRevoke(row.id!)}>Revoke</button>
                 )}
               </td>
@@ -89,7 +89,7 @@ export const SuspensionsTab: React.FC<{ employeeId: number }> = ({ employeeId })
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Suspensions", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <input type="date" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.start_date} onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))} />
           <input type="date" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.end_date} onChange={(e) => setForm((prev) => ({ ...prev, end_date: e.target.value }))} />

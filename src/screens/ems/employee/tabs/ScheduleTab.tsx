@@ -57,7 +57,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
   }, [employeeId]);
 
   const handleCreateShift = async () => {
-    if (!can("Employee", "edit")) return;
+    if (!can("Schedule", "edit")) return;
     try {
       const payload: any = {
         employee: employeeId,
@@ -78,7 +78,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
   };
 
   const handleCreateOverride = async () => {
-    if (!can("Employee", "edit")) return;
+    if (!can("Schedule", "edit")) return;
     try {
       const payload: any = {
         employee: employeeId,
@@ -99,7 +99,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
   };
 
   const handleDeleteShift = async (id: number) => {
-    if (!can("Employee", "delete")) return;
+    if (!can("Schedule", "delete")) return;
     if (!window.confirm("Delete this shift?")) return;
     try {
       await deleteShift(id);
@@ -110,7 +110,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
   };
 
   const handleDeleteOverride = async (id: number) => {
-    if (!can("Employee", "delete")) return;
+    if (!can("Schedule", "delete")) return;
     if (!window.confirm("Delete this override?")) return;
     try {
       await deleteShiftOverride(id);
@@ -143,7 +143,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
                   <td>{s.shift_start} - {s.shift_end}</td>
                   <td>{s.valid_from} {s.valid_to ? `to ${s.valid_to}` : ""}</td>
                   <td className="text-right">
-                    {can("Employee", "delete") && (
+                    {can("Schedule", "delete") && (
                       <button type="button" onClick={() => handleDeleteShift(s.id!)} className="text-red-400 hover:text-red-300">
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -180,7 +180,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
                   <td>{o.shift_start || "-"} {o.shift_end ? `- ${o.shift_end}` : ""}</td>
                   <td>{o.override_type}</td>
                   <td className="text-right">
-                    {can("Employee", "delete") && (
+                    {can("Schedule", "delete") && (
                       <button type="button" onClick={() => handleDeleteOverride(o.id!)} className="text-red-400 hover:text-red-300">
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -198,7 +198,7 @@ export const ScheduleTab: React.FC<{ employeeId: number; locations: Location[] }
         </div>
       </div>
 
-      {can("Employee", "edit") && (
+      {can("Schedule", "edit") && (
         <div className="grid grid-cols-12 gap-4">
           <div className="col-span-6 rounded-lg border border-kk-dark-border p-4">
             <h4 className="text-xs font-semibold mb-3">Add Recurring Shift</h4>

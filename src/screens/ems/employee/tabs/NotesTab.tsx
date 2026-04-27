@@ -32,7 +32,7 @@ export const NotesTab: React.FC<{ employeeId: number }> = ({ employeeId }) => {
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Notes", "create")) return;
     try {
       await createNote({
         employee: employeeId,
@@ -48,7 +48,7 @@ export const NotesTab: React.FC<{ employeeId: number }> = ({ employeeId }) => {
   };
 
   const handleDelete = async (id: number) => {
-    if (!can("Employee", "delete")) return;
+    if (!can("Notes", "delete")) return;
     if (!window.confirm("Delete this note?")) return;
     try {
       await deleteNote(id);
@@ -76,7 +76,7 @@ export const NotesTab: React.FC<{ employeeId: number }> = ({ employeeId }) => {
               <td>{row.title}</td>
               <td>{row.body}</td>
               <td className="text-right">
-                {can("Employee", "delete") && (
+                {can("Notes", "delete") && (
                   <button className="text-red-400" onClick={() => handleDelete(row.id!)}>
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -92,7 +92,7 @@ export const NotesTab: React.FC<{ employeeId: number }> = ({ employeeId }) => {
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Notes", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <select className="col-span-2 rounded-md border bg-kk-dark-bg border-kk-dark-input-border px-2 py-1" value={form.note_type} onChange={(e) => setForm((prev) => ({ ...prev, note_type: e.target.value }))}>
             {NOTE_TYPE_CHOICES.map((opt) => (

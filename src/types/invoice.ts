@@ -56,6 +56,48 @@ export interface InvoicePayment {
   received_by_name?: string | null;
 }
 
+export interface AppliedCouponPreview {
+  name?: string;
+  coupon_name?: string;
+  code: string;
+  type?: string;
+  value?: string;
+  amount_applied?: string;
+  priority?: number;
+  allow_combine?: boolean;
+  action_type?: string;
+}
+
+export interface PriceCartPreviewLine {
+  line_index: number;
+  item_id: number;
+  quantity: string;
+  unit_price: string;
+  base: string;
+  line_discount_amount: string;
+  invoice_discount_amount: string;
+  total_discount_amount: string;
+  base_net_after_inv_discount: string;
+  tax: string;
+}
+
+export interface PriceCartPreviewResponse {
+  subtotal: string;
+  line_discount_total?: string;
+  invoice_discount_amount?: string;
+  discount_total: string;
+  tax_total: string;
+  grand_total: string;
+  lines?: PriceCartPreviewLine[];
+  applied_coupons?: AppliedCouponPreview[];
+  applied_coupon?: AppliedCouponPreview | null;
+  coupon_error?: {
+    detail?: string;
+    reason?: string;
+  } | null;
+  bonus_lines?: Array<PriceCartPreviewLine & { source_line_index?: number | null }>;
+}
+
 export interface InvoiceResponse {
   id: number;
   number: string;                    // "INV-9-000001"

@@ -26,6 +26,7 @@ import { CRMSettingsPage } from "../screens/settings/crm/CRMSettingsPage";
 import { ZohoCRMImportManagementPage } from "../screens/settings/crm/ZohoCRMImportManagementPage";
 import DailyReportsSettingsPage from "../screens/settings/DailyReportsSettingsPage";
 import MonthlyReportsSettingsPage from "../screens/settings/MonthlyReportsSettingsPage";
+import EMSSettingsPage from "../screens/settings/ems/EMSSettingsPage";
 import { RoleListPage } from "../screens/settings/access-control/RoleListPage";
 import RoleFormPage from "../screens/settings/access-control/RoleFormPage";
 import { PermCategoryListPage } from "../screens/settings/access-control/PermCategoryListPage";
@@ -53,9 +54,10 @@ import CategoriesReportPage from "../screens/reports/CategoriesReportPage";
 import CategoryChildrenReportPage from "../screens/reports/categories/CategoryChildrenReportPage";
 import { CategoryListPage } from "../screens/catalog/category/CategoryListPage";
 import CategoryFormPage from "../screens/catalog/category/CategoryFormPage";
+import { InventoryAdjustmentFormPage } from "../screens/catalog/inventoryAdjustment/InventoryAdjustmentFormPage";
+import { InventoryAdjustmentListPage } from "../screens/catalog/inventoryAdjustment/InventoryAdjustmentListPage";
 import { InventoryTransferListPage } from "../screens/catalog/inventoryTransfer/InventoryTransferListPage";
 import { InventoryTransferFormPage } from "../screens/catalog/inventoryTransfer/InventoryTransferFormPage";
-import { InventoryAdjustmentPage } from "../screens/catalog/inventoryAdjustment/InventoryAdjustmentPage";
 import { PlansListPage } from "../screens/catalog/plan/PlansListPage";
 import PlanFormPage from "../screens/catalog/plan/PlanFormPage";
 import { InvoiceListPage } from "../screens/sales/invoice/InvoiceListPage";
@@ -92,6 +94,17 @@ function RequirePerm({ perm, action = "view", children }: {
 }) {
   const { can } = useAuth();
   if (!can(perm, action)) return <Navigate to="/" replace />;
+  return children;
+}
+
+function RequireAnyPerm({ perms, actions = ["view"], children }: {
+  perms: string[];
+  actions?: (keyof PermissionBitSet)[];
+  children: JSX.Element;
+}) {
+  const { can } = useAuth();
+  const allowed = perms.some((perm) => actions.some((action) => can(perm, action)));
+  if (!allowed) return <Navigate to="/" replace />;
   return children;
 }
 
@@ -315,8 +328,32 @@ export default function App() {
         <Route
           path="catalog/inventory-adjustment"
           element={
+            <RequirePerm perm="Inventory Adjustment" action="view">
+              <InventoryAdjustmentListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/inventory-adjustment/:id"
+          element={
+            <RequirePerm perm="Inventory Adjustment" action="view">
+              <InventoryAdjustmentListPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/inventory-adjustment/new"
+          element={
             <RequirePerm perm="Inventory Adjustment" action="create">
-              <InventoryAdjustmentPage />
+              <InventoryAdjustmentFormPage />
+            </RequirePerm>
+          }
+        />
+        <Route
+          path="catalog/inventory-adjustment/:id/edit"
+          element={
+            <RequirePerm perm="Inventory Adjustment" action="edit">
+              <InventoryAdjustmentFormPage />
             </RequirePerm>
           }
         />
@@ -585,7 +622,7 @@ export default function App() {
         <Route
           path="ems/departments"
           element={
-            <RequirePerm perm="Employee" action="view">
+            <RequirePerm perm="Departments" action="view">
               <DepartmentListPage />
             </RequirePerm>
           }
@@ -593,7 +630,7 @@ export default function App() {
         <Route
           path="ems/departments/new"
           element={
-            <RequirePerm perm="Employee" action="create">
+            <RequirePerm perm="Departments" action="create">
               <DepartmentFormPage />
             </RequirePerm>
           }
@@ -601,7 +638,7 @@ export default function App() {
         <Route
           path="ems/departments/:id/edit"
           element={
-            <RequirePerm perm="Employee" action="edit">
+            <RequirePerm perm="Departments" action="edit">
               <DepartmentFormPage />
             </RequirePerm>
           }
@@ -609,7 +646,7 @@ export default function App() {
         <Route
           path="ems/positions"
           element={
-            <RequirePerm perm="Employee" action="view">
+            <RequirePerm perm="Job Positions" action="view">
               <JobPositionListPage />
             </RequirePerm>
           }
@@ -617,7 +654,7 @@ export default function App() {
         <Route
           path="ems/positions/new"
           element={
-            <RequirePerm perm="Employee" action="create">
+            <RequirePerm perm="Job Positions" action="create">
               <JobPositionFormPage />
             </RequirePerm>
           }
@@ -625,7 +662,7 @@ export default function App() {
         <Route
           path="ems/positions/:id/edit"
           element={
-            <RequirePerm perm="Employee" action="edit">
+            <RequirePerm perm="Job Positions" action="edit">
               <JobPositionFormPage />
             </RequirePerm>
           }
@@ -633,7 +670,7 @@ export default function App() {
         <Route
           path="ems/schedule"
           element={
-            <RequirePerm perm="Employee" action="view">
+            <RequirePerm perm="Schedule" action="view">
               <ScheduleBoardPage />
             </RequirePerm>
           }
@@ -749,6 +786,14 @@ export default function App() {
           />
 
           {/* Reports */}
+          <Route
+            path="ems"
+            element={
+              <RequireAnyPerm perms={["Time-Off (PTO)", "Overtime", "Payroll"]} actions={["view", "create", "edit"]}>
+                <EMSSettingsPage />
+              </RequireAnyPerm>
+            }
+          />
           <Route
             path="reports/daily"
             element={

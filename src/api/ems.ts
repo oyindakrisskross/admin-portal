@@ -4,6 +4,16 @@ import type { PaginatedResult } from "./types";
 import type { FilterSet } from "../types/filters";
 import type * as EMS from "../types/ems";
 
+export async function fetchEmsSettings() {
+  const res = await api.get<EMS.EmsSettings>("/api/ems/settings/");
+  return res.data;
+}
+
+export async function updateEmsSettings(payload: Partial<EMS.EmsSettings>) {
+  const res = await api.patch<EMS.EmsSettings>("/api/ems/settings/", payload);
+  return res.data;
+}
+
 // Departments
 export async function fetchDepartments(params?: { filters?: FilterSet }) {
   const res = await api.get<PaginatedResult<EMS.Department>>(

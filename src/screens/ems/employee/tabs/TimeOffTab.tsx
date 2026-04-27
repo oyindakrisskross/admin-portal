@@ -39,7 +39,7 @@ export const TimeOffTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Time-Off (PTO)", "create")) return;
     try {
       await createTimeOff({
         employee: employeeId,
@@ -58,20 +58,20 @@ export const TimeOffTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
   };
 
   const handleApprove = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Time-Off (PTO)", "approve")) return;
     await approveTimeOff(id);
     await load();
   };
 
   const handleDecline = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Time-Off (PTO)", "approve")) return;
     if (!window.confirm("Decline this request?")) return;
     await declineTimeOff(id);
     await load();
   };
 
   const handleCancel = async (id: number) => {
-    if (!can("Employee", "edit")) return;
+    if (!can("Time-Off (PTO)", "edit")) return;
     if (!window.confirm("Cancel this request?")) return;
     await cancelTimeOff(id);
     await load();
@@ -97,13 +97,13 @@ export const TimeOffTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
               <td>{statusLabel(row)}</td>
               <td>{row.reason || "-"}</td>
               <td className="text-right">
-                {row.status_value === "REQUESTED" && can("Employee", "approve") && (
+                {row.status_value === "REQUESTED" && can("Time-Off (PTO)", "approve") && (
                   <div className="flex justify-end gap-2">
                     <button className="text-emerald-400" onClick={() => handleApprove(row.id!)}>Approve</button>
                     <button className="text-red-400" onClick={() => handleDecline(row.id!)}>Decline</button>
                   </div>
                 )}
-                {row.status_value === "REQUESTED" && can("Employee", "edit") && (
+                {row.status_value === "REQUESTED" && can("Time-Off (PTO)", "edit") && (
                   <button className="text-kk-dark-text-muted" onClick={() => handleCancel(row.id!)}>Cancel</button>
                 )}
               </td>
@@ -117,7 +117,7 @@ export const TimeOffTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Time-Off (PTO)", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <select
             className="col-span-2 rounded-md border bg-kk-dark-bg border-kk-dark-input-border px-2 py-1"

@@ -186,7 +186,7 @@ export const ScheduleBoardPage: React.FC = () => {
   const handleDropShift = async (targetDate: string) => {
     if (!draggedShift || !dragOriginDate) return;
     if (targetDate === dragOriginDate) return;
-    if (!can("Employee", "edit")) {
+    if (!can("Schedule", "edit")) {
       setToast({ message: "You don't have permission to adjust schedules.", variant: "error" });
       return;
     }
@@ -467,9 +467,9 @@ export const ScheduleBoardPage: React.FC = () => {
                                 return (
                                   <div
                                     key={`${inst.employee_id}-${inst.location_id}-${rowIdx}`}
-                                    draggable={can("Employee", "edit")}
+                                    draggable={can("Schedule", "edit")}
                                     onDragStart={(e) => {
-                                      if (!can("Employee", "edit")) return;
+                                      if (!can("Schedule", "edit")) return;
                                       e.dataTransfer.effectAllowed = "move";
                                       try {
                                         e.dataTransfer.setData("text/plain", "shift");
@@ -484,7 +484,7 @@ export const ScheduleBoardPage: React.FC = () => {
                                     }}
                                     className={`rounded-md border border-kk-dark-border bg-kk-dark-bg-elevated/60 px-2 py-1 text-[10px] ${
                                       accent ? "border-l-4" : ""
-                                    } ${can("Employee", "edit") ? "cursor-grab active:cursor-grabbing" : ""}`}
+                                    } ${can("Schedule", "edit") ? "cursor-grab active:cursor-grabbing" : ""}`}
                                     style={
                                       accent
                                         ? { borderLeftColor: accent.solid, backgroundColor: accent.soft }
@@ -591,9 +591,9 @@ export const ScheduleBoardPage: React.FC = () => {
                           return (
                             <div
                               key={`${inst.employee_id}-${inst.location_id}-${idx}`}
-                              draggable={can("Employee", "edit")}
+                              draggable={can("Schedule", "edit")}
                               onDragStart={(e) => {
-                                if (!can("Employee", "edit")) return;
+                                if (!can("Schedule", "edit")) return;
                                 e.dataTransfer.effectAllowed = "move";
                                 try {
                                   e.dataTransfer.setData("text/plain", "shift");
@@ -608,7 +608,7 @@ export const ScheduleBoardPage: React.FC = () => {
                               }}
                               className={`rounded-md border border-kk-dark-border px-2 py-1 text-[10px] ${
                                 accent ? "border-l-4" : ""
-                              } ${can("Employee", "edit") ? "cursor-grab active:cursor-grabbing" : ""}`}
+                              } ${can("Schedule", "edit") ? "cursor-grab active:cursor-grabbing" : ""}`}
                               style={
                                 accent
                                   ? { borderLeftColor: accent.solid, backgroundColor: accent.soft }

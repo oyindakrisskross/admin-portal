@@ -1,6 +1,7 @@
 // src/screens/catalog/item/Locations.tsx
 
 import React, { useEffect, useMemo, useState } from "react";
+import { QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 
 import type { Inventory } from "../../../types/catalog";
 import { fetchInventory } from "../../../api/catalog";
@@ -12,7 +13,7 @@ interface Props {
 
 export const Locations: React.FC<Props> = ({ itemId }) => {
   const [inventories, setInventories] = useState<Inventory[]>([]);
-  const [sort, setSort] = useState<SortState<"location" | "stock" | "wasted" | "reorder"> | null>(null);
+  const [sort, setSort] = useState<SortState<"location" | "available" | "current" | "wasted" | "reorder"> | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -24,7 +25,8 @@ export const Locations: React.FC<Props> = ({ itemId }) => {
   const rows = useMemo(() => {
     return sortBy(inventories, sort, {
       location: (r) => r.location_name ?? "",
-      stock: (r) => r.stock_qty ?? "",
+      available: (r) => r.available_qty ?? r.stock_qty ?? "",
+      current: (r) => r.stock_qty ?? "",
       wasted: (r) => r.wasted ?? "",
       reorder: (r) => r.reorder_point ?? "",
     });
@@ -43,9 +45,31 @@ export const Locations: React.FC<Props> = ({ itemId }) => {
             </th>
             <th
               className="cursor-pointer select-none"
-              onClick={() => setSort((s) => nextSort(s, "stock"))}
+              onClick={() => setSort((s) => nextSort(s, "available"))}
             >
-              Stock Qty{sortIndicator(sort, "stock")}
+              <span className="inline-flex items-center gap-1">
+                Available Qty{sortIndicator(sort, "available")}
+                <span className="help inline-flex items-center">
+                  <QuestionMarkCircleIcon className="h-4 w-4 text-kk-dark-text-muted" />
+                  <span className="tooltip-r w-[220px]">
+                    Stock available after subtracting units currently reserved on held POS orders.
+                  </span>
+                </span>
+              </span>
+            </th>
+            <th
+              className="cursor-pointer select-none"
+              onClick={() => setSort((s) => nextSort(s, "current"))}
+            >
+              <span className="inline-flex items-center gap-1">
+                Current Qty{sortIndicator(sort, "current")}
+                <span className="help inline-flex items-center">
+                  <QuestionMarkCircleIcon className="h-4 w-4 text-kk-dark-text-muted" />
+                  <span className="tooltip-r w-[220px]">
+                    Total stock on hand before subtracting units currently reserved on held POS orders.
+                  </span>
+                </span>
+              </span>
             </th>
             <th
               className="cursor-pointer select-none"
@@ -65,6 +89,7 @@ export const Locations: React.FC<Props> = ({ itemId }) => {
           {rows.map((t) => (
             <tr key={t.id}>
               <td>{t.location_name}</td>
+              <td>{t.available_qty ?? t.stock_qty}</td>
               <td>{t.stock_qty}</td>
               <td>{t.wasted}</td>
               <td>{t.reorder_point}</td>
@@ -74,7 +99,7 @@ export const Locations: React.FC<Props> = ({ itemId }) => {
           {!inventories.length && (
             <tr>
               <td
-                colSpan={4}
+                colSpan={5}
                 className="px-3 py-10 text-center text-xs text-kk-dark-text-muted"
               >
                 No inventory yet.

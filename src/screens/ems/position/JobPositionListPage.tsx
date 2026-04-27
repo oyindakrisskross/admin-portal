@@ -32,7 +32,7 @@ export const JobPositionListPage: React.FC = () => {
   }, []);
 
   const handleDelete = async (id: number) => {
-    if (!can("Employee", "delete")) return;
+    if (!can("Job Positions", "delete")) return;
     if (!window.confirm("Deactivate this position?")) return;
     try {
       await deletePosition(id);
@@ -53,7 +53,7 @@ export const JobPositionListPage: React.FC = () => {
           section="EMS"
           title="Job Positions"
           right={
-            can("Employee", "create") ? (
+            can("Job Positions", "create") ? (
               <button
                 onClick={() => navigate("/ems/positions/new")}
                 className="new inline-flex items-center gap-1 rounded-full"
@@ -86,7 +86,7 @@ export const JobPositionListPage: React.FC = () => {
                   <td>{p.department_name || "-"}</td>
                   <td>{p.is_active === false ? "Inactive" : "Active"}</td>
                   <td className="text-right">
-                    {can("Employee", "delete") && (
+                    {can("Job Positions", "delete") && (
                       <button
                         type="button"
                         onClick={(e) => {

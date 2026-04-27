@@ -1,14 +1,37 @@
 // src/api/promotions.ts
 
 import api from "./client";
+import { buildQueryPath } from "./query";
 import type { PaginatedResult } from "./types";
-import type { Coupon, CouponSchedule } from "../types/promotions";
+import type {
+  BulkCouponAction,
+  BulkCouponResult,
+  Coupon,
+  CouponSchedule,
+} from "../types/promotions";
+import type { FilterSet } from "../types/filters";
 
 // Coupons
-export async function fetchCoupons(params?: Record<string, any>) {
-  const res = await api.get<PaginatedResult<Coupon>>("/api/promotions/coupons/", {
-    params,
-  });
+export async function fetchCoupons(params?: {
+  filters?: FilterSet;
+  search?: string;
+  page?: number;
+  page_size?: number;
+  sort?: string;
+  order?: "asc" | "desc";
+}) {
+  const res = await api.get<PaginatedResult<Coupon>>(
+    buildQueryPath("/api/promotions/coupons/", {
+      params: {
+        search: params?.search,
+        page: params?.page,
+        page_size: params?.page_size,
+        sort: params?.sort,
+        order: params?.order,
+      },
+      filters: params?.filters,
+    })
+  );
   return res.data;
 }
 
@@ -34,6 +57,15 @@ export async function deleteCoupon(id: number) {
 
 export async function resetCouponUsage(id: number) {
   const res = await api.post<Coupon>(`/api/promotions/coupons/${id}/reset-usage/`);
+  return res.data;
+}
+
+export async function bulkCoupons(payload: {
+  ids: number[];
+  action: BulkCouponAction;
+  value?: string;
+}) {
+  const res = await api.post<BulkCouponResult>("/api/promotions/coupons/bulk/", payload);
   return res.data;
 }
 

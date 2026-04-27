@@ -5,6 +5,14 @@ import DetailSection from "../../../../components/detail/DetailSection";
 import DetailField from "../../../../components/detail/DetailField";
 import { formatDate, money } from "../employeeUtils";
 
+function formatLeaveDays(value: number | string | null | undefined) {
+  if (value == null || value === "") return "-";
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return String(value);
+  const display = Number.isInteger(parsed) ? parsed.toFixed(0) : parsed.toFixed(2);
+  return `${display} day${parsed === 1 ? "" : "s"}`;
+}
+
 export const ProfileTab: React.FC<{ employee: Employee }> = ({ employee }) => {
   const name = [employee.first_name, employee.last_name].filter(Boolean).join(" ").trim();
   const locations = employee.locations ?? [];
@@ -37,6 +45,12 @@ export const ProfileTab: React.FC<{ employee: Employee }> = ({ employee }) => {
             value={employee.rate_amount != null ? `NGN ${money(employee.rate_amount)}` : "-"}
           />
           <DetailField label="Rate Term" value={employee.rate_term_name || employee.rate_term_value || "-"} />
+          {employee.calculated_hourly_rate != null && (
+            <DetailField
+              label="Calculated Hourly Rate"
+              value={`NGN ${money(employee.calculated_hourly_rate)}`}
+            />
+          )}
           <DetailField label="Daily Hours" value={employee.standard_daily_hours ?? "-"} />
           <DetailField
             label="Overtime Eligible"
@@ -46,6 +60,9 @@ export const ProfileTab: React.FC<{ employee: Employee }> = ({ employee }) => {
             label="Workdays"
             value={(employee.work_pattern_weekdays ?? []).join(", ") || "-"}
           />
+          {employee.calculated_hourly_rate_note ? (
+            <div className="text-xs text-kk-dark-text-muted">{employee.calculated_hourly_rate_note}</div>
+          ) : null}
         </DetailSection>
 
         <DetailSection title="Locations">
@@ -66,8 +83,12 @@ export const ProfileTab: React.FC<{ employee: Employee }> = ({ employee }) => {
         </DetailSection>
 
         <DetailSection title="Balances">
-          <DetailField label="PTO Used" value={employee.pto_used_days ?? "-"} />
-          <DetailField label="Sick Used" value={employee.sick_used_days ?? "-"} />
+          <DetailField label="PTO Available" value={formatLeaveDays(employee.pto_available_days)} />
+          <DetailField label="PTO Remaining" value={formatLeaveDays(employee.pto_remaining_days)} />
+          <DetailField label="PTO Used" value={formatLeaveDays(employee.pto_used_days)} />
+          <DetailField label="Sick Available" value={formatLeaveDays(employee.sick_available_days)} />
+          <DetailField label="Sick Remaining" value={formatLeaveDays(employee.sick_remaining_days)} />
+          <DetailField label="Sick Used" value={formatLeaveDays(employee.sick_used_days)} />
         </DetailSection>
       </div>
 

@@ -38,7 +38,7 @@ export const AdvancesTab: React.FC<{ employeeId: number }> = ({ employeeId }) =>
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Advances", "create")) return;
     try {
       await createAdvance({
         employee: employeeId,
@@ -56,13 +56,13 @@ export const AdvancesTab: React.FC<{ employeeId: number }> = ({ employeeId }) =>
   };
 
   const handleApprove = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Advances", "approve")) return;
     await approveAdvance(id);
     await load();
   };
 
   const handleDecline = async (id: number) => {
-    if (!can("Employee", "approve")) return;
+    if (!can("Advances", "approve")) return;
     if (!window.confirm("Decline this request?")) return;
     await declineAdvance(id);
     await load();
@@ -88,7 +88,7 @@ export const AdvancesTab: React.FC<{ employeeId: number }> = ({ employeeId }) =>
               <td>{statusLabel(row)}</td>
               <td>{row.reason || "-"}</td>
               <td className="text-right">
-                {row.status_value === "REQUESTED" && can("Employee", "approve") && (
+                {row.status_value === "REQUESTED" && can("Advances", "approve") && (
                   <div className="flex justify-end gap-2">
                     <button className="text-emerald-400" onClick={() => handleApprove(row.id!)}>Approve</button>
                     <button className="text-red-400" onClick={() => handleDecline(row.id!)}>Decline</button>
@@ -105,7 +105,7 @@ export const AdvancesTab: React.FC<{ employeeId: number }> = ({ employeeId }) =>
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Advances", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <input type="date" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.request_date} onChange={(e) => setForm((prev) => ({ ...prev, request_date: e.target.value }))} />
           <input type="number" step="0.01" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.amount} onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))} placeholder="Amount" />

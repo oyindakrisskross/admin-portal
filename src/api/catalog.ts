@@ -91,6 +91,16 @@ export async function fetchTaxRule(id: number) {
   return res.data;
 }
 
+export async function fetchTaxSettings() {
+  const res = await api.get<Catalog.TaxSettings>("/api/catalog/tax-settings/");
+  return res.data;
+}
+
+export async function updateTaxSettings(payload: Partial<Catalog.TaxSettings>) {
+  const res = await api.patch<Catalog.TaxSettings>("/api/catalog/tax-settings/", payload);
+  return res.data;
+}
+
 export async function updateTaxRule(id: number, payload: Catalog.ItemGroup) {
   const res = await api.patch<Catalog.TaxRule>(`/api/catalog/tax-rules/${id}/`, payload);
   return res.data;
@@ -225,6 +235,44 @@ export async function searchItems(
     signal: params?.signal,
   });
   return res.data;
+}
+
+// Inventory Adjustments
+export async function fetchInventoryAdjustments(params?: Record<string, any>) {
+  const res = await api.get<PaginatedResult<Catalog.InventoryAdjustmentOrder>>(
+    "/api/catalog/inventory-adjustments/",
+    { params }
+  );
+  return res.data;
+}
+
+export async function fetchInventoryAdjustment(id: number) {
+  const res = await api.get<Catalog.InventoryAdjustmentOrder>(`/api/catalog/inventory-adjustments/${id}/`);
+  return res.data;
+}
+
+export async function createInventoryAdjustment(payload: Catalog.InventoryAdjustmentOrder) {
+  const res = await api.post<Catalog.InventoryAdjustmentOrder>("/api/catalog/inventory-adjustments/", payload);
+  return res.data;
+}
+
+export async function updateInventoryAdjustment(id: number, payload: Partial<Catalog.InventoryAdjustmentOrder>) {
+  const res = await api.patch<Catalog.InventoryAdjustmentOrder>(`/api/catalog/inventory-adjustments/${id}/`, payload);
+  return res.data;
+}
+
+export async function sendInventoryAdjustmentForApproval(id: number) {
+  const res = await api.post<Catalog.InventoryAdjustmentOrder>(`/api/catalog/inventory-adjustments/${id}/send-for-approval/`);
+  return res.data;
+}
+
+export async function approveInventoryAdjustment(id: number) {
+  const res = await api.post<Catalog.InventoryAdjustmentOrder>(`/api/catalog/inventory-adjustments/${id}/approve/`);
+  return res.data;
+}
+
+export async function deleteInventoryAdjustment(id: number) {
+  await api.delete(`/api/catalog/inventory-adjustments/${id}/`);
 }
 
 // Inventory Transfers

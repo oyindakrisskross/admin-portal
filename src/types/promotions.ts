@@ -53,6 +53,18 @@ export const CDTN_MODE_CHOICES: {value: ConditionMode; label: string}[] = [
     {value: "EACH", label: "Each"},
 ];
 
+export type CouponCombineDiscountBasis =
+    | "ORIGINAL_SUBTOTAL"
+    | "DISCOUNTED_SUBTOTAL";
+
+export const COUPON_COMBINE_DISCOUNT_BASIS_OPTIONS: {
+    value: CouponCombineDiscountBasis;
+    label: string;
+}[] = [
+    {value: "DISCOUNTED_SUBTOTAL", label: "Discounted subtotal"},
+    {value: "ORIGINAL_SUBTOTAL", label: "Original subtotal"},
+];
+
 export interface Coupon {
     id?: number;
     name: string;
@@ -60,6 +72,7 @@ export interface Coupon {
     active: boolean;
     auto_apply: boolean;
     allow_combine?: boolean;
+    combine_discount_basis?: CouponCombineDiscountBasis;
     max_uses?: number;
     use_count?: number;
     available_online: boolean;
@@ -82,6 +95,26 @@ export interface Coupon {
     updated_on?: string;
     schedules?: CouponSchedule[];
 };
+
+export type BulkCouponAction =
+  | "make_active"
+  | "make_inactive"
+  | "delete"
+  | "set_start_date"
+  | "set_end_date";
+
+export interface BulkCouponFailure {
+  id: number;
+  reason: string;
+  detail?: string;
+}
+
+export interface BulkCouponResult {
+  ok_ids: number[];
+  failed: BulkCouponFailure[];
+  deleted_ids?: number[];
+  deactivated_ids?: number[];
+}
 
 export type WeekDay = "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN";
 

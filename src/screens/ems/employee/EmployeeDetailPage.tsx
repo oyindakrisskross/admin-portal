@@ -81,6 +81,27 @@ export default function EmployeeDetailPage() {
     };
   }, [employeeId]);
 
+  const visibleTabs: { key: TabKey; label: string }[] = [
+    { key: "profile", label: "Profile" },
+    ...(can("Schedule", "view") ? [{ key: "schedule" as TabKey, label: "Schedule" }] : []),
+    ...(can("Attendance", "view") ? [{ key: "attendance" as TabKey, label: "Attendance" }] : []),
+    ...(can("Time-Off (PTO)", "view") ? [{ key: "timeoff" as TabKey, label: "Time Off" }] : []),
+    ...(can("Overtime", "view") ? [{ key: "overtime" as TabKey, label: "Overtime" }] : []),
+    ...(can("Payroll", "view") ? [{ key: "payroll" as TabKey, label: "Payroll" }] : []),
+    ...(can("Advances", "view") ? [{ key: "advances" as TabKey, label: "Advances" }] : []),
+    ...(can("Wallet", "view") ? [{ key: "wallet" as TabKey, label: "Wallet" }] : []),
+    ...(can("Notes", "view") ? [{ key: "notes" as TabKey, label: "Notes" }] : []),
+    ...(can("Documents", "view") ? [{ key: "documents" as TabKey, label: "Documents" }] : []),
+    ...(can("Suspensions", "view") ? [{ key: "suspensions" as TabKey, label: "Suspensions" }] : []),
+    { key: "audit", label: "Audit Log" },
+  ];
+
+  useEffect(() => {
+    if (!visibleTabs.some((entry) => entry.key === tab)) {
+      setTab(visibleTabs[0]?.key ?? "profile");
+    }
+  }, [tab, visibleTabs]);
+
   if (loading) {
     return <div className="p-6 text-sm">Loading employee...</div>;
   }
@@ -113,31 +134,24 @@ export default function EmployeeDetailPage() {
       />
 
       <div className="px-6 pt-4 pb-2 border-b border-kk-dark-border flex flex-wrap gap-4 text-sm">
-        <TabNav action={() => setTab("profile")} isActive={tab === "profile"}>Profile</TabNav>
-        <TabNav action={() => setTab("schedule")} isActive={tab === "schedule"}>Schedule</TabNav>
-        <TabNav action={() => setTab("attendance")} isActive={tab === "attendance"}>Attendance</TabNav>
-        <TabNav action={() => setTab("timeoff")} isActive={tab === "timeoff"}>Time Off</TabNav>
-        <TabNav action={() => setTab("overtime")} isActive={tab === "overtime"}>Overtime</TabNav>
-        <TabNav action={() => setTab("payroll")} isActive={tab === "payroll"}>Payroll</TabNav>
-        <TabNav action={() => setTab("advances")} isActive={tab === "advances"}>Advances</TabNav>
-        <TabNav action={() => setTab("wallet")} isActive={tab === "wallet"}>Wallet</TabNav>
-        <TabNav action={() => setTab("notes")} isActive={tab === "notes"}>Notes</TabNav>
-        <TabNav action={() => setTab("documents")} isActive={tab === "documents"}>Documents</TabNav>
-        <TabNav action={() => setTab("suspensions")} isActive={tab === "suspensions"}>Suspensions</TabNav>
-        <TabNav action={() => setTab("audit")} isActive={tab === "audit"}>Audit Log</TabNav>
+        {visibleTabs.map((entry) => (
+          <TabNav key={entry.key} action={() => setTab(entry.key)} isActive={tab === entry.key}>
+            {entry.label}
+          </TabNav>
+        ))}
       </div>
 
       {tab === "profile" && <ProfileTab employee={employee} />}
-      {tab === "schedule" && <ScheduleTab employeeId={employeeId} locations={locations} />}
-      {tab === "attendance" && <AttendanceTab employeeId={employeeId} locations={locations} />}
-      {tab === "timeoff" && <TimeOffTab employeeId={employeeId} />}
-      {tab === "overtime" && <OvertimeTab employeeId={employeeId} locations={locations} />}
-      {tab === "payroll" && <PayrollTab employeeId={employeeId} />}
-      {tab === "advances" && <AdvancesTab employeeId={employeeId} />}
-      {tab === "wallet" && <WalletTab employeeId={employeeId} locations={locations} />}
-      {tab === "notes" && <NotesTab employeeId={employeeId} />}
-      {tab === "documents" && <DocumentsTab employeeId={employeeId} />}
-      {tab === "suspensions" && <SuspensionsTab employeeId={employeeId} />}
+      {tab === "schedule" && can("Schedule", "view") && <ScheduleTab employeeId={employeeId} locations={locations} />}
+      {tab === "attendance" && can("Attendance", "view") && <AttendanceTab employeeId={employeeId} locations={locations} />}
+      {tab === "timeoff" && can("Time-Off (PTO)", "view") && <TimeOffTab employeeId={employeeId} />}
+      {tab === "overtime" && can("Overtime", "view") && <OvertimeTab employeeId={employeeId} locations={locations} />}
+      {tab === "payroll" && can("Payroll", "view") && <PayrollTab employeeId={employeeId} />}
+      {tab === "advances" && can("Advances", "view") && <AdvancesTab employeeId={employeeId} />}
+      {tab === "wallet" && can("Wallet", "view") && <WalletTab employeeId={employeeId} locations={locations} />}
+      {tab === "notes" && can("Notes", "view") && <NotesTab employeeId={employeeId} />}
+      {tab === "documents" && can("Documents", "view") && <DocumentsTab employeeId={employeeId} />}
+      {tab === "suspensions" && can("Suspensions", "view") && <SuspensionsTab employeeId={employeeId} />}
       {tab === "audit" && <AuditTab employeeId={employeeId} />}
 
       <ToastModal message={toast?.message ?? null} onClose={() => setToast(null)} variant={toast?.variant ?? "error"} />

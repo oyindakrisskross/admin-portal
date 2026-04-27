@@ -40,7 +40,7 @@ export const PayrollTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
   }, [employeeId]);
 
   const handleCreate = async () => {
-    if (!can("Employee", "create")) return;
+    if (!can("Payroll", "create")) return;
     try {
       await createPayment({
         employee: employeeId,
@@ -90,7 +90,7 @@ export const PayrollTab: React.FC<{ employeeId: number }> = ({ employeeId }) => 
         </tbody>
       </table>
 
-      {can("Employee", "create") && (
+      {can("Payroll", "create") && (
         <div className="grid grid-cols-12 gap-4 rounded-lg border border-kk-dark-border p-4 text-xs">
           <input type="date" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.pay_period_start} onChange={(e) => setForm((prev) => ({ ...prev, pay_period_start: e.target.value }))} />
           <input type="date" className="col-span-2 rounded-md border border-kk-dark-input-border px-2 py-1" value={form.pay_period_end} onChange={(e) => setForm((prev) => ({ ...prev, pay_period_end: e.target.value }))} />

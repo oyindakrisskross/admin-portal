@@ -96,9 +96,9 @@ const portalLinks = [
     icon: <Users className="h-5 w-5" />,
     children: [
       { to: "/ems/employees", label: "Directory", perm: "Employee" },
-      { to: "/ems/departments", label: "Departments", perm: "Employee" },
-      { to: "/ems/positions", label: "Job Positions", perm: "Employee" },
-      { to: "/ems/schedule", label: "Schedule Board", perm: "Employee" },
+      { to: "/ems/departments", label: "Departments", perm: "Departments" },
+      { to: "/ems/positions", label: "Job Positions", perm: "Job Positions" },
+      { to: "/ems/schedule", label: "Schedule Board", perm: "Schedule" },
     ],
   },
   {

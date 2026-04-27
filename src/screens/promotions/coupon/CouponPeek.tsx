@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Coupon } from "../../../types/promotions";
-import { ACTION_CHOICES, CDTN_MODE_CHOICES, CDTN_TYPE_CHOICES, DAY_CHOICES } from "../../../types/promotions";
+import {
+  ACTION_CHOICES,
+  CDTN_MODE_CHOICES,
+  CDTN_TYPE_CHOICES,
+  COUPON_COMBINE_DISCOUNT_BASIS_OPTIONS,
+  DAY_CHOICES,
+} from "../../../types/promotions";
 import { fetchCoupon } from "../../../api/promotions";
 import { fetchItem, fetchItemGroup } from "../../../api/catalog";
 import { TabNav } from "../../../components/layout/TabNav";
@@ -26,6 +32,9 @@ const conditionModeLabel = (v?: string) =>
 
 const weekdayLabel = (v?: string) =>
   DAY_CHOICES.find((d) => d.value === v)?.label ?? v ?? "-";
+
+const combineDiscountBasisLabel = (v?: string) =>
+  COUPON_COMBINE_DISCOUNT_BASIS_OPTIONS.find((option) => option.value === v)?.label ?? v ?? "-";
 
 const toDate = (v?: string) => (v ? new Date(v).toLocaleString() : "-");
 const yn = (v: any) => (v ? "Yes" : "No");
@@ -386,6 +395,14 @@ export const CouponPeek: React.FC<Props> = ({ coupon }) => {
           <div className="grid grid-cols-10">
             <p className="text-kk-dark-text-muted col-span-2">Allow Combine</p>
             <p className="col-span-4">{yn((c as any).allow_combine)}</p>
+          </div>
+          <div className="grid grid-cols-10">
+            <p className="text-kk-dark-text-muted col-span-2">Combined Discount Basis</p>
+            <p className="col-span-4">
+              {c.allow_combine
+                ? combineDiscountBasisLabel((c as any).combine_discount_basis)
+                : "Not applicable"}
+            </p>
           </div>
           <div className="grid grid-cols-10">
             <p className="text-kk-dark-text-muted col-span-2">Available Online</p>
