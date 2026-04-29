@@ -21,7 +21,7 @@ import {
 } from "../../types/catalog";
 
 import { 
-  fetchItems,
+  fetchAllItems,
   createItem, 
   updateItem,
   fetchUnits,
@@ -219,8 +219,8 @@ export const ItemForm: React.FC<Props> = ({ initial }) => {
 
   useEffect(() => {
     (async () => {
-      const data = await fetchItems();
-      setItems(data.results);
+      const data = await fetchAllItems();
+      setItems(data);
     })();
   }, []);
 

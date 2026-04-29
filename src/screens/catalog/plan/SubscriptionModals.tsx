@@ -23,7 +23,8 @@ import {
 } from "../../../api/subscriptions";
 import { fetchLocations } from "../../../api/location";
 import type { Location } from "../../../types/location";
-import { fetchCategories, fetchItemGroups, fetchItems } from "../../../api/catalog";
+import { fetchAllItems, fetchCategories, fetchItem, fetchItemGroups } from "../../../api/catalog";
+import type { Category, Item, ItemGroup } from "../../../types/catalog";
 import {
   buildActionConfig,
   actionDraftFromCoupon,
@@ -454,6 +455,7 @@ export function SubscriptionCouponModal(props: {
   });
   const [locations, setLocations] = useState<Location[]>([]);
   const [itemOptions, setItemOptions] = useState<SelectOption[]>([]);
+  const [itemDetailsById, setItemDetailsById] = useState<Record<number, Item>>({});
   const [groupOptions, setGroupOptions] = useState<SelectOption[]>([]);
   const [categoryOptions, setCategoryOptions] = useState<SelectOption[]>([]);
   const [categoryCascade, setCategoryCascade] = useState<{ descendantsById: Record<number, number[]> }>({
@@ -517,19 +519,72 @@ export function SubscriptionCouponModal(props: {
 
   useEffect(() => {
     if (!props.open) return;
+    const requestedIds = Array.from(
+      new Set(
+        [
+          ...(actionDraft.bxgy.get_item_ids ?? []),
+          ...(actionDraft.bxgy.buy_item_ids ?? []),
+          ...(actionDraft.itemPercent.item_ids ?? []),
+          ...(actionDraft.itemAmount.item_ids ?? []),
+          ...Object.keys(actionDraft.customization_rules_by_item ?? {}).map(Number),
+        ].filter((id) => Number.isFinite(Number(id)))
+      )
+    );
+    const missingIds = requestedIds.filter((id) => !itemDetailsById[id]);
+    if (!missingIds.length) return;
+
+    let cancelled = false;
+    (async () => {
+      const results = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const item = await fetchItem(id);
+            return [id, item] as const;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      if (cancelled) return;
+      setItemDetailsById((prev) => {
+        const next = { ...prev };
+        results.forEach((result) => {
+          if (!result) return;
+          next[result[0]] = result[1];
+        });
+        return next;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    props.open,
+    actionDraft.bxgy.get_item_ids,
+    actionDraft.bxgy.buy_item_ids,
+    actionDraft.itemPercent.item_ids,
+    actionDraft.itemAmount.item_ids,
+    actionDraft.customization_rules_by_item,
+    itemDetailsById,
+  ]);
+
+  useEffect(() => {
+    if (!props.open) return;
     let cancelled = false;
     (async () => {
       try {
         const [itemsRes, groupsRes, categoriesRes] = await Promise.all([
-          fetchItems(),
+          fetchAllItems(),
           fetchItemGroups(),
           fetchCategories(),
         ]);
         if (cancelled) return;
-        const items = (itemsRes?.results ?? []) as any[];
-        const groups = (groupsRes?.results ?? []) as any[];
-        const categories = (categoriesRes?.results ?? []) as any[];
-        const catTree = buildCategoryTree(categories as any);
+        const items = itemsRes;
+        const groups = (groupsRes?.results ?? []) as ItemGroup[];
+        const categories = (categoriesRes?.results ?? []) as Category[];
+        const catTree = buildCategoryTree(categories);
         setItemOptions(
           items
             .filter((i) => i?.id != null)
@@ -972,6 +1027,7 @@ export function SubscriptionCouponModal(props: {
           value={actionDraft}
           onChange={setActionDraft}
           itemOptions={itemOptions}
+          itemDetailsById={itemDetailsById}
           categoryOptions={categoryOptions}
           categoryCascade={categoryCascade}
         />

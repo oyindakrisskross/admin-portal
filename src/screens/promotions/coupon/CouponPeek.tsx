@@ -214,7 +214,10 @@ export const CouponPeek: React.FC<Props> = ({ coupon }) => {
     };
   }, [coupon.id]);
 
-  const c = peekCoupon ?? coupon;
+  const c = useMemo(
+    () => ({ ...(peekCoupon ?? coupon), active: coupon.active }),
+    [coupon, peekCoupon]
+  );
 
   const referencedItemIds = useMemo(() => {
     const ids: number[] = [];

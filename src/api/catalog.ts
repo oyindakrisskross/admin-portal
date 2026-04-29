@@ -170,19 +170,23 @@ export async function deleteItemGroup(id: number) {
 
 
 // Items
-// export async function fetchItems(params?: Record<string, any>) {
-//   const res = await api.get<PaginatedResult<Catalog.Item>>("/api/catalog/items/", { params });
-//   return res.data;
-// }
-export async function fetchItems(params?: {
+export type FetchItemsParams = {
   filters?: FilterSet;
   search?: string;
   page?: number;
   page_size?: number;
   sort?: string;
   order?: "asc" | "desc";
-}) {
-  const res = await api.get(
+};
+
+const FETCH_ALL_ITEMS_PAGE_SIZE = 100;
+
+// export async function fetchItems(params?: Record<string, any>) {
+//   const res = await api.get<PaginatedResult<Catalog.Item>>("/api/catalog/items/", { params });
+//   return res.data;
+// }
+export async function fetchItems(params?: FetchItemsParams): Promise<PaginatedResult<Catalog.Item>> {
+  const res = await api.get<PaginatedResult<Catalog.Item>>(
     buildQueryPath("/api/catalog/item-lte/", {
       params: {
         search: params?.search,
@@ -195,6 +199,27 @@ export async function fetchItems(params?: {
     })
   );
   return res.data;
+}
+
+export async function fetchAllItems(
+  params?: Omit<FetchItemsParams, "page" | "page_size"> & { page_size?: number }
+): Promise<Catalog.Item[]> {
+  const pageSize = params?.page_size ?? FETCH_ALL_ITEMS_PAGE_SIZE;
+  const items: Catalog.Item[] = [];
+  let page = 1;
+  let count: number | null = null;
+
+  while (true) {
+    const data = await fetchItems({ ...params, page, page_size: pageSize });
+    const results = data.results ?? [];
+    items.push(...results);
+    count = typeof data.count === "number" ? data.count : count;
+
+    if (!data.next || (count != null && items.length >= count)) break;
+    page += 1;
+  }
+
+  return items;
 }
 
 export async function fetchItem(id: number) {

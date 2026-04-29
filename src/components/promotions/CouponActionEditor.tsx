@@ -10,6 +10,15 @@ type BXGYFreeCustomizationSelection = {
   quantity: number;
 };
 
+type CustomizationRequiredMode = "ALL" | "ANY";
+
+type CustomizationEligibilityRule = {
+  required_ids: number[];
+  required_mode: CustomizationRequiredMode;
+  allowed_ids: number[];
+  excluded_ids: number[];
+};
+
 export type ActionDraft = {
   action_type: CouponAction;
   cartPercent: { percent: string; cap: string };
@@ -23,6 +32,7 @@ export type ActionDraft = {
     apply_discount: boolean;
     discount_scope: "AUTO" | "PARENT_ONLY" | "BUNDLE";
   };
+  customization_rules_by_item: Record<number, CustomizationEligibilityRule>;
   bxgy: {
     buy_item_ids: number[];
     get_item_ids: number[];
@@ -40,6 +50,21 @@ export type ActionDraft = {
   };
 };
 
+function normalizeCustomizationRule(rule?: Partial<CustomizationEligibilityRule>): CustomizationEligibilityRule {
+  const requiredMode = String(rule?.required_mode || "ALL").toUpperCase();
+  return {
+    required_ids: Array.isArray(rule?.required_ids) ? rule.required_ids.map(Number).filter(Number.isFinite) : [],
+    required_mode: requiredMode === "ANY" ? "ANY" : "ALL",
+    allowed_ids: Array.isArray(rule?.allowed_ids) ? rule.allowed_ids.map(Number).filter(Number.isFinite) : [],
+    excluded_ids: Array.isArray(rule?.excluded_ids) ? rule.excluded_ids.map(Number).filter(Number.isFinite) : [],
+  };
+}
+
+function hasCustomizationRule(rule?: CustomizationEligibilityRule) {
+  if (!rule) return false;
+  return Boolean(rule.required_ids.length || rule.allowed_ids.length || rule.excluded_ids.length);
+}
+
 type Props = {
   value: ActionDraft;
   onChange: (next: ActionDraft) => void;
@@ -48,6 +73,165 @@ type Props = {
   categoryOptions: SelectOption[];
   categoryCascade?: { descendantsById: Record<number, number[]> };
 };
+
+function CustomizationEligibilityRulesEditor({
+  title,
+  description,
+  itemIds,
+  itemDetailsById,
+  itemLabelById,
+  rulesByItem,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  itemIds: number[];
+  itemDetailsById?: Record<number, Item>;
+  itemLabelById: Map<number, string>;
+  rulesByItem: Record<number, CustomizationEligibilityRule>;
+  onChange: (next: Record<number, CustomizationEligibilityRule>) => void;
+}) {
+  const uniqueItemIds = Array.from(new Set(itemIds.map(Number).filter(Number.isFinite)));
+  if (!uniqueItemIds.length) return null;
+
+  const updateRule = (itemId: number, patch: Partial<CustomizationEligibilityRule>) => {
+    const current = normalizeCustomizationRule(rulesByItem[itemId]);
+    const nextRule = normalizeCustomizationRule({ ...current, ...patch });
+    const next = { ...(rulesByItem ?? {}) };
+    if (hasCustomizationRule(nextRule)) {
+      next[itemId] = nextRule;
+    } else {
+      delete next[itemId];
+    }
+    onChange(next);
+  };
+
+  const clearRule = (itemId: number) => {
+    const next = { ...(rulesByItem ?? {}) };
+    delete next[itemId];
+    onChange(next);
+  };
+
+  return (
+    <div className="rounded-xl border border-kk-dark-border bg-kk-dark-bg-elevated p-4">
+      <div className="text-sm font-medium text-kk-dark-text">{title}</div>
+      <div className="mt-1 text-xs text-kk-dark-text-muted">{description}</div>
+
+      <div className="mt-4 space-y-4">
+        {uniqueItemIds.map((itemId) => {
+          const itemDetail = itemDetailsById?.[itemId];
+          const itemLabel = itemDetail?.name || itemLabelById.get(itemId) || `Item #${itemId}`;
+          const customizations = itemDetail?.customizations ?? [];
+          const rule = normalizeCustomizationRule(rulesByItem[itemId]);
+          const customizationOptions = customizations
+            .filter((customization) => customization.id != null)
+            .map((customization) => ({
+              id: Number(customization.id),
+              label: String(customization.label || customization.child_name || `Customization #${customization.id}`),
+            }));
+
+          return (
+            <div
+              key={itemId}
+              className="rounded-lg border border-kk-dark-input-border bg-kk-dark-bg px-3 py-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-kk-dark-text">{itemLabel}</div>
+                  <div className="text-xs text-kk-dark-text-muted">
+                    Rules apply per cart line for this item.
+                  </div>
+                </div>
+                {hasCustomizationRule(rule) ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-kk-dark-input-border px-3 py-1 text-xs text-kk-dark-text-muted hover:text-kk-dark-text"
+                    onClick={() => clearRule(itemId)}
+                  >
+                    Clear rules
+                  </button>
+                ) : null}
+              </div>
+
+              {!itemDetail ? (
+                <div className="mt-3 text-xs text-kk-dark-text-muted">
+                  Loading available customizations...
+                </div>
+              ) : !itemDetail.customized || !customizationOptions.length ? (
+                <div className="mt-3 text-xs text-kk-dark-text-muted">
+                  This item has no configurable customizations.
+                </div>
+              ) : (
+                <div className="mt-3 grid gap-3">
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-4 text-xs font-medium text-kk-dark-text">
+                      Required customizations
+                    </div>
+                    <div className="col-span-6">
+                      <SearchMultiSelectDropdown
+                        options={customizationOptions}
+                        selectedIds={rule.required_ids}
+                        onChange={(ids) => updateRule(itemId, { required_ids: ids })}
+                        placeholder="None required"
+                      />
+                    </div>
+                    <select
+                      className="col-span-2 rounded-md bg-kk-dark-bg border border-kk-dark-input-border px-2 py-1 text-xs"
+                      value={rule.required_mode}
+                      disabled={!rule.required_ids.length}
+                      onChange={(e) =>
+                        updateRule(itemId, {
+                          required_mode: e.target.value as CustomizationRequiredMode,
+                        })
+                      }
+                    >
+                      <option value="ALL">All</option>
+                      <option value="ANY">Any</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-4 text-xs font-medium text-kk-dark-text">
+                      Allowed customizations
+                    </div>
+                    <div className="col-span-8">
+                      <SearchMultiSelectDropdown
+                        options={customizationOptions}
+                        selectedIds={rule.allowed_ids}
+                        onChange={(ids) => updateRule(itemId, { allowed_ids: ids })}
+                        placeholder="Any customization allowed"
+                      />
+                    </div>
+                    <div className="col-span-12 text-[11px] text-kk-dark-text-muted">
+                      If set, selected cart customizations must be limited to this list.
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-12 gap-3 items-center">
+                    <div className="col-span-4 text-xs font-medium text-kk-dark-text">
+                      Blocked customizations
+                    </div>
+                    <div className="col-span-8">
+                      <SearchMultiSelectDropdown
+                        options={customizationOptions}
+                        selectedIds={rule.excluded_ids}
+                        onChange={(ids) => updateRule(itemId, { excluded_ids: ids })}
+                        placeholder="None blocked"
+                      />
+                    </div>
+                    <div className="col-span-12 text-[11px] text-kk-dark-text-muted">
+                      If a cart line includes any blocked customization, that line will not qualify.
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function CouponActionEditor({
   value,
@@ -467,6 +651,30 @@ export function CouponActionEditor({
           </>
         )}
 
+        {selected === "ITEM_PERCENT" && (
+          <CustomizationEligibilityRulesEditor
+            title="Customization Eligibility"
+            description="Control which selected-product customizations make this line eligible for the coupon."
+            itemIds={value.itemPercent.item_ids}
+            itemDetailsById={itemDetailsById}
+            itemLabelById={itemLabelById}
+            rulesByItem={value.customization_rules_by_item}
+            onChange={(rules) => onChange({ ...value, customization_rules_by_item: rules })}
+          />
+        )}
+
+        {selected === "ITEM_AMOUNT" && (
+          <CustomizationEligibilityRulesEditor
+            title="Customization Eligibility"
+            description="Control which selected-product customizations make this line eligible for the coupon."
+            itemIds={value.itemAmount.item_ids}
+            itemDetailsById={itemDetailsById}
+            itemLabelById={itemLabelById}
+            rulesByItem={value.customization_rules_by_item}
+            onChange={(rules) => onChange({ ...value, customization_rules_by_item: rules })}
+          />
+        )}
+
         {selected === "CATEGORY_PERCENT" && (
           <>
             <div className="text-xs text-kk-dark-text-muted">
@@ -735,6 +943,16 @@ export function CouponActionEditor({
                 />
               </div>
             </div>
+
+            <CustomizationEligibilityRulesEditor
+              title="Buy X Customization Eligibility"
+              description="Only Buy X cart lines whose selected customizations pass these rules will count toward this BXGY coupon."
+              itemIds={value.bxgy.buy_item_ids}
+              itemDetailsById={itemDetailsById}
+              itemLabelById={itemLabelById}
+              rulesByItem={value.customization_rules_by_item}
+              onChange={(rules) => onChange({ ...value, customization_rules_by_item: rules })}
+            />
 
             <div className="grid grid-cols-12 gap-3 items-end">
               <div className="col-span-4">

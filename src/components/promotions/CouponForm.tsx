@@ -18,8 +18,8 @@ import {
 } from "../../api/promotions";
 import { fetchLocations } from "../../api/location";
 import type { Location } from "../../types/location";
-import { fetchCategories, fetchItem, fetchItemGroups, fetchItems } from "../../api/catalog";
-import type { Item } from "../../types/catalog";
+import { fetchAllItems, fetchCategories, fetchItem, fetchItemGroups } from "../../api/catalog";
+import type { Category, Item, ItemGroup } from "../../types/catalog";
 
 import {
   CouponConditionsEditor,
@@ -199,6 +199,79 @@ export function validateConditions(op: ConditionOp, conditions: ConditionDraft[]
   return null;
 }
 
+function normalizeCustomizationRulesByItem(raw: any): ActionDraft["customization_rules_by_item"] {
+  if (!raw || typeof raw !== "object") return {};
+  const out: ActionDraft["customization_rules_by_item"] = {};
+
+  Object.entries(raw).forEach(([rawItemId, value]) => {
+    const itemId = Number(rawItemId);
+    if (!Number.isFinite(itemId) || itemId <= 0 || !value || typeof value !== "object") return;
+    const rule = value as any;
+    const required = Array.isArray(rule.required)
+      ? rule.required
+      : Array.isArray(rule.required_ids)
+        ? rule.required_ids
+        : Array.isArray(rule.required_customization_ids)
+          ? rule.required_customization_ids
+          : [];
+    const allowed = Array.isArray(rule.allowed)
+      ? rule.allowed
+      : Array.isArray(rule.allowed_ids)
+        ? rule.allowed_ids
+        : Array.isArray(rule.allowed_customization_ids)
+          ? rule.allowed_customization_ids
+          : [];
+    const excluded = Array.isArray(rule.excluded)
+      ? rule.excluded
+      : Array.isArray(rule.excluded_ids)
+        ? rule.excluded_ids
+        : Array.isArray(rule.excluded_customization_ids)
+          ? rule.excluded_customization_ids
+          : Array.isArray(rule.blocked)
+            ? rule.blocked
+            : [];
+    const requiredMode = String(rule.required_mode || rule.match || "ALL").toUpperCase();
+    const normalized = {
+      required_ids: required.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
+      required_mode: requiredMode === "ANY" ? "ANY" as const : "ALL" as const,
+      allowed_ids: allowed.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
+      excluded_ids: excluded.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
+    };
+    if (normalized.required_ids.length || normalized.allowed_ids.length || normalized.excluded_ids.length) {
+      out[itemId] = normalized;
+    }
+  });
+
+  return out;
+}
+
+function buildCustomizationRulesConfig(
+  rulesByItem: ActionDraft["customization_rules_by_item"],
+  selectedItemIds: number[]
+) {
+  const selected = new Set(selectedItemIds.map(Number).filter((id) => Number.isFinite(id) && id > 0));
+  const entries = Object.entries(rulesByItem ?? {})
+    .map(([rawItemId, rule]) => {
+      const itemId = Number(rawItemId);
+      if (!selected.has(itemId)) return null;
+      const required = (rule.required_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      const allowed = (rule.allowed_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      const excluded = (rule.excluded_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
+      if (!required.length && !allowed.length && !excluded.length) return null;
+      return [
+        String(itemId),
+        {
+          required,
+          required_mode: rule.required_mode === "ANY" ? "ANY" : "ALL",
+          allowed,
+          excluded,
+        },
+      ] as const;
+    })
+    .filter(Boolean);
+  return Object.fromEntries(entries as Array<readonly [string, object]>);
+}
+
 export function actionDraftFromCoupon(c: Coupon): ActionDraft {
   const cfg: any = c.action_config || {};
   const action_type = c.action_type || "CART_PERCENT";
@@ -210,6 +283,9 @@ export function actionDraftFromCoupon(c: Coupon): ActionDraft {
     discountScopeRaw === "PARENT_ONLY" || discountScopeRaw === "BUNDLE" || discountScopeRaw === "AUTO"
       ? (discountScopeRaw as any)
       : ("AUTO" as any);
+  const customizationRules = normalizeCustomizationRulesByItem(
+    cfg.customization_rules_by_item || cfg.buy?.customization_rules_by_item || {}
+  );
 
   const bxgy = (() => {
     const buy = cfg.buy || {};
@@ -287,6 +363,7 @@ export function actionDraftFromCoupon(c: Coupon): ActionDraft {
       apply_discount: Boolean(customizedCfg.apply_discount ?? true),
       discount_scope,
     },
+    customization_rules_by_item: customizationRules,
     bxgy,
     redeemFreeItems: {
       item_ids: Array.isArray(cfg.items)
@@ -327,10 +404,14 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
       apply_discount: Boolean(draft.customized?.apply_discount ?? true),
       discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
     };
+    const customization_rules_by_item = buildCustomizationRulesConfig(
+      draft.customization_rules_by_item,
+      draft.itemPercent.item_ids
+    );
     return {
       config: cap
-        ? { items: draft.itemPercent.item_ids, percent, cap, customized }
-        : { items: draft.itemPercent.item_ids, percent, customized },
+        ? { items: draft.itemPercent.item_ids, percent, cap, customized, customization_rules_by_item }
+        : { items: draft.itemPercent.item_ids, percent, customized, customization_rules_by_item },
     };
   }
 
@@ -347,7 +428,11 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
       apply_discount: Boolean(draft.customized?.apply_discount ?? true),
       discount_scope: (draft.customized?.discount_scope ?? "AUTO") as any,
     };
-    return { config: { items: draft.itemAmount.item_ids, amount, customized } };
+    const customization_rules_by_item = buildCustomizationRulesConfig(
+      draft.customization_rules_by_item,
+      draft.itemAmount.item_ids
+    );
+    return { config: { items: draft.itemAmount.item_ids, amount, customized, customization_rules_by_item } };
   }
 
   if (draft.action_type === "CATEGORY_PERCENT") {
@@ -444,6 +529,10 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
               .filter(([, rows]) => Array.isArray(rows) && rows.length > 0)
           )
         : {};
+    const customization_rules_by_item = buildCustomizationRulesConfig(
+      draft.customization_rules_by_item,
+      draft.bxgy.buy_item_ids
+    );
 
     return {
       config: {
@@ -452,6 +541,7 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
           groups: [],
           qty: buyQty,
           mode: "SUM",
+          customization_rules_by_item,
         },
         get: {
           items: draft.bxgy.get_item_ids,
@@ -466,6 +556,7 @@ export function buildActionConfig(draft: ActionDraft): { config: any; error?: st
             : {}),
         },
         customized,
+        customization_rules_by_item,
         repeat: Boolean(draft.bxgy.repeat),
         apply_cheapest: Boolean(draft.bxgy.apply_cheapest),
       },
@@ -537,14 +628,14 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
 	    (async () => {
 	      try {
 	        const [itemsRes, groupsRes, categoriesRes] = await Promise.all([
-	          fetchItems(),
+	          fetchAllItems(),
 	          fetchItemGroups(),
 	          fetchCategories(),
 	        ]);
-	        const items = (itemsRes?.results ?? []) as any[];
-	        const groups = (groupsRes?.results ?? []) as any[];
-	        const categories = (categoriesRes?.results ?? []) as any[];
-	        const catTree = buildCategoryTree(categories as any);
+	        const items = itemsRes;
+	        const groups = (groupsRes?.results ?? []) as ItemGroup[];
+	        const categories = (categoriesRes?.results ?? []) as Category[];
+	        const catTree = buildCategoryTree(categories);
 
         setItemOptions(
           items
@@ -576,7 +667,13 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
   useEffect(() => {
     const requestedIds = Array.from(
       new Set(
-        (actionDraft.bxgy.get_item_ids ?? []).filter((id) => Number.isFinite(Number(id)))
+        [
+          ...(actionDraft.bxgy.get_item_ids ?? []),
+          ...(actionDraft.bxgy.buy_item_ids ?? []),
+          ...(actionDraft.itemPercent.item_ids ?? []),
+          ...(actionDraft.itemAmount.item_ids ?? []),
+          ...Object.keys(actionDraft.customization_rules_by_item ?? {}).map(Number),
+        ].filter((id) => Number.isFinite(Number(id)))
       )
     );
     const missingIds = requestedIds.filter((id) => !itemDetailsById[id]);
@@ -609,7 +706,14 @@ export const CouponForm: React.FC<Props> = ({ initial }) => {
     return () => {
       cancelled = true;
     };
-  }, [actionDraft.bxgy.get_item_ids, itemDetailsById]);
+  }, [
+    actionDraft.bxgy.get_item_ids,
+    actionDraft.bxgy.buy_item_ids,
+    actionDraft.itemPercent.item_ids,
+    actionDraft.itemAmount.item_ids,
+    actionDraft.customization_rules_by_item,
+    itemDetailsById,
+  ]);
 
   const selectedLocations = useMemo(() => coupon.locations ?? [], [coupon.locations]);
 

@@ -12,6 +12,7 @@ import {
   deleteCoupon,
   fetchCoupons,
   resetCouponUsage,
+  updateCoupon,
 } from "../../../api/promotions";
 import { nextSort, sortIndicator, type SortState } from "../../../utils/sort";
 import { CouponPeek } from "./CouponPeek";
@@ -58,6 +59,7 @@ export const CouponListPage: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [statusBusy, setStatusBusy] = useState(false);
   const [bulkDateAction, setBulkDateAction] = useState<"set_start_date" | "set_end_date" | null>(
     null
   );
@@ -227,6 +229,33 @@ export const CouponListPage: React.FC = () => {
       const data = err?.response?.data;
       const detail = typeof data === "string" ? data : data?.detail;
       showToast(String(detail ?? "Unable to reset coupon usage."), "error");
+    }
+  };
+
+  const handleStatusChange = async () => {
+    if (!selectedId || !selectedCoupon || statusBusy) return;
+
+    const active = !selectedCoupon.active;
+    setStatusBusy(true);
+    try {
+      const updated = await updateCoupon(selectedId, { active });
+      setCoupons((prev) =>
+        prev.map((coupon) =>
+          coupon.id === selectedId ? { ...coupon, ...updated, active } : coupon
+        )
+      );
+      setSelectedCoupon((prev) => (prev ? { ...prev, ...updated, active } : prev));
+      showToast(`Coupon ${active ? "activated" : "deactivated"}.`, "success");
+    } catch (err: any) {
+      showToast(
+        extractApiDetail(
+          err,
+          `Unable to ${active ? "activate" : "deactivate"} coupon.`
+        ),
+        "error"
+      );
+    } finally {
+      setStatusBusy(false);
     }
   };
 
@@ -667,13 +696,33 @@ export const CouponListPage: React.FC = () => {
           actions={
             <div className="flex items-center gap-1">
               {can("Coupons", "edit") ? (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/promotions/coupons/${selectedId}/edit`)}
-                >
-                  <span className="tooltip-b">Edit</span>
-                  <PencilSquareIcon className="h-5 w-5 text-kk-muted" />
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={handleStatusChange}
+                    disabled={statusBusy}
+                    className={statusBusy ? "opacity-50" : undefined}
+                  >
+                    {selectedCoupon.active ? (
+                      <>
+                        <span className="tooltip-b">Deactivate</span>
+                        <PauseIcon className="h-5 w-5 text-kk-muted" />
+                      </>
+                    ) : (
+                      <>
+                        <span className="tooltip-b">Activate</span>
+                        <PlayIcon className="h-5 w-5 text-kk-muted" />
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/promotions/coupons/${selectedId}/edit`)}
+                  >
+                    <span className="tooltip-b">Edit</span>
+                    <PencilSquareIcon className="h-5 w-5 text-kk-muted" />
+                  </button>
+                </>
               ) : null}
               {can("Coupons", "delete") ? (
                 <button type="button" onClick={handleDelete}>
