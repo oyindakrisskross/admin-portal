@@ -15,6 +15,7 @@ type CustomizationRequiredMode = "ALL" | "ANY";
 type CustomizationEligibilityRule = {
   required_ids: number[];
   required_mode: CustomizationRequiredMode;
+  force_required_customizations: boolean;
   allowed_ids: number[];
   excluded_ids: number[];
 };
@@ -50,19 +51,54 @@ export type ActionDraft = {
   };
 };
 
-function normalizeCustomizationRule(rule?: Partial<CustomizationEligibilityRule>): CustomizationEligibilityRule {
+function uniqueCustomizationIds(values?: number[]) {
+  const seen = new Set<number>();
+  const out: number[] = [];
+  if (!Array.isArray(values)) return out;
+  values.forEach((value) => {
+    const id = Number(value);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  });
+  return out;
+}
+
+function normalizeCustomizationRule(
+  rule?: Partial<CustomizationEligibilityRule>,
+  preferBlocked = false
+): CustomizationEligibilityRule {
   const requiredMode = String(rule?.required_mode || "ALL").toUpperCase();
+  let requiredIds = uniqueCustomizationIds(rule?.required_ids);
+  let allowedIds = uniqueCustomizationIds(rule?.allowed_ids);
+  let excludedIds = uniqueCustomizationIds(rule?.excluded_ids);
+
+  if (preferBlocked) {
+    const blocked = new Set(excludedIds);
+    requiredIds = requiredIds.filter((id) => !blocked.has(id));
+    allowedIds = allowedIds.filter((id) => !blocked.has(id));
+  } else {
+    const positive = new Set([...requiredIds, ...allowedIds]);
+    excludedIds = excludedIds.filter((id) => !positive.has(id));
+  }
+
   return {
-    required_ids: Array.isArray(rule?.required_ids) ? rule.required_ids.map(Number).filter(Number.isFinite) : [],
+    required_ids: requiredIds,
     required_mode: requiredMode === "ANY" ? "ANY" : "ALL",
-    allowed_ids: Array.isArray(rule?.allowed_ids) ? rule.allowed_ids.map(Number).filter(Number.isFinite) : [],
-    excluded_ids: Array.isArray(rule?.excluded_ids) ? rule.excluded_ids.map(Number).filter(Number.isFinite) : [],
+    force_required_customizations: Boolean(rule?.force_required_customizations) && requiredIds.length > 0,
+    allowed_ids: allowedIds,
+    excluded_ids: excludedIds,
   };
 }
 
 function hasCustomizationRule(rule?: CustomizationEligibilityRule) {
   if (!rule) return false;
-  return Boolean(rule.required_ids.length || rule.allowed_ids.length || rule.excluded_ids.length);
+  return Boolean(
+    rule.required_ids.length ||
+      rule.allowed_ids.length ||
+      rule.excluded_ids.length ||
+      rule.force_required_customizations
+  );
 }
 
 type Props = {
@@ -96,7 +132,8 @@ function CustomizationEligibilityRulesEditor({
 
   const updateRule = (itemId: number, patch: Partial<CustomizationEligibilityRule>) => {
     const current = normalizeCustomizationRule(rulesByItem[itemId]);
-    const nextRule = normalizeCustomizationRule({ ...current, ...patch });
+    const preferBlocked = Object.prototype.hasOwnProperty.call(patch, "excluded_ids");
+    const nextRule = normalizeCustomizationRule({ ...current, ...patch }, preferBlocked);
     const next = { ...(rulesByItem ?? {}) };
     if (hasCustomizationRule(nextRule)) {
       next[itemId] = nextRule;
@@ -129,6 +166,10 @@ function CustomizationEligibilityRulesEditor({
               id: Number(customization.id),
               label: String(customization.label || customization.child_name || `Customization #${customization.id}`),
             }));
+          const blockedIds = new Set(rule.excluded_ids);
+          const positiveIds = new Set([...rule.required_ids, ...rule.allowed_ids]);
+          const positiveCustomizationOptions = customizationOptions.filter((option) => !blockedIds.has(option.id));
+          const blockedCustomizationOptions = customizationOptions.filter((option) => !positiveIds.has(option.id));
 
           return (
             <div
@@ -169,7 +210,7 @@ function CustomizationEligibilityRulesEditor({
                     </div>
                     <div className="col-span-6">
                       <SearchMultiSelectDropdown
-                        options={customizationOptions}
+                        options={positiveCustomizationOptions}
                         selectedIds={rule.required_ids}
                         onChange={(ids) => updateRule(itemId, { required_ids: ids })}
                         placeholder="None required"
@@ -188,6 +229,25 @@ function CustomizationEligibilityRulesEditor({
                       <option value="ALL">All</option>
                       <option value="ANY">Any</option>
                     </select>
+                    <label className="col-span-12 flex items-start gap-2 rounded-lg border border-kk-dark-input-border bg-kk-dark-bg-elevated px-3 py-2 text-xs text-kk-dark-text">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={rule.force_required_customizations}
+                        disabled={!rule.required_ids.length}
+                        onChange={(e) =>
+                          updateRule(itemId, {
+                            force_required_customizations: e.target.checked,
+                          })
+                        }
+                      />
+                      <span>
+                        <span className="block font-medium">Force required customizations</span>
+                        <span className="block text-[11px] text-kk-dark-text-muted">
+                          If enabled, missing required customizations are added to the item automatically before the coupon is applied.
+                        </span>
+                      </span>
+                    </label>
                   </div>
 
                   <div className="grid grid-cols-12 gap-3 items-center">
@@ -196,7 +256,7 @@ function CustomizationEligibilityRulesEditor({
                     </div>
                     <div className="col-span-8">
                       <SearchMultiSelectDropdown
-                        options={customizationOptions}
+                        options={positiveCustomizationOptions}
                         selectedIds={rule.allowed_ids}
                         onChange={(ids) => updateRule(itemId, { allowed_ids: ids })}
                         placeholder="Any customization allowed"
@@ -213,7 +273,7 @@ function CustomizationEligibilityRulesEditor({
                     </div>
                     <div className="col-span-8">
                       <SearchMultiSelectDropdown
-                        options={customizationOptions}
+                        options={blockedCustomizationOptions}
                         selectedIds={rule.excluded_ids}
                         onChange={(ids) => updateRule(itemId, { excluded_ids: ids })}
                         placeholder="None blocked"

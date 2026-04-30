@@ -202,6 +202,16 @@ export function validateConditions(op: ConditionOp, conditions: ConditionDraft[]
 function normalizeCustomizationRulesByItem(raw: any): ActionDraft["customization_rules_by_item"] {
   if (!raw || typeof raw !== "object") return {};
   const out: ActionDraft["customization_rules_by_item"] = {};
+  const normalizeIds = (values: any[]) => {
+    const seen = new Set<number>();
+    const ids: number[] = [];
+    values.map(Number).forEach((id) => {
+      if (!Number.isFinite(id) || id <= 0 || seen.has(id)) return;
+      seen.add(id);
+      ids.push(id);
+    });
+    return ids;
+  };
 
   Object.entries(raw).forEach(([rawItemId, value]) => {
     const itemId = Number(rawItemId);
@@ -231,13 +241,27 @@ function normalizeCustomizationRulesByItem(raw: any): ActionDraft["customization
             ? rule.blocked
             : [];
     const requiredMode = String(rule.required_mode || rule.match || "ALL").toUpperCase();
+    const requiredIds = normalizeIds(required);
+    const allowedIds = normalizeIds(allowed);
+    const positiveIds = new Set([...requiredIds, ...allowedIds]);
+    const excludedIds = normalizeIds(excluded).filter((id) => !positiveIds.has(id));
     const normalized = {
-      required_ids: required.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
+      required_ids: requiredIds,
       required_mode: requiredMode === "ANY" ? "ANY" as const : "ALL" as const,
-      allowed_ids: allowed.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
-      excluded_ids: excluded.map(Number).filter((id: number) => Number.isFinite(id) && id > 0),
+      force_required_customizations: Boolean(
+        rule.force_required_customizations ?? rule.force_required ?? rule.force
+      ),
+      allowed_ids: allowedIds,
+      excluded_ids: excludedIds,
     };
-    if (normalized.required_ids.length || normalized.allowed_ids.length || normalized.excluded_ids.length) {
+    normalized.force_required_customizations =
+      normalized.force_required_customizations && normalized.required_ids.length > 0;
+    if (
+      normalized.required_ids.length ||
+      normalized.allowed_ids.length ||
+      normalized.excluded_ids.length ||
+      normalized.force_required_customizations
+    ) {
       out[itemId] = normalized;
     }
   });
@@ -254,15 +278,24 @@ function buildCustomizationRulesConfig(
     .map(([rawItemId, rule]) => {
       const itemId = Number(rawItemId);
       if (!selected.has(itemId)) return null;
-      const required = (rule.required_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
-      const allowed = (rule.allowed_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
-      const excluded = (rule.excluded_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0);
-      if (!required.length && !allowed.length && !excluded.length) return null;
+      const required = Array.from(
+        new Set((rule.required_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0))
+      );
+      const allowed = Array.from(
+        new Set((rule.allowed_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0))
+      );
+      const positive = new Set([...required, ...allowed]);
+      const excluded = Array.from(
+        new Set((rule.excluded_ids ?? []).map(Number).filter((id) => Number.isFinite(id) && id > 0))
+      ).filter((id) => !positive.has(id));
+      const forceRequired = Boolean(rule.force_required_customizations) && required.length > 0;
+      if (!required.length && !allowed.length && !excluded.length && !forceRequired) return null;
       return [
         String(itemId),
         {
           required,
           required_mode: rule.required_mode === "ANY" ? "ANY" : "ALL",
+          force_required_customizations: forceRequired,
           allowed,
           excluded,
         },
