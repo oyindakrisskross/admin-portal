@@ -4,6 +4,38 @@ React 19 + Vite admin interface for the KrissKross operational back office. The
 portal talks to the Django backend under `/api/*` and handles catalog, CRM,
 sales, reports, EMS, promotions, and settings workflows.
 
+## Screenshots
+
+### Dashboard
+
+<img src="docs/screenshots/dashboard-dark.png" alt="Dashboard overview in dark mode" width="100%">
+
+<img src="docs/screenshots/dashboard-light.png" alt="Dashboard overview in light mode" width="100%">
+
+### Promotions
+
+<img src="docs/screenshots/promotions-coupon-action.png" alt="Buy X get Y coupon action configuration" width="100%">
+
+### Reports
+
+<img src="docs/screenshots/reports-categories.png" alt="Category sales report with charts" width="100%">
+
+### Catalog
+
+<img src="docs/screenshots/catalog-items.png" alt="Catalog item list" width="100%">
+
+### Employee Scheduling
+
+<img src="docs/screenshots/ems-schedule-board.png" alt="Employee schedule board calendar" width="100%">
+
+### Settings
+
+<img src="docs/screenshots/settings-crm.png" alt="CRM import and export settings" width="100%">
+
+<img src="docs/screenshots/settings-connections.png" alt="Third-party app connections settings" width="100%">
+
+<img src="docs/screenshots/settings-daily-reports.png" alt="Daily report automation settings" width="100%">
+
 ## Local setup
 
 1. Install dependencies with `npm install`.
