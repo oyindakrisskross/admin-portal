@@ -4,6 +4,21 @@ React 19 + Vite admin interface for the KrissKross operational back office. The
 portal talks to the Django backend under `/api/*` and handles catalog, CRM,
 sales, reports, EMS, promotions, and settings workflows.
 
+## Live Test Version
+### Admin Dashboard
+Link: https://sandbox.admin.krisskrossskate.com/
+
+Email: tester@gmail.com
+
+Password: NewPass123!
+
+### POS Plugin
+Link: https://sandbox.pos.krisskrossskate.com/
+
+Email: tester@gmail.com
+
+Pin: 123456
+
 ## Screenshots
 
 ### Dashboard
@@ -64,8 +79,6 @@ sales, reports, EMS, promotions, and settings workflows.
 - Roles must include the expected permission categories for a user to reach the
   guarded routes in `src/routes/App.tsx`.
 
-## Cleanup notes
+## POS Plugin
 
-This pass removed leftover Vite starter files and centralized repeated query
-serialization in the API layer. Remaining cleanup candidates are documented in
-`docs/code-cleanup-audit.md`.
+Check out the accompanying POS plugin here: https://github.com/oyindakrisskross/pos-portal
